@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: simorgh_ledger_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: simorgh
+      POSTGRES_PASSWORD: simorgh
+      POSTGRES_DB: simorgh_ledger
+    ports:
+      - "5432:5432"
+    volumes:
+      - simorgh_ledger_pgdata:/var/lib/postgresql/data
+
+volumes:
+  simorgh_ledger_pgdata:
