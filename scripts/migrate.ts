@@ -12,6 +12,23 @@ async function main() {
 
   const sql = postgres(url, { max: 1, onnotice: () => {} });
   try {
+    // Control-plane (platform) migrations: holdings + holding admins.
+    console.log("→ migrating platform");
+    await sql.unsafe(`
+      CREATE TABLE IF NOT EXISTS platform.holdings (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        name text NOT NULL,
+        slug text NOT NULL UNIQUE,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      ALTER TABLE platform.companies
+        ADD COLUMN IF NOT EXISTS holding_id uuid REFERENCES platform.holdings(id) ON DELETE SET NULL;
+      ALTER TABLE platform.user_accounts
+        ADD COLUMN IF NOT EXISTS is_holding_admin boolean NOT NULL DEFAULT false;
+      ALTER TABLE platform.user_accounts
+        ADD COLUMN IF NOT EXISTS holding_id uuid REFERENCES platform.holdings(id) ON DELETE CASCADE;
+    `);
+
     const tenants = await sql<{ schema_name: string }[]>`
       SELECT schema_name FROM platform.companies
     `;

@@ -16,6 +16,24 @@ export async function requirePlatformAdmin(): Promise<PlatformContext> {
   return { session };
 }
 
+export interface HoldingContext {
+  session: SessionData;
+  holding: { id: string; name: string; slug: string };
+}
+
+/** Loads the holding context: verifies a holding session and resolves it. */
+export async function requireHolding(): Promise<HoldingContext> {
+  const session = await getSession();
+  if (!session || session.kind !== "holding" || !session.holdingId) {
+    redirect("/login");
+  }
+  const [holding] = await sql<{ id: string; name: string; slug: string }[]>`
+    SELECT id, name, slug FROM platform.holdings WHERE id = ${session.holdingId}
+  `;
+  if (!holding) redirect("/login");
+  return { session, holding };
+}
+
 export interface MemberContext {
   memberId: string;
   fullName: string;

@@ -10,6 +10,7 @@ export interface NewCompanyInput {
   name: string;
   plan?: string;
   maxUsers?: number;
+  holdingId?: string;
   adminName: string;
   adminEmail: string;
   adminPassword: string;
@@ -55,10 +56,12 @@ export async function provisionCompany(
 
   // 1) control-plane company row
   const [company] = await sql<{ id: string }[]>`
-    INSERT INTO platform.companies (name, slug, schema_name, plan, max_users)
+    INSERT INTO platform.companies
+      (name, slug, schema_name, plan, max_users, holding_id)
     VALUES (
       ${input.name}, ${slug}, ${schema},
-      ${input.plan ?? "standard"}, ${input.maxUsers ?? 10}
+      ${input.plan ?? "standard"}, ${input.maxUsers ?? 10},
+      ${input.holdingId ?? null}
     )
     RETURNING id
   `;

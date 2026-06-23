@@ -6,6 +6,54 @@ import { z } from "zod";
 import { sql } from "@/lib/db";
 import { requirePlatformAdmin } from "@/lib/session";
 import { provisionCompany } from "@/lib/provision";
+import { hashPassword } from "@/lib/password";
+import { slugify, shortId } from "@/lib/utils";
+
+const newHoldingSchema = z.object({
+  name: z.string().min(2, "نام هولدینگ حداقل ۲ کاراکتر باشد."),
+  adminName: z.string().min(2, "نام مدیر هولدینگ را وارد کنید."),
+  adminEmail: z.string().email("ایمیل مدیر هولدینگ نامعتبر است."),
+  adminPassword: z.string().min(6, "رمز عبور حداقل ۶ کاراکتر باشد."),
+});
+
+/** Create a holding plus its holding-administrator account. */
+export async function createHoldingAction(
+  _prev: CompanyFormState,
+  formData: FormData
+): Promise<CompanyFormState> {
+  await requirePlatformAdmin();
+  const parsed = newHoldingSchema.safeParse({
+    name: formData.get("name"),
+    adminName: formData.get("adminName"),
+    adminEmail: formData.get("adminEmail"),
+    adminPassword: formData.get("adminPassword"),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const [existing] = await sql`
+    SELECT id FROM platform.user_accounts WHERE email = ${parsed.data.adminEmail}
+  `;
+  if (existing) return { error: "این ایمیل قبلاً ثبت شده است." };
+
+  const slug = `${slugify(parsed.data.name)}-${shortId(4)}`;
+  try {
+    const [holding] = await sql<{ id: string }[]>`
+      INSERT INTO platform.holdings (name, slug)
+      VALUES (${parsed.data.name}, ${slug}) RETURNING id
+    `;
+    const passwordHash = await hashPassword(parsed.data.adminPassword);
+    await sql`
+      INSERT INTO platform.user_accounts
+        (email, password_hash, full_name, is_holding_admin, holding_id)
+      VALUES (${parsed.data.adminEmail}, ${passwordHash}, ${parsed.data.adminName},
+              true, ${holding.id})
+    `;
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "خطا در ساخت هولدینگ." };
+  }
+  revalidatePath("/admin/holdings");
+  redirect("/admin/holdings");
+}
 
 const newCompanySchema = z.object({
   name: z.string().min(2, "نام شرکت حداقل ۲ کاراکتر باشد."),

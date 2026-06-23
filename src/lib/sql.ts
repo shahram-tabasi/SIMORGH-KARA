@@ -9,12 +9,22 @@ CREATE SCHEMA IF NOT EXISTS platform;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;        -- gen_random_uuid()
 CREATE EXTENSION IF NOT EXISTS citext;          -- case-insensitive email
 
--- Companies = tenants. Each has its own dedicated schema.
+-- Holdings = a group of companies (sections) owned by one organisation.
+CREATE TABLE IF NOT EXISTS platform.holdings (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        text NOT NULL,
+  slug        text NOT NULL UNIQUE,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- Companies = tenants. Each has its own dedicated schema. A company may
+-- belong to a holding (e.g. a section: فنی، تولید، انبار…).
 CREATE TABLE IF NOT EXISTS platform.companies (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name         text NOT NULL,
   slug         text NOT NULL UNIQUE,
   schema_name  text NOT NULL UNIQUE,
+  holding_id   uuid REFERENCES platform.holdings(id) ON DELETE SET NULL,
   status       text NOT NULL DEFAULT 'active'
                  CHECK (status IN ('active','suspended','pending')),
   plan         text NOT NULL DEFAULT 'standard',
@@ -23,13 +33,16 @@ CREATE TABLE IF NOT EXISTS platform.companies (
 );
 
 -- Global identity / auth records. Used to resolve which tenant a login
--- belongs to. Platform super-admins have company_id = NULL.
+-- belongs to. Platform super-admins have company_id = NULL; holding admins
+-- have company_id = NULL and holding_id set with is_holding_admin = true.
 CREATE TABLE IF NOT EXISTS platform.user_accounts (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email              citext NOT NULL UNIQUE,
   password_hash      text NOT NULL,
   full_name          text NOT NULL,
   is_platform_admin  boolean NOT NULL DEFAULT false,
+  is_holding_admin   boolean NOT NULL DEFAULT false,
+  holding_id         uuid REFERENCES platform.holdings(id) ON DELETE CASCADE,
   company_id         uuid REFERENCES platform.companies(id) ON DELETE CASCADE,
   status             text NOT NULL DEFAULT 'active'
                        CHECK (status IN ('active','disabled')),

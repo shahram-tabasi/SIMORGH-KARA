@@ -20,11 +20,13 @@ export interface SessionData {
   sub: string;
   email: string;
   name: string;
-  kind: "platform" | "tenant";
+  kind: "platform" | "holding" | "tenant";
   // present only for tenant sessions:
   companyId?: string;
   schema?: string;
   slug?: string;
+  // present only for holding sessions:
+  holdingId?: string;
 }
 
 export async function createSession(data: SessionData): Promise<void> {

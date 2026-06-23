@@ -35,12 +35,14 @@ export async function loginAction(
       full_name: string;
       password_hash: string;
       is_platform_admin: boolean;
+      is_holding_admin: boolean;
+      holding_id: string | null;
       company_id: string | null;
       status: string;
     }[]
   >`
     SELECT id, email, full_name, password_hash, is_platform_admin,
-           company_id, status
+           is_holding_admin, holding_id, company_id, status
     FROM platform.user_accounts WHERE email = ${email}
   `;
 
@@ -61,6 +63,17 @@ export async function loginAction(
       kind: "platform",
     });
     redirect("/admin");
+  }
+
+  if (account.is_holding_admin && account.holding_id) {
+    await createSession({
+      sub: account.id,
+      email: account.email,
+      name: account.full_name,
+      kind: "holding",
+      holdingId: account.holding_id,
+    });
+    redirect("/holding");
   }
 
   if (!account.company_id) {
