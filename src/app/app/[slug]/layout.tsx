@@ -36,8 +36,11 @@ export default async function TenantLayout({
       ],
     },
     {
-      title: "کارتابل",
-      items: [{ href: `${base}/kartabl`, label: "کارتابل من", icon: "📥" }],
+      title: "کارتابل و میز کار",
+      items: [
+        { href: `${base}/kartabl`, label: "کارتابل من", icon: "📥" },
+        { href: `${base}/tasks`, label: "میز کار", icon: "🗒️" },
+      ],
     },
     {
       title: "حضور و غیاب",

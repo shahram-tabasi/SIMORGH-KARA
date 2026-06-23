@@ -150,6 +150,16 @@ async function main() {
       const [mk] = await tx<{ id: string }[]>`SELECT id FROM kartabls WHERE member_id=${mgrId} ORDER BY created_at LIMIT 1`;
       await tx`INSERT INTO kartabl_items (kartabl_id, title, body, kind, ref_kind, ref_id, created_by)
                VALUES (${mk.id}, ${`درخواست مرخصی: ${CREDS.employee.name}`}, 'مرحله مدیر بخش', 'approval', 'leave_request', ${req.id}, ${empId})`;
+
+      // Sample «میز کار» tasks from the manager to the employee
+      const [wt1] = await tx<{ id: string }[]>`
+        INSERT INTO work_tasks (title, code, body, priority, due_date, created_by)
+        VALUES ('وایرینگ تابلو', '110234', 'سیم‌کشی تابلو طبق نقشه', 'urgent', ${iso(lv1)}, ${mgrId}) RETURNING id`;
+      await tx`INSERT INTO work_task_assignees (task_id, member_id) VALUES (${wt1.id}, ${empId})`;
+      const [wt2] = await tx<{ id: string }[]>`
+        INSERT INTO work_tasks (title, code, body, priority, due_date, created_by)
+        VALUES ('بازرسی ایمنی کوره', 'SAFE-9', 'بازرسی فوری ایمنی', 'forced', ${iso(d2)}, ${mgrId}) RETURNING id`;
+      await tx`INSERT INTO work_task_assignees (task_id, member_id) VALUES (${wt2.id}, ${empId})`;
     });
 
     console.log("✔ Demo ready.");

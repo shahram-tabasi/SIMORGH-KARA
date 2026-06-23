@@ -142,6 +142,36 @@ CREATE TABLE IF NOT EXISTS kartabl_items (
 
 CREATE INDEX IF NOT EXISTS idx_kartabl_items_kartabl ON kartabl_items(kartabl_id);
 
+-- «میز کار» — team tasks / work orders (separate from the leave kartabl).
+-- A task may be broadcast to a whole subgroup or sent to individuals, carry a
+-- priority (urgent/forced) and a date range, and be delegated (parent_id).
+CREATE TABLE IF NOT EXISTS work_tasks (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title       text NOT NULL,
+  body        text,
+  code        text,                          -- optional work-order code
+  priority    text NOT NULL DEFAULT 'normal'
+                CHECK (priority IN ('normal','urgent','forced')),
+  from_date   date,
+  due_date    date,
+  created_by  uuid REFERENCES members(id) ON DELETE SET NULL,
+  group_id    uuid REFERENCES groups(id) ON DELETE SET NULL,   -- set when broadcast
+  parent_id   uuid REFERENCES work_tasks(id) ON DELETE SET NULL, -- delegation chain
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS work_task_assignees (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id     uuid NOT NULL REFERENCES work_tasks(id) ON DELETE CASCADE,
+  member_id   uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  status      text NOT NULL DEFAULT 'open'
+                CHECK (status IN ('open','in_progress','done')),
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (task_id, member_id)
+);
+CREATE INDEX IF NOT EXISTS idx_task_assignee_member ON work_task_assignees(member_id);
+CREATE INDEX IF NOT EXISTS idx_work_tasks_creator ON work_tasks(created_by);
+
 -- HR / Calendar module (stage 1) ------------------------------------------
 
 -- A work schedule: which weekdays are working days and the daily hours.

@@ -188,6 +188,33 @@ async function main() {
           SET annual_leave_days = 30 WHERE annual_leave_days = 26;
       `);
 
+      // «میز کار» — team tasks / work orders.
+      await sql.unsafe(`
+        CREATE TABLE IF NOT EXISTS "${schema_name}".work_tasks (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          title text NOT NULL,
+          body text,
+          code text,
+          priority text NOT NULL DEFAULT 'normal' CHECK (priority IN ('normal','urgent','forced')),
+          from_date date,
+          due_date date,
+          created_by uuid REFERENCES "${schema_name}".members(id) ON DELETE SET NULL,
+          group_id uuid REFERENCES "${schema_name}".groups(id) ON DELETE SET NULL,
+          parent_id uuid REFERENCES "${schema_name}".work_tasks(id) ON DELETE SET NULL,
+          created_at timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE TABLE IF NOT EXISTS "${schema_name}".work_task_assignees (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          task_id uuid NOT NULL REFERENCES "${schema_name}".work_tasks(id) ON DELETE CASCADE,
+          member_id uuid NOT NULL REFERENCES "${schema_name}".members(id) ON DELETE CASCADE,
+          status text NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','done')),
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          UNIQUE (task_id, member_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_assignee_member ON "${schema_name}".work_task_assignees(member_id);
+        CREATE INDEX IF NOT EXISTS idx_work_tasks_creator ON "${schema_name}".work_tasks(created_by);
+      `);
+
       // Kartabl approval items: link to a leave request + new 'approval' kind.
       await sql.unsafe(`
         ALTER TABLE "${schema_name}".kartabl_items
