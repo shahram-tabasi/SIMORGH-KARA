@@ -3,8 +3,27 @@
 import { revalidatePath } from "next/cache";
 import { withTenant } from "@/lib/db";
 import { requireTenant, ensurePermission } from "@/lib/session";
-import { toGregorian, isoDate } from "@/lib/jalali";
-import { computeEffectiveDays, holidaysInRange } from "@/lib/leave-balance";
+import {
+  toGregorian,
+  isoDate,
+  toJalali,
+  jalaliMonthLength,
+  iranianWeekday,
+} from "@/lib/jalali";
+import {
+  computeEffectiveDays,
+  holidaysInRange,
+  proratedAccrual,
+} from "@/lib/leave-balance";
+import { timeToMinutes } from "@/lib/attendance";
+
+function parseIso(d: string): Date {
+  const [y, m, day] = d.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, day);
+}
+
+/** Max allowed negative entitlement balance (مرخصی منفی), in days. */
+const MAX_NEGATIVE_DAYS = 3;
 
 function rev(slug: string) {
   revalidatePath(`/app/${slug}/leave`);
@@ -49,10 +68,17 @@ export async function submitLeaveAction(
         unit: "day" | "hour";
         requires_attachment: boolean;
         counts_inner_holidays: boolean;
+        deducts_entitlement: boolean;
+        max_minutes_per_day: number | null;
+        max_count_per_month: number | null;
+        max_count_per_week: number | null;
+        max_days_per_year: string | null;
         is_active: boolean;
       }[]
     >`
-      SELECT code, unit, requires_attachment, counts_inner_holidays, is_active
+      SELECT code, unit, requires_attachment, counts_inner_holidays,
+             deducts_entitlement, max_minutes_per_day, max_count_per_month,
+             max_count_per_week, max_days_per_year, is_active
       FROM leave_types WHERE id = ${typeId}
     `;
     if (!type || !type.is_active) return { error: "نوع مرخصی نامعتبر است." };
@@ -75,10 +101,11 @@ export async function submitLeaveAction(
       return { error: "برای این نوع مرخصی پیوست مدرک الزامی است." };
 
     // Compute billable days (skips inner holidays / converts hours → day fraction).
-    const [emp] = await tx<{ daily_work_minutes: number }[]>`
-      SELECT daily_work_minutes FROM member_employment
+    const [emp] = await tx<{ daily_work_minutes: number; hire_date: string }[]>`
+      SELECT daily_work_minutes, hire_date::text FROM member_employment
       WHERE member_id = ${ctx.member.memberId}
     `;
+    const dailyMinutes = emp?.daily_work_minutes ?? 510;
     const holidays = await holidaysInRange(tx, fromIso, toIso);
     const effectiveDays = computeEffectiveDays({
       unit: type.unit,
@@ -88,8 +115,100 @@ export async function submitLeaveAction(
       fromTime,
       toTime,
       holidays,
-      dailyMinutes: emp?.daily_work_minutes ?? 510,
+      dailyMinutes,
     });
+
+    const member = ctx.member.memberId;
+    const jFrom = toJalali(parseIso(fromIso));
+
+    // (a) Hourly per-day ceiling (e.g. ۴ ساعت؛ بیش از آن باید روزانه ثبت شود).
+    if (type.unit === "hour" && type.max_minutes_per_day != null) {
+      const mins = timeToMinutes(toTime!) - timeToMinutes(fromTime!);
+      if (mins > type.max_minutes_per_day) {
+        const h = Math.floor(type.max_minutes_per_day / 60);
+        return {
+          error: `بیش از سقف مجاز روزانه (${h} ساعت) است؛ این روز را باید به‌صورت مرخصی روزانه ثبت کنید.`,
+        };
+      }
+    }
+
+    // (b) Monthly occurrence cap (e.g. ۵ نوبت ساعتی در ماه).
+    if (type.max_count_per_month != null) {
+      const mStart = isoDate(toGregorian(jFrom.jy, jFrom.jm, 1));
+      const mEnd = isoDate(
+        toGregorian(jFrom.jy, jFrom.jm, jalaliMonthLength(jFrom.jy, jFrom.jm))
+      );
+      const [{ c }] = await tx<{ c: number }[]>`
+        SELECT count(*)::int AS c FROM leave_requests
+        WHERE member_id = ${member} AND type_id = ${typeId}
+          AND status <> 'rejected' AND from_date BETWEEN ${mStart} AND ${mEnd}
+      `;
+      if (c >= type.max_count_per_month)
+        return { error: `به سقف ${type.max_count_per_month} نوبت در ماه برای این نوع مرخصی رسیده‌اید.` };
+    }
+
+    // (c) Weekly occurrence cap (e.g. مجوز خروج ۲ بار در هفته).
+    if (type.max_count_per_week != null) {
+      const wd = iranianWeekday(parseIso(fromIso)); // 0=Sat
+      const ws = parseIso(fromIso);
+      const weekStart = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() - wd);
+      const weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6);
+      const [{ c }] = await tx<{ c: number }[]>`
+        SELECT count(*)::int AS c FROM leave_requests
+        WHERE member_id = ${member} AND type_id = ${typeId}
+          AND status <> 'rejected'
+          AND from_date BETWEEN ${isoDate(weekStart)} AND ${isoDate(weekEnd)}
+      `;
+      if (c >= type.max_count_per_week)
+        return { error: `به سقف ${type.max_count_per_week} نوبت در هفته برای این نوع مرخصی رسیده‌اید.` };
+    }
+
+    // (d) Annual day cap for this type.
+    if (type.max_days_per_year != null) {
+      const yStart = isoDate(toGregorian(jFrom.jy, 1, 1));
+      const yEnd = isoDate(toGregorian(jFrom.jy, 12, jalaliMonthLength(jFrom.jy, 12)));
+      const [{ s }] = await tx<{ s: string }[]>`
+        SELECT COALESCE(sum(effective_days),0) AS s FROM leave_requests
+        WHERE member_id = ${member} AND type_id = ${typeId}
+          AND status <> 'rejected' AND from_date BETWEEN ${yStart} AND ${yEnd}
+      `;
+      if (Number(s) + effectiveDays > Number(type.max_days_per_year))
+        return { error: `با این درخواست از سقف ${type.max_days_per_year} روز در سال این نوع مرخصی فراتر می‌روید.` };
+    }
+
+    // (e) Negative-balance cap for entitlement-deducting leave (مرخصی منفی ۳ روز).
+    if (type.deducts_entitlement) {
+      const [pol] = await tx<{ annual_leave_days: string }[]>`
+        SELECT annual_leave_days FROM attendance_policy WHERE id = 1
+      `;
+      const annual = Number(pol?.annual_leave_days ?? 30);
+      const hire = parseIso(emp?.hire_date ?? fromIso);
+      const accrued = proratedAccrual(hire, jFrom.jy, annual);
+
+      const used = await tx<{ from_date: string; effective_days: string | null }[]>`
+        SELECT lr.from_date::text, lr.effective_days FROM leave_requests lr
+        JOIN leave_types lt ON lt.id = lr.type_id
+        WHERE lr.member_id = ${member} AND lr.status = 'approved'
+          AND lt.deducts_entitlement = true
+      `;
+      let usedDays = 0;
+      for (const u of used)
+        if (toJalali(parseIso(u.from_date)).jy === jFrom.jy)
+          usedDays += Number(u.effective_days ?? 0);
+
+      const ledger = await tx<{ days: string }[]>`
+        SELECT days FROM leave_ledger
+        WHERE member_id = ${member} AND jyear = ${jFrom.jy}
+      `;
+      const ledgerNet = ledger.reduce((a, l) => a + Number(l.days), 0);
+
+      const remaining = accrued + ledgerNet - usedDays;
+      if (remaining - effectiveDays < -MAX_NEGATIVE_DAYS) {
+        return {
+          error: `مانده استحقاقی کافی نیست (مانده ${remaining.toFixed(1)} روز). حداکثر ${MAX_NEGATIVE_DAYS} روز مرخصی منفی مجاز است؛ از مرخصی بدون حقوق استفاده کنید.`,
+        };
+      }
+    }
 
     // Map to the legacy `kind` used by the attendance sheet reflection.
     const kind =

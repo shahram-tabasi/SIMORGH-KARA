@@ -101,7 +101,7 @@ export interface LeaveBalance {
 }
 
 /** Day-prorated annual accrual within a Jalali year, up to today. */
-function proratedAccrual(hireDate: Date, jyear: number, annual: number): number {
+export function proratedAccrual(hireDate: Date, jyear: number, annual: number): number {
   const yearStart = toGregorian(jyear, 1, 1);
   const yearEnd = toGregorian(jyear, 12, jalaliMonthLength(jyear, 12));
   const nextStart = toGregorian(jyear + 1, 1, 1);
