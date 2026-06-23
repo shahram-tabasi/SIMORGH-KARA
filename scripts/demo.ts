@@ -171,6 +171,12 @@ async function main() {
       await tx`INSERT INTO kartabl_items (kartabl_id, title, body, kind, ref_kind, ref_id, created_by)
                VALUES (${mk.id}, ${`درخواست مرخصی: ${CREDS.employee.name}`}, 'مرحله مدیر بخش', 'approval', 'leave_request', ${req.id}, ${empId})`;
 
+      // The manager's *own* in-flight leave (so «کارتابل مرخصی» shows both their
+      // approval queue and their own pending requests).
+      await tx`
+        INSERT INTO leave_requests (member_id, type_id, kind, from_date, to_date, status, reason, effective_days, total_steps, current_step)
+        VALUES (${mgrId}, (SELECT id FROM leave_types WHERE code='entitlement_daily'), 'leave', ${iso(lv1)}, ${iso(lv1)}, 'pending', 'مرخصی شخصی', 1, 2, 2)`;
+
       // Sample «میز کار» tasks from the manager to the employee
       const [wt1] = await tx<{ id: string }[]>`
         INSERT INTO work_tasks (title, code, body, priority, due_date, created_by)

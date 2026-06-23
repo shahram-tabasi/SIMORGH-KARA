@@ -60,7 +60,7 @@ export default async function TenantLayout({
         { href: `${base}/leave/assistant`, label: "دستیار مرخصی", icon: "🤖" },
         ...push(
           can("leave.approve") || can("leave.approve.hr") || can("leave.approve.l3"),
-          { href: `${base}/leave/manage`, label: "تأیید مرخصی‌ها", icon: "✅" }
+          { href: `${base}/leave/manage`, label: "کارتابل مرخصی", icon: "✅" }
         ),
         ...push(can("leave.types.manage"), { href: `${base}/leave/types`, label: "انواع مرخصی", icon: "🗂️" }),
         ...push(can("leave.ledger.manage"), { href: `${base}/leave/ledger`, label: "مدیریت مانده", icon: "💼" }),

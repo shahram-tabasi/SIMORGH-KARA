@@ -3,6 +3,8 @@ import { sql, withTenant, assertSafeSchema } from "./db";
 import { tenantDDL } from "./sql";
 import { DEFAULT_ROLES } from "./rbac";
 import { DEFAULT_LEAVE_TYPES } from "./leave-types";
+import { fetchOfficialHolidays } from "./online-holidays";
+import { todayJalali } from "./jalali";
 import { hashPassword } from "./password";
 import { slugify, shortId, schemaNameFromSlug } from "./utils";
 
@@ -132,6 +134,21 @@ export async function provisionCompany(
       INSERT INTO attendance_policy (id, annual_leave_days)
       VALUES (1, 30) ON CONFLICT DO NOTHING
     `;
+
+    // Seed official Iranian holidays (current + next Jalali year) so تعطیلات
+    // رسمی مثل تاسوعا/عاشورا از همان ابتدا در تقویم و حضور دیده می‌شوند. Read
+    // online with an offline fallback; later years are added via «همگام‌سازی».
+    const jyNow = todayJalali().jy;
+    for (const jy of [jyNow, jyNow + 1]) {
+      const { holidays } = await fetchOfficialHolidays(jy);
+      for (const h of holidays) {
+        await tx`
+          INSERT INTO holidays (holiday_date, title, is_official)
+          VALUES (${h.iso}, ${h.title}, true)
+          ON CONFLICT (holiday_date) DO NOTHING
+        `;
+      }
+    }
 
     // Seed the configurable leave-type catalogue from labour-law defaults.
     for (const t of DEFAULT_LEAVE_TYPES) {

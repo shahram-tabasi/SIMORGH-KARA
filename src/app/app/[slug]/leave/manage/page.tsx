@@ -26,7 +26,7 @@ interface Row {
   total_steps: number;
 }
 
-async function loadRequests(schema: string) {
+async function loadRequests(schema: string, meId: string) {
   return withTenant(schema, async (tx) => {
     const pending = await tx<Row[]>`
       SELECT lr.id, m.full_name AS member_name,
@@ -49,7 +49,20 @@ async function loadRequests(schema: string) {
       ORDER BY lr.decided_at DESC NULLS LAST
       LIMIT 50
     `;
-    return { pending, history };
+    // The approver's *own* leave requests in flight (so a group manager sees
+    // both what they must approve and their own pending/recent leaves).
+    const mine = await tx<Row[]>`
+      SELECT lr.id, m.full_name AS member_name,
+             COALESCE(lt.name, lr.kind) AS kind,
+             lr.from_date::text, lr.to_date::text, lr.from_time, lr.to_time,
+             lr.reason, lr.status, lr.current_step, lr.total_steps
+      FROM leave_requests lr JOIN members m ON m.id = lr.member_id
+      LEFT JOIN leave_types lt ON lt.id = lr.type_id
+      WHERE lr.member_id = ${meId}
+      ORDER BY (lr.status = 'pending') DESC, lr.created_at DESC
+      LIMIT 20
+    `;
+    return { pending, history, mine };
   });
 }
 
@@ -81,19 +94,66 @@ export default async function LeaveManagePage({
     ctx.member.permissions.has("leave.approve.l3");
   if (!canAny) ensurePermission(ctx, "leave.approve"); // throws
 
-  const { pending: allPending, history } = await loadRequests(ctx.company.schema);
+  const {
+    pending: allPending,
+    history,
+    mine,
+  } = await loadRequests(ctx.company.schema, ctx.member.memberId);
   // Show only requests whose *current* step this approver is allowed to act on.
   const pending = allPending.filter((r) =>
     ctx.member.permissions.has(stepPerm(r.current_step))
   );
   const waiting = allPending.length - pending.length;
+  const myActive = mine.filter((r) => r.status === "pending");
 
   return (
     <>
       <PageHeader
-        title="تأیید مرخصی‌ها"
-        description="بررسی و تصمیم‌گیری درباره درخواست‌های اعضا"
+        title="کارتابل مرخصی"
+        description="درخواست‌های در انتظار تأیید شما و مرخصی‌های در جریان خودتان"
       />
+
+      {/* The approver's own leave requests — both in-flight and recent. */}
+      <div className="card mb-6">
+        <h3 className="mb-3 text-sm font-semibold text-slate-700">
+          مرخصی‌های در جریان من ({toFaDigits(myActive.length)})
+        </h3>
+        {mine.length === 0 ? (
+          <div className="text-sm text-slate-400">
+            شما درخواست مرخصی ثبت‌شده‌ای ندارید.
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {mine.map((r) => (
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="badge bg-slate-100 text-slate-600">
+                      {KIND_LABEL[r.kind] ?? r.kind}
+                    </span>
+                    <span className={`badge ${STATUS_TONE[r.status]}`}>
+                      {STATUS_LABEL[r.status]}
+                    </span>
+                    {r.status === "pending" && r.total_steps > 1 && (
+                      <span className="badge bg-indigo-50 text-indigo-700">
+                        مرحله {toFaDigits(r.current_step)} از{" "}
+                        {toFaDigits(r.total_steps)} · {STEP_LABEL[r.current_step - 1]}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    <Range r={r} />
+                    {r.reason && <span className="mr-2">— {r.reason}</span>}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="card mb-6">
         <h3 className="mb-3 text-sm font-semibold text-slate-700">
