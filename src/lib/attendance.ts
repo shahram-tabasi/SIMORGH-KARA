@@ -36,6 +36,53 @@ export function workedMinutes(
   return diff > 0 ? diff : 0;
 }
 
+export interface PunchInput {
+  at: Date;
+  kind: "in" | "out";
+}
+
+export interface PunchAggregate {
+  firstIn: Date | null;
+  lastOut: Date | null;
+  worked: number; // minutes from paired in→out (plus running time if `now` given)
+  open: boolean; // ends on an unmatched "in"
+}
+
+/**
+ * Reduce a day's punches into first-in / last-out / total worked minutes.
+ * Pairs each "in" with the next "out"; a trailing open "in" counts running
+ * time only when `now` is supplied (i.e. for today).
+ */
+export function aggregatePunches(
+  punches: PunchInput[],
+  now?: Date
+): PunchAggregate {
+  const sorted = [...punches].sort((a, b) => a.at.getTime() - b.at.getTime());
+  let firstIn: Date | null = null;
+  let lastOut: Date | null = null;
+  let worked = 0;
+  let openAt: Date | null = null;
+
+  for (const p of sorted) {
+    if (p.kind === "in") {
+      if (!firstIn) firstIn = p.at;
+      if (!openAt) openAt = p.at; // ignore a duplicate "in"
+    } else {
+      lastOut = p.at;
+      if (openAt) {
+        worked += Math.max(0, Math.round((p.at.getTime() - openAt.getTime()) / 60000));
+        openAt = null;
+      }
+    }
+  }
+
+  const open = openAt !== null;
+  if (open && now) {
+    worked += Math.max(0, Math.round((now.getTime() - openAt!.getTime()) / 60000));
+  }
+  return { firstIn, lastOut, worked, open };
+}
+
 export type DayStatus =
   | "present"
   | "late"

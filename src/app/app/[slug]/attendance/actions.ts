@@ -10,44 +10,33 @@ function rev(slug: string) {
   revalidatePath(`/app/${slug}/attendance/team`);
 }
 
-/** Punch IN for the current member (today). */
-export async function punchInAction(formData: FormData) {
-  const slug = String(formData.get("slug"));
-  const ctx = await requireTenant(slug);
-  const today = isoDate(new Date());
-  await withTenant(ctx.company.schema, async (tx) => {
-    await tx`
-      INSERT INTO attendance_days (member_id, work_date, check_in)
-      VALUES (${ctx.member.memberId}, ${today}, now())
-      ON CONFLICT (member_id, work_date)
-      DO UPDATE SET check_in = COALESCE(attendance_days.check_in, now())
-    `;
-  });
-  rev(slug);
-}
-
-/** Punch OUT for the current member (today). */
-export async function punchOutAction(formData: FormData) {
-  const slug = String(formData.get("slug"));
-  const ctx = await requireTenant(slug);
-  const today = isoDate(new Date());
-  await withTenant(ctx.company.schema, async (tx) => {
-    await tx`
-      INSERT INTO attendance_days (member_id, work_date, check_in, check_out)
-      VALUES (${ctx.member.memberId}, ${today}, now(), now())
-      ON CONFLICT (member_id, work_date)
-      DO UPDATE SET check_out = now(),
-                   check_in = COALESCE(attendance_days.check_in, now())
-    `;
-  });
-  rev(slug);
-}
-
 /**
- * Manager correction: set/clear a member's punch times for a given Jalali day.
- * Times are "HH:MM" (local). Empty clears the punch.
+ * Toggle punch for the current member: records an "in" or "out" at now(),
+ * choosing the kind from today's most recent punch (supports multiple
+ * in/out pairs per day, e.g. a lunch break).
  */
-export async function saveAttendanceAction(formData: FormData) {
+export async function punchAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  const todayIso = isoDate(new Date());
+  await withTenant(ctx.company.schema, async (tx) => {
+    const [last] = await tx<{ kind: string }[]>`
+      SELECT kind FROM attendance_punches
+      WHERE member_id = ${ctx.member.memberId}
+        AND punched_at >= ${todayIso}::date
+      ORDER BY punched_at DESC LIMIT 1
+    `;
+    const next = last?.kind === "in" ? "out" : "in";
+    await tx`
+      INSERT INTO attendance_punches (member_id, kind, source)
+      VALUES (${ctx.member.memberId}, ${next}, 'self')
+    `;
+  });
+  rev(slug);
+}
+
+/** Manager correction: add a single punch for a member at a Jalali day + time. */
+export async function addPunchAction(formData: FormData) {
   const slug = String(formData.get("slug"));
   const ctx = await requireTenant(slug);
   ensurePermission(ctx, "attendance.manage");
@@ -56,28 +45,31 @@ export async function saveAttendanceAction(formData: FormData) {
   const jy = Number(formData.get("jy"));
   const jm = Number(formData.get("jm"));
   const jd = Number(formData.get("jd"));
-  const inT = String(formData.get("check_in") || "").trim();
-  const outT = String(formData.get("check_out") || "").trim();
+  const time = String(formData.get("time") || "").trim();
+  const kind = String(formData.get("kind") || "");
   if (!memberId || !jy || !jm || !jd) return;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return;
+  if (kind !== "in" && kind !== "out") return;
 
-  const day = isoDate(toGregorian(jy, jm, jd)); // YYYY-MM-DD (local)
-  const inTs = /^\d{1,2}:\d{2}$/.test(inT) ? `${day} ${inT}` : null;
-  const outTs = /^\d{1,2}:\d{2}$/.test(outT) ? `${day} ${outT}` : null;
-
+  const day = isoDate(toGregorian(jy, jm, jd));
+  const ts = `${day} ${time}`;
   await withTenant(ctx.company.schema, async (tx) => {
-    if (!inTs && !outTs) {
-      await tx`
-        DELETE FROM attendance_days
-        WHERE member_id = ${memberId} AND work_date = ${day}
-      `;
-      return;
-    }
     await tx`
-      INSERT INTO attendance_days (member_id, work_date, check_in, check_out)
-      VALUES (${memberId}, ${day}, ${inTs}, ${outTs})
-      ON CONFLICT (member_id, work_date)
-      DO UPDATE SET check_in = ${inTs}, check_out = ${outTs}
+      INSERT INTO attendance_punches (member_id, punched_at, kind, source)
+      VALUES (${memberId}, ${ts}, ${kind}, 'manual')
     `;
+  });
+  revalidatePath(`/app/${slug}/attendance/team`);
+}
+
+/** Manager correction: delete a single punch. */
+export async function deletePunchAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "attendance.manage");
+  const id = String(formData.get("id"));
+  await withTenant(ctx.company.schema, async (tx) => {
+    await tx`DELETE FROM attendance_punches WHERE id = ${id}`;
   });
   revalidatePath(`/app/${slug}/attendance/team`);
 }

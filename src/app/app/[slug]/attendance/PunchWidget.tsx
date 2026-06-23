@@ -1,13 +1,13 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
-import { punchInAction, punchOutAction } from "./actions";
-import { formatTime } from "@/lib/attendance";
+import { punchAction } from "./actions";
+import { formatTime, formatDuration } from "@/lib/attendance";
 
-function Button({ label, tone }: { label: string; tone: string }) {
+function ToggleButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
-    <button className={`${tone} px-6 py-3 text-base`} disabled={pending}>
+    <button className="btn-primary px-6 py-3 text-base" disabled={pending}>
       {pending ? "…" : label}
     </button>
   );
@@ -15,21 +15,16 @@ function Button({ label, tone }: { label: string; tone: string }) {
 
 export function PunchWidget({
   slug,
-  checkInIso,
-  checkOutIso,
+  punches,
+  workedMinutes,
 }: {
   slug: string;
-  checkInIso: string | null;
-  checkOutIso: string | null;
+  punches: { at: string; kind: "in" | "out" }[];
+  workedMinutes: number;
 }) {
-  const checkIn = checkInIso ? new Date(checkInIso) : null;
-  const checkOut = checkOutIso ? new Date(checkOutIso) : null;
-
-  const state = !checkIn
-    ? "out"
-    : !checkOut
-      ? "in"
-      : "done";
+  const last = punches[punches.length - 1];
+  const working = last?.kind === "in";
+  const state = !last ? "idle" : working ? "in" : "done";
 
   return (
     <div className="card">
@@ -46,25 +41,41 @@ export function PunchWidget({
                     : "bg-amber-100 text-amber-700"
               }`}
             >
-              {state === "in" ? "در حال کار" : state === "done" ? "خروج ثبت شد" : "هنوز وارد نشده‌اید"}
+              {state === "in"
+                ? "در حال کار"
+                : state === "done"
+                  ? "خارج شده"
+                  : "هنوز وارد نشده‌اید"}
             </span>
-            <span className="text-sm text-slate-500" dir="ltr">
-              ورود: {formatTime(checkIn)} · خروج: {formatTime(checkOut)}
+            <span className="text-sm text-slate-500">
+              کارکرد امروز: {formatDuration(workedMinutes)}
             </span>
           </div>
         </div>
 
-        <div className="flex gap-3">
-          <form action={punchInAction}>
-            <input type="hidden" name="slug" value={slug} />
-            <Button label="ثبت ورود" tone="btn-primary" />
-          </form>
-          <form action={punchOutAction}>
-            <input type="hidden" name="slug" value={slug} />
-            <Button label="ثبت خروج" tone="btn-ghost" />
-          </form>
-        </div>
+        <form action={punchAction}>
+          <input type="hidden" name="slug" value={slug} />
+          <ToggleButton label={working ? "ثبت خروج" : "ثبت ورود"} />
+        </form>
       </div>
+
+      {punches.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+          {punches.map((p, i) => (
+            <span
+              key={i}
+              className={`badge ${
+                p.kind === "in"
+                  ? "bg-green-50 text-green-700"
+                  : "bg-rose-50 text-rose-700"
+              }`}
+              dir="ltr"
+            >
+              {p.kind === "in" ? "↳ ورود" : "↰ خروج"} {formatTime(new Date(p.at))}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

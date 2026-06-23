@@ -7,23 +7,26 @@ import {
   isoDate,
   iranianWeekday,
   JALALI_MONTHS,
+  WEEKDAYS,
   toFaDigits,
 } from "@/lib/jalali";
 import {
   computeDay,
+  aggregatePunches,
   STATUS_LABEL,
   STATUS_TONE,
   formatTime,
+  formatDuration,
+  type PunchInput,
 } from "@/lib/attendance";
 import { loadMonthSheet } from "../data";
 import { SheetTable } from "../SheetTable";
-import { saveAttendanceAction } from "../actions";
+import { addPunchAction, deletePunchAction } from "../actions";
 
-interface Roster {
-  id: string;
-  full_name: string;
-  check_in: Date | null;
-  check_out: Date | null;
+interface PunchRow {
+  member_id: string;
+  at: Date;
+  kind: "in" | "out";
 }
 
 async function loadToday(schema: string) {
@@ -35,15 +38,15 @@ async function loadToday(schema: string) {
     const [hol] = await tx<{ c: number }[]>`
       SELECT count(*)::int AS c FROM holidays WHERE holiday_date = ${todayIso}
     `;
-    const members = await tx<Roster[]>`
-      SELECT m.id, m.full_name, a.check_in, a.check_out
-      FROM members m
-      LEFT JOIN attendance_days a
-        ON a.member_id = m.id AND a.work_date = ${todayIso}
-      WHERE m.status = 'active'
-      ORDER BY m.full_name
+    const members = await tx<{ id: string; full_name: string }[]>`
+      SELECT id, full_name FROM members WHERE status = 'active' ORDER BY full_name
     `;
-    return { sched, isHoliday: hol.c > 0, members };
+    const punches = await tx<PunchRow[]>`
+      SELECT member_id, punched_at AS at, kind FROM attendance_punches
+      WHERE punched_at >= ${todayIso}::date AND punched_at < (${todayIso}::date + 1)
+      ORDER BY punched_at
+    `;
+    return { sched, isHoliday: hol.c > 0, members, punches };
   });
 }
 
@@ -57,11 +60,19 @@ export default async function TeamAttendancePage({
   const ctx = await requireTenant(params.slug);
   ensurePermission(ctx, "attendance.manage");
 
-  const { sched, isHoliday, members } = await loadToday(ctx.company.schema);
+  const { sched, isHoliday, members, punches } = await loadToday(ctx.company.schema);
   const workDays = new Set(sched?.work_days ?? [0, 1, 2, 3, 4]);
   const start = sched?.start_time ?? "08:00";
   const todayWeekday = iranianWeekday(new Date());
   const isWorkingDay = workDays.has(todayWeekday) && !isHoliday;
+  const now = new Date();
+
+  const byMember = new Map<string, PunchInput[]>();
+  for (const p of punches) {
+    const list = byMember.get(p.member_id);
+    if (list) list.push({ at: p.at, kind: p.kind });
+    else byMember.set(p.member_id, [{ at: p.at, kind: p.kind }]);
+  }
 
   const today = todayJalali();
   const selected = searchParams.member;
@@ -72,6 +83,7 @@ export default async function TeamAttendancePage({
     ? await loadMonthSheet(ctx.company.schema, selected, jy, jm)
     : null;
   const selectedName = members.find((m) => m.id === selected)?.full_name;
+  const daysWithPunches = sheet?.days.filter((d) => d.punches.length > 0) ?? [];
 
   return (
     <>
@@ -89,19 +101,21 @@ export default async function TeamAttendancePage({
             <thead>
               <tr className="text-right text-xs text-slate-400">
                 <th className="pb-2 font-medium">عضو</th>
-                <th className="pb-2 font-medium">ورود</th>
-                <th className="pb-2 font-medium">خروج</th>
+                <th className="pb-2 font-medium">اولین ورود</th>
+                <th className="pb-2 font-medium">آخرین خروج</th>
+                <th className="pb-2 font-medium">کارکرد</th>
                 <th className="pb-2 font-medium">وضعیت</th>
                 <th className="pb-2 font-medium">کارنامه</th>
               </tr>
             </thead>
             <tbody>
               {members.map((m) => {
+                const agg = aggregatePunches(byMember.get(m.id) ?? [], now);
                 const res = computeDay({
                   isWorkingDay,
                   isHoliday,
-                  checkIn: m.check_in,
-                  checkOut: m.check_out,
+                  checkIn: agg.firstIn,
+                  checkOut: agg.lastOut,
                   dayOrder: 0,
                   scheduleStart: start,
                 });
@@ -109,9 +123,13 @@ export default async function TeamAttendancePage({
                   <tr key={m.id} className="border-t border-slate-100">
                     <td className="py-2 font-medium text-slate-700">
                       {m.full_name}
+                      {agg.open && (
+                        <span className="mr-1 inline-block h-2 w-2 rounded-full bg-green-500" />
+                      )}
                     </td>
-                    <td className="py-2" dir="ltr">{formatTime(m.check_in)}</td>
-                    <td className="py-2" dir="ltr">{formatTime(m.check_out)}</td>
+                    <td className="py-2" dir="ltr">{formatTime(agg.firstIn)}</td>
+                    <td className="py-2" dir="ltr">{formatTime(agg.lastOut)}</td>
+                    <td className="py-2">{formatDuration(agg.worked)}</td>
                     <td className="py-2">
                       <span className={`badge ${STATUS_TONE[res.status]}`}>
                         {STATUS_LABEL[res.status]}
@@ -149,10 +167,10 @@ export default async function TeamAttendancePage({
 
           <div className="card mb-4">
             <h4 className="mb-2 text-sm font-semibold text-slate-700">
-              اصلاح دستی یک روز
+              افزودن تردد دستی
             </h4>
             <form
-              action={saveAttendanceAction}
+              action={addPunchAction}
               className="flex flex-wrap items-end gap-2"
             >
               <input type="hidden" name="slug" value={params.slug} />
@@ -170,18 +188,51 @@ export default async function TeamAttendancePage({
                 </select>
               </div>
               <div>
-                <label className="label">ورود</label>
-                <input name="check_in" type="time" className="input" dir="ltr" />
+                <label className="label">ساعت</label>
+                <input name="time" type="time" className="input" dir="ltr" />
               </div>
               <div>
-                <label className="label">خروج</label>
-                <input name="check_out" type="time" className="input" dir="ltr" />
+                <label className="label">نوع</label>
+                <select name="kind" className="input" defaultValue="in">
+                  <option value="in">ورود</option>
+                  <option value="out">خروج</option>
+                </select>
               </div>
-              <button className="btn-ghost">ذخیره</button>
-              <span className="text-[11px] text-slate-400">
-                خالی گذاشتن هر دو = حذف رکورد آن روز
-              </span>
+              <button className="btn-ghost">افزودن</button>
             </form>
+
+            {daysWithPunches.length > 0 && (
+              <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
+                {daysWithPunches.map((d) => (
+                  <div key={d.iso} className="flex flex-wrap items-center gap-2">
+                    <span className="w-32 text-xs text-slate-500">
+                      {WEEKDAYS[d.weekday]} {toFaDigits(d.jd)}{" "}
+                      {JALALI_MONTHS[jm - 1]}
+                    </span>
+                    {d.punches.map((p) => (
+                      <span
+                        key={p.id}
+                        className={`badge flex items-center gap-1 ${
+                          p.kind === "in"
+                            ? "bg-green-50 text-green-700"
+                            : "bg-rose-50 text-rose-700"
+                        }`}
+                        dir="ltr"
+                      >
+                        {p.kind === "in" ? "ورود" : "خروج"} {formatTime(p.at)}
+                        <form action={deletePunchAction} className="inline">
+                          <input type="hidden" name="slug" value={params.slug} />
+                          <input type="hidden" name="id" value={p.id} />
+                          <button className="text-red-500 hover:text-red-700">
+                            ×
+                          </button>
+                        </form>
+                      </span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <SheetTable

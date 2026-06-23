@@ -162,6 +162,18 @@ CREATE TABLE IF NOT EXISTS attendance_days (
 );
 CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance_days(work_date);
 
+-- Individual punches (stage 4.3): supports multiple in/out per day.
+CREATE TABLE IF NOT EXISTS attendance_punches (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  member_id  uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  punched_at timestamptz NOT NULL DEFAULT now(),
+  kind       text NOT NULL CHECK (kind IN ('in','out')),
+  source     text NOT NULL DEFAULT 'self',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_punch_member_time
+  ON attendance_punches(member_id, punched_at);
+
 -- Attendance policy / company rules (stage 3): single settings row.
 CREATE TABLE IF NOT EXISTS attendance_policy (
   id                     int PRIMARY KEY DEFAULT 1 CHECK (id = 1),

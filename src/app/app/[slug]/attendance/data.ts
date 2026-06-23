@@ -6,7 +6,13 @@ import {
   iranianWeekday,
   isoDate,
 } from "@/lib/jalali";
-import { computeDay, type DayResult } from "@/lib/attendance";
+import { computeDay, aggregatePunches, type DayResult } from "@/lib/attendance";
+
+export interface DayPunch {
+  id: string;
+  at: Date;
+  kind: "in" | "out";
+}
 
 export interface SheetDay {
   jd: number;
@@ -17,6 +23,7 @@ export interface SheetDay {
   holidayTitle?: string;
   checkIn: Date | null;
   checkOut: Date | null;
+  punches: DayPunch[];
   result: DayResult;
 }
 
@@ -85,16 +92,24 @@ export async function loadMonthSheet(
       }
     }
 
-    const rows = await tx<
-      { work_date: string; check_in: Date | null; check_out: Date | null }[]
-    >`
-      SELECT work_date::text, check_in, check_out
-      FROM attendance_days
+    // Punches across the month (padded so timezone edges still bucket locally).
+    const punches = await tx<DayPunch[]>`
+      SELECT id, punched_at AS at, kind
+      FROM attendance_punches
       WHERE member_id = ${memberId}
-        AND work_date BETWEEN ${firstIso} AND ${lastIso}
+        AND punched_at >= ${firstIso}::date
+        AND punched_at < (${lastIso}::date + 2)
+      ORDER BY punched_at
     `;
-    const rowMap = new Map(rows.map((r) => [r.work_date.slice(0, 10), r]));
+    const punchesByDay = new Map<string, DayPunch[]>();
+    for (const p of punches) {
+      const iso = isoDate(p.at);
+      const list = punchesByDay.get(iso);
+      if (list) list.push(p);
+      else punchesByDay.set(iso, [p]);
+    }
 
+    const now = new Date();
     const days: SheetDay[] = [];
     const totals = { presentDays: 0, absentDays: 0, workedMinutes: 0, lateMinutes: 0 };
 
@@ -104,10 +119,12 @@ export async function loadMonthSheet(
       const weekday = iranianWeekday(g);
       const isHoliday = holidayMap.has(iso) || weekday === 6; // Friday off
       const isWorkingDay = workDays.has(weekday) && !isHoliday;
-      const row = rowMap.get(iso);
-      const checkIn = row?.check_in ?? null;
-      const checkOut = row?.check_out ?? null;
       const dayOrder = iso < todayIso ? -1 : iso === todayIso ? 0 : 1;
+
+      const dayPunches = punchesByDay.get(iso) ?? [];
+      const agg = aggregatePunches(dayPunches, dayOrder === 0 ? now : undefined);
+      const checkIn = agg.firstIn;
+      const checkOut = agg.lastOut;
 
       const result = computeDay({
         isWorkingDay,
@@ -118,6 +135,8 @@ export async function loadMonthSheet(
         scheduleStart: start,
         graceMinutes: grace,
       });
+      // Worked time comes from summed in→out pairs (handles lunch breaks).
+      result.worked = agg.worked > 0 ? agg.worked : null;
 
       // An approved leave/mission overrides an otherwise empty working day.
       if (
@@ -144,6 +163,7 @@ export async function loadMonthSheet(
         holidayTitle: holidayMap.get(iso),
         checkIn,
         checkOut,
+        punches: dayPunches,
         result,
       });
     }

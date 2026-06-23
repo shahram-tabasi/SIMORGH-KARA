@@ -37,8 +37,13 @@ export default async function AttendancePage({
       <div className="mb-6">
         <PunchWidget
           slug={params.slug}
-          checkInIso={todayRow?.checkIn?.toISOString() ?? null}
-          checkOutIso={todayRow?.checkOut?.toISOString() ?? null}
+          punches={
+            todayRow?.punches.map((p) => ({
+              at: p.at.toISOString(),
+              kind: p.kind,
+            })) ?? []
+          }
+          workedMinutes={todayRow?.result.worked ?? 0}
         />
       </div>
 

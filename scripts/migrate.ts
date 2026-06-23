@@ -68,6 +68,17 @@ async function main() {
         CREATE INDEX IF NOT EXISTS idx_attendance_date
           ON "${schema_name}".attendance_days(work_date);
 
+        CREATE TABLE IF NOT EXISTS "${schema_name}".attendance_punches (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          member_id uuid NOT NULL REFERENCES "${schema_name}".members(id) ON DELETE CASCADE,
+          punched_at timestamptz NOT NULL DEFAULT now(),
+          kind text NOT NULL CHECK (kind IN ('in','out')),
+          source text NOT NULL DEFAULT 'self',
+          created_at timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_punch_member_time
+          ON "${schema_name}".attendance_punches(member_id, punched_at);
+
         CREATE TABLE IF NOT EXISTS "${schema_name}".attendance_policy (
           id int PRIMARY KEY DEFAULT 1 CHECK (id = 1),
           grace_minutes int NOT NULL DEFAULT 0,
