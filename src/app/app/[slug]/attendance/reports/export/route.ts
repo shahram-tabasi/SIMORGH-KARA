@@ -31,6 +31,8 @@ export async function GET(
     "مرخصی/مأموریت",
     "مجموع کارکرد",
     "مجموع تأخیر",
+    "کسرکار",
+    "اضافه‌کار",
   ];
   const lines = [header.join(",")];
   for (const r of rows) {
@@ -42,6 +44,8 @@ export async function GET(
         r.leaveDays,
         dur(r.workedMinutes),
         dur(r.lateMinutes),
+        dur(r.deficitMinutes),
+        dur(r.overtimeMinutes),
       ].join(",")
     );
   }

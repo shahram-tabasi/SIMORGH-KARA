@@ -37,11 +37,13 @@ export function SheetTable({
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <Summary label="روزهای حاضر" value={toFaDigits(sheet.totals.presentDays)} tone="text-green-700" />
         <Summary label="روزهای غایب" value={toFaDigits(sheet.totals.absentDays)} tone="text-red-700" />
         <Summary label="مجموع کارکرد" value={formatDuration(sheet.totals.workedMinutes)} tone="text-brand-700" />
         <Summary label="مجموع تأخیر" value={formatDuration(sheet.totals.lateMinutes)} tone="text-amber-700" />
+        <Summary label="مجموع کسرکار" value={formatDuration(sheet.totals.deficitMinutes)} tone="text-rose-700" />
+        <Summary label="مجموع اضافه‌کار" value={formatDuration(sheet.totals.overtimeMinutes)} tone="text-indigo-700" />
       </div>
 
       <div className="mt-4 overflow-x-auto">
@@ -54,6 +56,8 @@ export function SheetTable({
               <th className="pb-2 font-medium">خروج</th>
               <th className="pb-2 font-medium">کارکرد</th>
               <th className="pb-2 font-medium">تأخیر</th>
+              <th className="pb-2 font-medium">کسرکار</th>
+              <th className="pb-2 font-medium">اضافه‌کار</th>
               <th className="pb-2 font-medium">وضعیت</th>
             </tr>
           </thead>
@@ -81,6 +85,12 @@ export function SheetTable({
                     {d.result.lateMinutes > 0
                       ? formatDuration(d.result.lateMinutes)
                       : "—"}
+                  </td>
+                  <td className="py-1.5 text-rose-600">
+                    {d.deficitMinutes > 0 ? formatDuration(d.deficitMinutes) : "—"}
+                  </td>
+                  <td className="py-1.5 text-indigo-600">
+                    {d.overtimeMinutes > 0 ? formatDuration(d.overtimeMinutes) : "—"}
                   </td>
                   <td className="py-1.5">
                     <span className={`badge ${STATUS_TONE[d.result.status]}`}>

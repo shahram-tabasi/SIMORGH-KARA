@@ -36,8 +36,10 @@ export default async function ReportsPage({
       leave: a.leave + r.leaveDays,
       worked: a.worked + r.workedMinutes,
       late: a.late + r.lateMinutes,
+      deficit: a.deficit + r.deficitMinutes,
+      overtime: a.overtime + r.overtimeMinutes,
     }),
-    { present: 0, absent: 0, leave: 0, worked: 0, late: 0 }
+    { present: 0, absent: 0, leave: 0, worked: 0, late: 0, deficit: 0, overtime: 0 }
   );
 
   return (
@@ -80,7 +82,9 @@ export default async function ReportsPage({
                 <th className="pb-2 font-medium">غایب</th>
                 <th className="pb-2 font-medium">مرخصی/مأموریت</th>
                 <th className="pb-2 font-medium">مجموع کارکرد</th>
-                <th className="pb-2 font-medium">مجموع تأخیر</th>
+                <th className="pb-2 font-medium">تأخیر</th>
+                <th className="pb-2 font-medium">کسرکار</th>
+                <th className="pb-2 font-medium">اضافه‌کار</th>
               </tr>
             </thead>
             <tbody>
@@ -94,11 +98,17 @@ export default async function ReportsPage({
                   <td className="py-2 text-amber-600">
                     {formatDuration(r.lateMinutes)}
                   </td>
+                  <td className="py-2 text-rose-600">
+                    {formatDuration(r.deficitMinutes)}
+                  </td>
+                  <td className="py-2 text-indigo-600">
+                    {formatDuration(r.overtimeMinutes)}
+                  </td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-slate-400">
+                  <td colSpan={8} className="py-6 text-center text-slate-400">
                     عضوی یافت نشد.
                   </td>
                 </tr>
@@ -113,6 +123,8 @@ export default async function ReportsPage({
                   <td className="py-2">{toFaDigits(grand.leave)}</td>
                   <td className="py-2">{formatDuration(grand.worked)}</td>
                   <td className="py-2">{formatDuration(grand.late)}</td>
+                  <td className="py-2">{formatDuration(grand.deficit)}</td>
+                  <td className="py-2">{formatDuration(grand.overtime)}</td>
                 </tr>
               </tfoot>
             )}

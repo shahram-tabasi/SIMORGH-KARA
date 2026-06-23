@@ -24,6 +24,8 @@ export interface SheetDay {
   checkIn: Date | null;
   checkOut: Date | null;
   punches: DayPunch[];
+  deficitMinutes: number; // کسرکار: shortfall vs the daily working minutes
+  overtimeMinutes: number; // اضافه‌کار: worked beyond the daily minutes
   result: DayResult;
 }
 
@@ -31,7 +33,15 @@ export interface MonthSheet {
   days: SheetDay[];
   scheduleStart: string;
   scheduleName: string;
-  totals: { presentDays: number; absentDays: number; workedMinutes: number; lateMinutes: number };
+  dailyMinutes: number;
+  totals: {
+    presentDays: number;
+    absentDays: number;
+    workedMinutes: number;
+    lateMinutes: number;
+    deficitMinutes: number;
+    overtimeMinutes: number;
+  };
 }
 
 /** Build a member's attendance sheet for a Jalali month. */
@@ -62,10 +72,22 @@ export async function loadMonthSheet(
     const workDays = new Set(sched?.work_days ?? [0, 1, 2, 3, 4]);
     const start = sched?.start_time ?? "08:00";
 
-    const [policy] = await tx<{ grace_minutes: number }[]>`
-      SELECT grace_minutes FROM attendance_policy WHERE id = 1
+    const [policy] = await tx<
+      { grace_minutes: number; standard_daily_minutes: number; overtime_enabled: boolean }[]
+    >`
+      SELECT grace_minutes, standard_daily_minutes, overtime_enabled
+      FROM attendance_policy WHERE id = 1
     `;
     const grace = policy?.grace_minutes ?? 0;
+    const overtimeEnabled = policy?.overtime_enabled ?? true;
+
+    // Daily working minutes for کسرکار/اضافه‌کار: the member's own موظفی,
+    // falling back to the company standard.
+    const [emp] = await tx<{ daily_work_minutes: number }[]>`
+      SELECT daily_work_minutes FROM member_employment WHERE member_id = ${memberId}
+    `;
+    const dailyMinutes =
+      emp?.daily_work_minutes ?? policy?.standard_daily_minutes ?? 480;
 
     const holidays = await tx<{ holiday_date: string; title: string }[]>`
       SELECT holiday_date::text, title FROM holidays
@@ -111,7 +133,14 @@ export async function loadMonthSheet(
 
     const now = new Date();
     const days: SheetDay[] = [];
-    const totals = { presentDays: 0, absentDays: 0, workedMinutes: 0, lateMinutes: 0 };
+    const totals = {
+      presentDays: 0,
+      absentDays: 0,
+      workedMinutes: 0,
+      lateMinutes: 0,
+      deficitMinutes: 0,
+      overtimeMinutes: 0,
+    };
 
     for (let d = 1; d <= len; d++) {
       const g = toGregorian(jy, jm, d);
@@ -148,11 +177,27 @@ export async function loadMonthSheet(
         if (lv) result.status = lv;
       }
 
+      // کسرکار / اضافه‌کار vs the daily working minutes (present days only).
+      // Late arrival naturally surfaces here as کسرکار (no grace on deduction).
+      let deficitMinutes = 0;
+      let overtimeMinutes = 0;
+      if (
+        (result.status === "present" || result.status === "late") &&
+        result.worked != null
+      ) {
+        deficitMinutes = Math.max(0, dailyMinutes - result.worked);
+        overtimeMinutes = overtimeEnabled
+          ? Math.max(0, result.worked - dailyMinutes)
+          : 0;
+      }
+
       if (result.status === "present" || result.status === "late")
         totals.presentDays++;
       if (result.status === "absent") totals.absentDays++;
       if (result.worked) totals.workedMinutes += result.worked;
       totals.lateMinutes += result.lateMinutes;
+      totals.deficitMinutes += deficitMinutes;
+      totals.overtimeMinutes += overtimeMinutes;
 
       days.push({
         jd: d,
@@ -161,6 +206,8 @@ export async function loadMonthSheet(
         isWorkingDay,
         isHoliday,
         holidayTitle: holidayMap.get(iso),
+        deficitMinutes,
+        overtimeMinutes,
         checkIn,
         checkOut,
         punches: dayPunches,
@@ -172,6 +219,7 @@ export async function loadMonthSheet(
       days,
       scheduleStart: start,
       scheduleName: sched?.name ?? "—",
+      dailyMinutes,
       totals,
     };
   });
@@ -185,6 +233,8 @@ export interface MemberSummary {
   leaveDays: number;
   workedMinutes: number;
   lateMinutes: number;
+  deficitMinutes: number;
+  overtimeMinutes: number;
 }
 
 /** Monthly attendance summary for every active member. */
@@ -212,6 +262,8 @@ export async function loadMonthSummaries(
       leaveDays,
       workedMinutes: sheet.totals.workedMinutes,
       lateMinutes: sheet.totals.lateMinutes,
+      deficitMinutes: sheet.totals.deficitMinutes,
+      overtimeMinutes: sheet.totals.overtimeMinutes,
     });
   }
   return out;
