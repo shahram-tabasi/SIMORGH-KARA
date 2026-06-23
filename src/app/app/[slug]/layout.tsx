@@ -24,6 +24,8 @@ export default async function TenantLayout({
   if (can("attendance.manage"))
     nav.push({ href: `${base}/attendance/team`, label: "حضور تیم", icon: "👫" });
   if (can("attendance.manage"))
+    nav.push({ href: `${base}/attendance/reports`, label: "گزارش حضور", icon: "📊" });
+  if (can("attendance.manage"))
     nav.push({ href: `${base}/attendance/rules`, label: "قوانین حضور", icon: "⚙️" });
   nav.push({ href: `${base}/leave`, label: "مرخصی و مأموریت", icon: "🏖️" });
   if (can("leave.approve"))

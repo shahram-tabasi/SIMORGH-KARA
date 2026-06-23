@@ -156,3 +156,43 @@ export async function loadMonthSheet(
     };
   });
 }
+
+export interface MemberSummary {
+  memberId: string;
+  name: string;
+  presentDays: number;
+  absentDays: number;
+  leaveDays: number;
+  workedMinutes: number;
+  lateMinutes: number;
+}
+
+/** Monthly attendance summary for every active member. */
+export async function loadMonthSummaries(
+  schema: string,
+  jy: number,
+  jm: number
+): Promise<MemberSummary[]> {
+  const members = await withTenant(schema, async (tx) =>
+    tx<{ id: string; full_name: string }[]>`
+      SELECT id, full_name FROM members WHERE status = 'active' ORDER BY full_name
+    `
+  );
+  const out: MemberSummary[] = [];
+  for (const m of members) {
+    const sheet = await loadMonthSheet(schema, m.id, jy, jm);
+    const leaveDays = sheet.days.filter(
+      (d) => d.result.status === "leave" || d.result.status === "mission"
+    ).length;
+    out.push({
+      memberId: m.id,
+      name: m.full_name,
+      presentDays: sheet.totals.presentDays,
+      absentDays: sheet.totals.absentDays,
+      leaveDays,
+      workedMinutes: sheet.totals.workedMinutes,
+      lateMinutes: sheet.totals.lateMinutes,
+    });
+  }
+  return out;
+}
