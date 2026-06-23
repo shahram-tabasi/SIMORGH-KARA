@@ -3,6 +3,7 @@ import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { ToggleForm } from "@/components/ToggleForm";
 import { MemberForm } from "./MemberForm";
+import { ScheduleSelect } from "./ScheduleSelect";
 import { toggleMemberRoleAction, toggleMemberGroupAction } from "../actions";
 
 interface MemberRow {
@@ -11,15 +12,19 @@ interface MemberRow {
   title: string | null;
   status: string;
   email: string;
+  schedule_id: string | null;
 }
 
 async function loadData(schema: string) {
   return withTenant(schema, async (tx) => {
     const members = await tx<MemberRow[]>`
-      SELECT m.id, m.full_name, m.title, m.status, ua.email
+      SELECT m.id, m.full_name, m.title, m.status, m.schedule_id, ua.email
       FROM members m
       JOIN platform.user_accounts ua ON ua.id = m.account_id
       ORDER BY m.created_at
+    `;
+    const schedules = await tx<{ id: string; name: string; is_default: boolean }[]>`
+      SELECT id, name, is_default FROM work_schedules ORDER BY is_default DESC, name
     `;
     const roles = await tx<{ id: string; name: string }[]>`
       SELECT id, name FROM roles ORDER BY name
@@ -33,7 +38,7 @@ async function loadData(schema: string) {
     const memberGroups = await tx<{ member_id: string; group_id: string }[]>`
       SELECT member_id, group_id FROM member_groups
     `;
-    return { members, roles, groups, memberRoles, memberGroups };
+    return { members, roles, groups, memberRoles, memberGroups, schedules };
   });
 }
 
@@ -44,9 +49,8 @@ export default async function MembersPage({
 }) {
   const ctx = await requireTenant(params.slug);
   const canManage = ctx.member.permissions.has("members.manage");
-  const { members, roles, groups, memberRoles, memberGroups } = await loadData(
-    ctx.company.schema
-  );
+  const { members, roles, groups, memberRoles, memberGroups, schedules } =
+    await loadData(ctx.company.schema);
 
   const roleSet = new Set(memberRoles.map((r) => `${r.member_id}:${r.role_id}`));
   const groupSet = new Set(
@@ -146,6 +150,20 @@ export default async function MembersPage({
                     )
                   )}
                 </div>
+              </div>
+            )}
+
+            {canManage && (
+              <div className="mt-4">
+                <div className="mb-1.5 text-xs font-medium text-slate-500">
+                  شیفت کاری
+                </div>
+                <ScheduleSelect
+                  slug={params.slug}
+                  memberId={m.id}
+                  current={m.schedule_id}
+                  schedules={schedules}
+                />
               </div>
             )}
           </div>

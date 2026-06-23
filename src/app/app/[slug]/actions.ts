@@ -117,6 +117,29 @@ export async function toggleMemberRoleAction(formData: FormData) {
   rev(slug, "/members");
 }
 
+/** Assign (or clear) a member's work schedule. Empty = use company default. */
+export async function setMemberScheduleAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "members.manage");
+  const memberId = String(formData.get("memberId"));
+  const scheduleId = String(formData.get("scheduleId") || "");
+
+  await withTenant(ctx.company.schema, async (tx) => {
+    if (scheduleId) {
+      // Guard against a foreign schedule id from another tenant/stale form.
+      const [s] = await tx<{ id: string }[]>`
+        SELECT id FROM work_schedules WHERE id = ${scheduleId}
+      `;
+      if (!s) return;
+      await tx`UPDATE members SET schedule_id = ${scheduleId} WHERE id = ${memberId}`;
+    } else {
+      await tx`UPDATE members SET schedule_id = NULL WHERE id = ${memberId}`;
+    }
+  });
+  rev(slug, "/members");
+}
+
 export async function toggleMemberGroupAction(formData: FormData) {
   const slug = String(formData.get("slug"));
   const ctx = await requireTenant(slug);
