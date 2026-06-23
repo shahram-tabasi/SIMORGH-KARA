@@ -52,7 +52,7 @@ export function Shell({
         </div>
       </aside>
 
-      <main className="flex-1 overflow-x-hidden p-6 lg:p-8">{children}</main>
+      <main className="flex-1 overflow-x-hidden p-4 lg:p-6">{children}</main>
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { requireTenant } from "@/lib/session";
-import { PageHeader } from "@/components/Shell";
 import { todayJalali, isoDate } from "@/lib/jalali";
 import { loadMonthSheet } from "./data";
 import { SheetTable } from "./SheetTable";
@@ -29,12 +28,12 @@ export default async function AttendancePage({
 
   return (
     <>
-      <PageHeader
-        title="حضور و غیاب"
-        description="ثبت ورود و خروج و مشاهده کارنامه ماهانه شما"
-      />
+      <div className="mb-3">
+        <h1 className="text-lg font-bold text-slate-800">حضور و غیاب</h1>
+        <p className="text-xs text-slate-400">ثبت ورود/خروج و کارنامهٔ ماهانه</p>
+      </div>
 
-      <div className="mb-6">
+      <div className="mb-3">
         <PunchWidget
           slug={params.slug}
           punches={
