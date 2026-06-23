@@ -115,6 +115,11 @@ CREATE TABLE IF NOT EXISTS kartabl_items (
                 CHECK (kind IN ('task','document','message')),
   status      text NOT NULL DEFAULT 'open'
                 CHECK (status IN ('open','in_progress','done','archived')),
+  -- The member who created/assigned this item. Only the assigner (or a
+  -- kartabl manager acting on someone else's kartabl) may edit or delete it;
+  -- the recipient can only report progress via status. This keeps tasks
+  -- assigned to a person — even the CEO — tamper-proof for accountability.
+  created_by  uuid REFERENCES members(id) ON DELETE SET NULL,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 

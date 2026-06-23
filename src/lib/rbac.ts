@@ -11,8 +11,9 @@ export const PERMISSIONS = {
   "roles.manage": "مدیریت نقش‌ها و سطوح دسترسی",
   "groups.view": "مشاهده زیرگروه‌ها",
   "groups.manage": "مدیریت زیرگروه‌ها",
+  "kartabl.assign": "ارجاع کار به کارتابل دیگران",
   "kartabl.view_all": "مشاهده کارتابل همه اعضا",
-  "kartabl.manage": "مدیریت کارتابل‌ها",
+  "kartabl.manage": "مدیریت کامل کارتابل‌ها (ویرایش/حذف کار دیگران)",
   "ledger.view": "مشاهده دفتر کل",
   "ledger.manage": "ثبت و مدیریت اسناد دفتر کل",
   "settings.manage": "مدیریت تنظیمات شرکت",
@@ -41,8 +42,8 @@ export const DEFAULT_ROLES: {
   },
   {
     name: "کاربر",
-    description: "دسترسی پایه — کارتابل شخصی",
-    permissions: ["kartabl.manage", "ledger.view"],
+    description: "دسترسی پایه — فقط کارتابل شخصی خود",
+    permissions: ["ledger.view"],
     is_system: true,
   },
 ];

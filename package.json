@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "db:seed": "node --env-file=.env --import tsx scripts/seed.ts",
+    "db:migrate": "node --env-file=.env --import tsx scripts/migrate.ts",
     "db:reset": "node --env-file=.env --import tsx scripts/reset.ts"
   },
   "dependencies": {

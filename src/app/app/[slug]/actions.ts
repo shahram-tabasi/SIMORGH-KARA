@@ -86,6 +86,11 @@ export async function toggleMemberRoleAction(formData: FormData) {
   const roleId = String(formData.get("roleId"));
   const checked = formData.get("checked") === "1";
 
+  // Guard 1: you can never change your OWN roles. This prevents an admin from
+  // accidentally stripping their own access (the "CEO unticks مدیر سامانه" trap).
+  // Another admin must change someone's roles.
+  if (memberId === ctx.member.memberId) return;
+
   await withTenant(ctx.company.schema, async (tx) => {
     if (checked) {
       await tx`
@@ -93,6 +98,17 @@ export async function toggleMemberRoleAction(formData: FormData) {
         ON CONFLICT DO NOTHING
       `;
     } else {
+      // Guard 2: never remove the last member holding a full-access (system
+      // admin) role — that would lock the whole company out of management.
+      const [role] = await tx<{ is_system: boolean; name: string }[]>`
+        SELECT is_system, name FROM roles WHERE id = ${roleId}
+      `;
+      if (role?.is_system && role.name === "مدیر سامانه") {
+        const [{ holders }] = await tx<{ holders: number }[]>`
+          SELECT count(*)::int AS holders FROM member_roles WHERE role_id = ${roleId}
+        `;
+        if (holders <= 1) return; // keep at least one full admin
+      }
       await tx`
         DELETE FROM member_roles WHERE member_id = ${memberId} AND role_id = ${roleId}
       `;
@@ -215,7 +231,36 @@ export async function deleteGroupAction(formData: FormData) {
 }
 
 /* ------------------------------- kartabl --------------------------------- */
+/*
+ * Accountability model:
+ *  - The *owner* of a kartabl is the person it belongs to (the assignee).
+ *  - `created_by` records who created/assigned each item (the assigner).
+ *  - Editing/deleting an item is allowed ONLY for the assigner, or for a
+ *    kartabl manager acting on SOMEONE ELSE's kartabl. A person can never
+ *    edit or delete a task that was assigned to them — even the CEO. They may
+ *    only report progress (status).
+ */
 
+interface ItemCtx {
+  owner_id: string;
+  created_by: string | null;
+}
+
+function canEditItem(item: ItemCtx, memberId: string, perms: Set<string>) {
+  if (item.created_by === memberId) return true; // the assigner / self-author
+  if (item.owner_id === memberId) return false; // never edit your own assigned task
+  return perms.has("kartabl.manage"); // managing another member's kartabl
+}
+
+function canSetStatus(item: ItemCtx, memberId: string, perms: Set<string>) {
+  return (
+    item.owner_id === memberId ||
+    item.created_by === memberId ||
+    perms.has("kartabl.manage")
+  );
+}
+
+/** Add a note/task to one's OWN kartabl (self-authored, freely editable). */
 export async function addKartablItemAction(
   _prev: ActionState,
   formData: FormData
@@ -229,21 +274,116 @@ export async function addKartablItemAction(
   if (title.length < 1) return { error: "عنوان را وارد کنید." };
 
   await withTenant(ctx.company.schema, async (tx) => {
-    // ensure the kartabl belongs to the current member unless they can manage all
     const [k] = await tx<{ member_id: string }[]>`
       SELECT member_id FROM kartabls WHERE id = ${kartablId}
     `;
     if (!k) throw new Error("کارتابل یافت نشد.");
-    if (k.member_id !== ctx.member.memberId && !ctx.member.permissions.has("kartabl.manage")) {
+    if (
+      k.member_id !== ctx.member.memberId &&
+      !ctx.member.permissions.has("kartabl.manage")
+    ) {
       throw new Error("دسترسی غیرمجاز.");
     }
     await tx`
-      INSERT INTO kartabl_items (kartabl_id, title, body, kind)
-      VALUES (${kartablId}, ${title}, ${body}, ${kind})
+      INSERT INTO kartabl_items (kartabl_id, title, body, kind, created_by)
+      VALUES (${kartablId}, ${title}, ${body}, ${kind}, ${ctx.member.memberId})
     `;
   });
   rev(slug, "/kartabl");
   return { ok: true };
+}
+
+/** Assign a task INTO another member's kartabl (requires kartabl.assign). */
+export async function assignTaskAction(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "kartabl.assign");
+
+  const targetMemberId = String(formData.get("memberId"));
+  const title = String(formData.get("title") || "").trim();
+  const body = String(formData.get("body") || "");
+  const kind = String(formData.get("kind") || "task");
+  if (!targetMemberId) return { error: "عضو مقصد را انتخاب کنید." };
+  if (title.length < 1) return { error: "عنوان کار را وارد کنید." };
+
+  try {
+    await withTenant(ctx.company.schema, async (tx) => {
+      let [k] = await tx<{ id: string }[]>`
+        SELECT id FROM kartabls WHERE member_id = ${targetMemberId}
+        ORDER BY created_at LIMIT 1
+      `;
+      if (!k) {
+        [k] = await tx<{ id: string }[]>`
+          INSERT INTO kartabls (member_id, name)
+          VALUES (${targetMemberId}, 'کارتابل اصلی') RETURNING id
+        `;
+      }
+      await tx`
+        INSERT INTO kartabl_items (kartabl_id, title, body, kind, created_by)
+        VALUES (${k.id}, ${title}, ${body}, ${kind}, ${ctx.member.memberId})
+      `;
+    });
+  } catch {
+    return { error: "خطا در ارجاع کار." };
+  }
+  rev(slug, "/kartabl");
+  return { ok: true };
+}
+
+export async function editKartablItemAction(
+  _prev: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  const itemId = String(formData.get("itemId"));
+  const title = String(formData.get("title") || "").trim();
+  const body = String(formData.get("body") || "");
+  if (title.length < 1) return { error: "عنوان را وارد کنید." };
+
+  const result = await withTenant(ctx.company.schema, async (tx) => {
+    const [item] = await tx<ItemCtx[]>`
+      SELECT k.member_id AS owner_id, i.created_by
+      FROM kartabl_items i JOIN kartabls k ON k.id = i.kartabl_id
+      WHERE i.id = ${itemId}
+    `;
+    if (!item) return "notfound";
+    if (!canEditItem(item, ctx.member.memberId, ctx.member.permissions)) {
+      return "forbidden";
+    }
+    await tx`
+      UPDATE kartabl_items SET title = ${title}, body = ${body} WHERE id = ${itemId}
+    `;
+    return "ok";
+  });
+
+  if (result === "forbidden")
+    return { error: "این کار توسط فرد دیگری به شما ارجاع شده و قابل ویرایش نیست." };
+  if (result === "notfound") return { error: "مورد یافت نشد." };
+  rev(slug, "/kartabl");
+  return { ok: true };
+}
+
+export async function deleteKartablItemAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  const itemId = String(formData.get("itemId"));
+  await withTenant(ctx.company.schema, async (tx) => {
+    const [item] = await tx<ItemCtx[]>`
+      SELECT k.member_id AS owner_id, i.created_by
+      FROM kartabl_items i JOIN kartabls k ON k.id = i.kartabl_id
+      WHERE i.id = ${itemId}
+    `;
+    if (!item) return;
+    if (!canEditItem(item, ctx.member.memberId, ctx.member.permissions)) {
+      throw new Error("اجازهٔ حذف این کار را ندارید.");
+    }
+    await tx`DELETE FROM kartabl_items WHERE id = ${itemId}`;
+  });
+  rev(slug, "/kartabl");
 }
 
 export async function setKartablItemStatusAction(formData: FormData) {
@@ -253,6 +393,15 @@ export async function setKartablItemStatusAction(formData: FormData) {
   const status = String(formData.get("status"));
   if (!["open", "in_progress", "done", "archived"].includes(status)) return;
   await withTenant(ctx.company.schema, async (tx) => {
+    const [item] = await tx<ItemCtx[]>`
+      SELECT k.member_id AS owner_id, i.created_by
+      FROM kartabl_items i JOIN kartabls k ON k.id = i.kartabl_id
+      WHERE i.id = ${itemId}
+    `;
+    if (!item) return;
+    if (!canSetStatus(item, ctx.member.memberId, ctx.member.permissions)) {
+      throw new Error("اجازهٔ تغییر وضعیت را ندارید.");
+    }
     await tx`UPDATE kartabl_items SET status = ${status} WHERE id = ${itemId}`;
   });
   rev(slug, "/kartabl");

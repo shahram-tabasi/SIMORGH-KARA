@@ -67,11 +67,18 @@ export default async function MembersPage({
       )}
 
       <div className="space-y-4">
-        {members.map((m) => (
+        {members.map((m) => {
+          const isSelf = m.id === ctx.member.memberId;
+          return (
           <div key={m.id} className="card">
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-semibold text-slate-800">{m.full_name}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-800">{m.full_name}</span>
+                  {isSelf && (
+                    <span className="badge bg-brand-50 text-brand-700">شما</span>
+                  )}
+                </div>
                 <div className="text-xs text-slate-400" dir="ltr">
                   {m.email}
                   {m.title ? ` · ${m.title}` : ""}
@@ -84,24 +91,35 @@ export default async function MembersPage({
                 نقش‌ها
               </div>
               <div className="flex flex-wrap gap-2">
-                {roles.map((r) =>
-                  canManage ? (
-                    <ToggleForm
-                      key={r.id}
-                      action={toggleMemberRoleAction}
-                      hidden={{ slug: params.slug, memberId: m.id, roleId: r.id }}
-                      checked={roleSet.has(`${m.id}:${r.id}`)}
-                      label={r.name}
-                    />
-                  ) : (
-                    roleSet.has(`${m.id}:${r.id}`) && (
-                      <span key={r.id} className="badge bg-brand-50 text-brand-700">
-                        {r.name}
-                      </span>
-                    )
-                  )
-                )}
+                {/* You can never edit your own roles — shown read-only. */}
+                {canManage && !isSelf
+                  ? roles.map((r) => (
+                      <ToggleForm
+                        key={r.id}
+                        action={toggleMemberRoleAction}
+                        hidden={{ slug: params.slug, memberId: m.id, roleId: r.id }}
+                        checked={roleSet.has(`${m.id}:${r.id}`)}
+                        label={r.name}
+                      />
+                    ))
+                  : roles.map(
+                      (r) =>
+                        roleSet.has(`${m.id}:${r.id}`) && (
+                          <span
+                            key={r.id}
+                            className="badge bg-brand-50 text-brand-700"
+                          >
+                            {r.name}
+                          </span>
+                        )
+                    )}
               </div>
+              {isSelf && canManage && (
+                <div className="mt-1.5 text-[11px] text-slate-400">
+                  🔒 نقش‌های خودتان قابل تغییر نیست؛ برای جلوگیری از قطع تصادفی
+                  دسترسی، باید مدیر دیگری آن را تغییر دهد.
+                </div>
+              )}
             </div>
 
             {groups.length > 0 && (
@@ -131,7 +149,8 @@ export default async function MembersPage({
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );
