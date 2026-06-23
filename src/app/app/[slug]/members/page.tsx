@@ -4,7 +4,9 @@ import { PageHeader } from "@/components/Shell";
 import { ToggleForm } from "@/components/ToggleForm";
 import { MemberForm } from "./MemberForm";
 import { ScheduleSelect } from "./ScheduleSelect";
+import { EmploymentForm } from "./EmploymentForm";
 import { toggleMemberRoleAction, toggleMemberGroupAction } from "../actions";
+import { toJalali } from "@/lib/jalali";
 
 interface MemberRow {
   id: string;
@@ -26,6 +28,11 @@ async function loadData(schema: string) {
     const schedules = await tx<{ id: string; name: string; is_default: boolean }[]>`
       SELECT id, name, is_default FROM work_schedules ORDER BY is_default DESC, name
     `;
+    const employment = await tx<
+      { member_id: string; hire_date: string; site: string; daily_work_minutes: number }[]
+    >`
+      SELECT member_id, hire_date::text, site, daily_work_minutes FROM member_employment
+    `;
     const roles = await tx<{ id: string; name: string }[]>`
       SELECT id, name FROM roles ORDER BY name
     `;
@@ -38,8 +45,13 @@ async function loadData(schema: string) {
     const memberGroups = await tx<{ member_id: string; group_id: string }[]>`
       SELECT member_id, group_id FROM member_groups
     `;
-    return { members, roles, groups, memberRoles, memberGroups, schedules };
+    return { members, roles, groups, memberRoles, memberGroups, schedules, employment };
   });
+}
+
+function parseIso(d: string): Date {
+  const [y, m, day] = d.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, day);
 }
 
 export default async function MembersPage({
@@ -49,8 +61,9 @@ export default async function MembersPage({
 }) {
   const ctx = await requireTenant(params.slug);
   const canManage = ctx.member.permissions.has("members.manage");
-  const { members, roles, groups, memberRoles, memberGroups, schedules } =
+  const { members, roles, groups, memberRoles, memberGroups, schedules, employment } =
     await loadData(ctx.company.schema);
+  const empByMember = new Map(employment.map((e) => [e.member_id, e]));
 
   const roleSet = new Set(memberRoles.map((r) => `${r.member_id}:${r.role_id}`));
   const groupSet = new Set(
@@ -166,6 +179,29 @@ export default async function MembersPage({
                 />
               </div>
             )}
+
+            {canManage && (() => {
+              const e = empByMember.get(m.id);
+              const j = e ? toJalali(parseIso(e.hire_date)) : null;
+              return (
+                <div className="mt-4">
+                  <div className="mb-1.5 text-xs font-medium text-slate-500">
+                    اطلاعات استخدامی
+                  </div>
+                  <EmploymentForm
+                    slug={params.slug}
+                    memberId={m.id}
+                    emp={{
+                      hire_jy: j?.jy ?? 1404,
+                      hire_jm: j?.jm ?? 1,
+                      hire_jd: j?.jd ?? 1,
+                      site: e?.site ?? "hq",
+                      daily_work_minutes: e?.daily_work_minutes ?? 510,
+                    }}
+                  />
+                </div>
+              );
+            })()}
           </div>
           );
         })}

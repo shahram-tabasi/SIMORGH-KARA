@@ -106,6 +106,27 @@ async function main() {
         CREATE INDEX IF NOT EXISTS idx_leave_member ON "${schema_name}".leave_requests(member_id);
         CREATE INDEX IF NOT EXISTS idx_leave_status ON "${schema_name}".leave_requests(status);
 
+        CREATE TABLE IF NOT EXISTS "${schema_name}".member_employment (
+          member_id uuid PRIMARY KEY REFERENCES "${schema_name}".members(id) ON DELETE CASCADE,
+          hire_date date NOT NULL DEFAULT current_date,
+          site text NOT NULL DEFAULT 'hq' CHECK (site IN ('hq','factory','guard')),
+          daily_work_minutes int NOT NULL DEFAULT 510,
+          updated_at timestamptz NOT NULL DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS "${schema_name}".leave_ledger (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          member_id uuid NOT NULL REFERENCES "${schema_name}".members(id) ON DELETE CASCADE,
+          jyear int NOT NULL,
+          kind text NOT NULL CHECK (kind IN ('carry_in','forfeit','buyback','adjust')),
+          days numeric(6,2) NOT NULL,
+          note text,
+          created_by uuid REFERENCES "${schema_name}".members(id) ON DELETE SET NULL,
+          created_at timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_leave_ledger_member
+          ON "${schema_name}".leave_ledger(member_id, jyear);
+
         CREATE TABLE IF NOT EXISTS "${schema_name}".leave_types (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           code text NOT NULL UNIQUE,
@@ -134,6 +155,13 @@ async function main() {
 
         UPDATE "${schema_name}".attendance_policy
           SET annual_leave_days = 30 WHERE annual_leave_days = 26;
+      `);
+
+      // Backfill an employment profile for every existing member.
+      await sql.unsafe(`
+        INSERT INTO "${schema_name}".member_employment (member_id, hire_date)
+        SELECT id, created_at::date FROM "${schema_name}".members
+        ON CONFLICT (member_id) DO NOTHING;
       `);
 
       // Seed/refresh the leave-type catalogue (system types only; never clobber

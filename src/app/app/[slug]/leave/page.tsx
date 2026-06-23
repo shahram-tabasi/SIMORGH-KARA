@@ -2,9 +2,57 @@ import { requireTenant } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { toFaDigits, todayJalali } from "@/lib/jalali";
+import { loadBalance } from "@/lib/leave-balance";
 import { LeaveForm } from "./LeaveForm";
 import { cancelLeaveAction } from "./actions";
 import { KIND_LABEL, STATUS_LABEL, STATUS_TONE, faDate } from "./shared";
+
+function BalanceCard({
+  balance,
+}: {
+  balance: Awaited<ReturnType<typeof loadBalance>>;
+}) {
+  const cells: { label: string; value: number; tone: string }[] = [
+    { label: "استحقاق امسال", value: balance.accrued, tone: "text-brand-700" },
+    { label: "ذخیره سال‌های قبل", value: balance.carriedIn, tone: "text-slate-700" },
+    { label: "استفاده‌شده", value: balance.used, tone: "text-amber-700" },
+    {
+      label: "مانده قابل استفاده",
+      value: balance.remaining,
+      tone: balance.remaining < 0 ? "text-red-700" : "text-green-700",
+    },
+  ];
+  return (
+    <div className="card mb-6">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-700">
+          مانده مرخصی استحقاقی (سال {toFaDigits(balance.jyear)})
+        </h3>
+        <span className="text-xs text-slate-400">
+          سقف سالانه {toFaDigits(balance.annual)} روز
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {cells.map((c) => (
+          <div
+            key={c.label}
+            className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-center"
+          >
+            <div className={`text-lg font-bold ${c.tone}`}>
+              {toFaDigits(c.value)}
+            </div>
+            <div className="mt-0.5 text-xs text-slate-500">{c.label}</div>
+          </div>
+        ))}
+      </div>
+      {balance.remaining < 0 && (
+        <p className="mt-2 text-[11px] text-red-600">
+          مانده شما منفی است؛ طبق دستورالعمل حداکثر ۳ روز مرخصی منفی مجاز است.
+        </p>
+      )}
+    </div>
+  );
+}
 
 interface Req {
   id: string;
@@ -48,12 +96,20 @@ export default async function LeavePage({
     return { requests, types };
   });
 
+  const balance = await loadBalance(
+    ctx.company.schema,
+    ctx.member.memberId,
+    todayJalali().jy
+  );
+
   return (
     <>
       <PageHeader
         title="مرخصی و مأموریت"
         description="ثبت درخواست و پیگیری وضعیت آن"
       />
+
+      <BalanceCard balance={balance} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <LeaveForm slug={params.slug} year={todayJalali().jy} types={types} />

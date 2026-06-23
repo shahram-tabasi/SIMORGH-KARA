@@ -72,6 +72,7 @@ export async function createMemberAction(
       RETURNING id
     `;
     await tx`INSERT INTO kartabls (member_id, name) VALUES (${m.id}, 'کارتابل اصلی')`;
+    await tx`INSERT INTO member_employment (member_id) VALUES (${m.id})`;
   });
 
   rev(slug, "/members");
@@ -138,6 +139,40 @@ export async function setMemberScheduleAction(formData: FormData) {
     }
   });
   rev(slug, "/members");
+}
+
+/** Set a member's employment profile (hire date, site, daily working minutes). */
+export async function setMemberEmploymentAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "members.manage");
+  const memberId = String(formData.get("memberId"));
+  const site = ["hq", "factory", "guard"].includes(String(formData.get("site")))
+    ? String(formData.get("site"))
+    : "hq";
+  const siteMinutes: Record<string, number> = { hq: 510, factory: 440, guard: 510 };
+  const minutesRaw = Number(formData.get("daily_work_minutes"));
+  const minutes =
+    Number.isFinite(minutesRaw) && minutesRaw > 0 ? minutesRaw : siteMinutes[site];
+
+  const jy = Number(formData.get("jy"));
+  const jm = Number(formData.get("jm"));
+  const jd = Number(formData.get("jd"));
+  if (!jy || !jm || !jd) return;
+  const { toGregorian, isoDate } = await import("@/lib/jalali");
+  const hireIso = isoDate(toGregorian(jy, jm, jd));
+
+  await withTenant(ctx.company.schema, async (tx) => {
+    await tx`
+      INSERT INTO member_employment (member_id, hire_date, site, daily_work_minutes, updated_at)
+      VALUES (${memberId}, ${hireIso}, ${site}, ${minutes}, now())
+      ON CONFLICT (member_id) DO UPDATE SET
+        hire_date = ${hireIso}, site = ${site},
+        daily_work_minutes = ${minutes}, updated_at = now()
+    `;
+  });
+  rev(slug, "/members");
+  rev(slug, "/leave");
 }
 
 export async function toggleMemberGroupAction(formData: FormData) {

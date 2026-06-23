@@ -113,6 +113,11 @@ export async function provisionCompany(
       VALUES (${member.id}, 'کارتابل اصلی')
     `;
 
+    await tx`
+      INSERT INTO member_employment (member_id, hire_date)
+      VALUES (${member.id}, current_date)
+    `;
+
     // Default company work schedule (Sat–Wed, 08:00–17:00).
     await tx`
       INSERT INTO work_schedules (name, work_days, start_time, end_time, is_default)

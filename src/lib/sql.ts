@@ -184,6 +184,31 @@ CREATE TABLE IF NOT EXISTS attendance_policy (
   overtime_enabled       boolean NOT NULL DEFAULT true
 );
 
+-- Employment profile (stage 5.2): drives entitlement accrual and the
+-- site-specific "minutes that equal one leave day".
+CREATE TABLE IF NOT EXISTS member_employment (
+  member_id          uuid PRIMARY KEY REFERENCES members(id) ON DELETE CASCADE,
+  hire_date          date NOT NULL DEFAULT current_date,
+  site               text NOT NULL DEFAULT 'hq' CHECK (site IN ('hq','factory','guard')),
+  daily_work_minutes int NOT NULL DEFAULT 510, -- hq 08:30, factory 07:20
+  updated_at         timestamptz NOT NULL DEFAULT now()
+);
+
+-- Entitlement ledger (stage 5.2): manual carry-over / buyback / adjustments.
+-- Monthly accrual and usage are computed live; this table only stores the
+-- carry-in cap, forfeits, buy-backs and manual corrections.
+CREATE TABLE IF NOT EXISTS leave_ledger (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  member_id   uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  jyear       int NOT NULL,
+  kind        text NOT NULL CHECK (kind IN ('carry_in','forfeit','buyback','adjust')),
+  days        numeric(6,2) NOT NULL, -- signed: + increases, - decreases balance
+  note        text,
+  created_by  uuid REFERENCES members(id) ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_leave_ledger_member ON leave_ledger(member_id, jyear);
+
 -- Configurable leave-type catalogue (stage 5): each company tunes its rules.
 CREATE TABLE IF NOT EXISTS leave_types (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),

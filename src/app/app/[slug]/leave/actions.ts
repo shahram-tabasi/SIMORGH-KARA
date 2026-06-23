@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { withTenant } from "@/lib/db";
 import { requireTenant, ensurePermission } from "@/lib/session";
 import { toGregorian, isoDate } from "@/lib/jalali";
+import { computeEffectiveDays, holidaysInRange } from "@/lib/leave-balance";
 
 function rev(slug: string) {
   revalidatePath(`/app/${slug}/leave`);
@@ -47,10 +48,11 @@ export async function submitLeaveAction(
         code: string;
         unit: "day" | "hour";
         requires_attachment: boolean;
+        counts_inner_holidays: boolean;
         is_active: boolean;
       }[]
     >`
-      SELECT code, unit, requires_attachment, is_active
+      SELECT code, unit, requires_attachment, counts_inner_holidays, is_active
       FROM leave_types WHERE id = ${typeId}
     `;
     if (!type || !type.is_active) return { error: "نوع مرخصی نامعتبر است." };
@@ -72,6 +74,23 @@ export async function submitLeaveAction(
     if (type.requires_attachment && !attachment)
       return { error: "برای این نوع مرخصی پیوست مدرک الزامی است." };
 
+    // Compute billable days (skips inner holidays / converts hours → day fraction).
+    const [emp] = await tx<{ daily_work_minutes: number }[]>`
+      SELECT daily_work_minutes FROM member_employment
+      WHERE member_id = ${ctx.member.memberId}
+    `;
+    const holidays = await holidaysInRange(tx, fromIso, toIso);
+    const effectiveDays = computeEffectiveDays({
+      unit: type.unit,
+      countsInnerHolidays: type.counts_inner_holidays,
+      fromIso,
+      toIso,
+      fromTime,
+      toTime,
+      holidays,
+      dailyMinutes: emp?.daily_work_minutes ?? 510,
+    });
+
     // Map to the legacy `kind` used by the attendance sheet reflection.
     const kind =
       type.code === "mission"
@@ -83,10 +102,10 @@ export async function submitLeaveAction(
     await tx`
       INSERT INTO leave_requests
         (member_id, type_id, kind, from_date, to_date, from_time, to_time,
-         reason, attachment_url)
+         reason, attachment_url, effective_days)
       VALUES
         (${ctx.member.memberId}, ${typeId}, ${kind}, ${fromIso}, ${toIso},
-         ${fromTime}, ${toTime}, ${reason}, ${attachment})
+         ${fromTime}, ${toTime}, ${reason}, ${attachment}, ${effectiveDays})
     `;
     return { ok: true as const };
   });
