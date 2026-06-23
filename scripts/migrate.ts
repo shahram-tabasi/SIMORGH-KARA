@@ -70,8 +70,11 @@ async function main() {
           holiday_date date NOT NULL UNIQUE,
           title text NOT NULL,
           is_official boolean NOT NULL DEFAULT true,
+          is_off boolean NOT NULL DEFAULT true,
           created_at timestamptz NOT NULL DEFAULT now()
         );
+        ALTER TABLE "${schema_name}".holidays
+          ADD COLUMN IF NOT EXISTS is_off boolean NOT NULL DEFAULT true;
 
         CREATE TABLE IF NOT EXISTS "${schema_name}".attendance_days (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

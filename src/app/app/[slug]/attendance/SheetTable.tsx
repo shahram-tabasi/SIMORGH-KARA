@@ -128,7 +128,17 @@ export function SheetTable({
                     {WEEKDAYS[d.weekday]}
                     {isToday && <span className="mr-1 rounded bg-brand-600 px-1 text-[9px] text-white">امروز</span>}
                   </td>
-                  <td className="whitespace-nowrap px-2 py-[3px] text-slate-500">{toFaDigits(d.jd)} {JALALI_MONTHS[jm - 1]}</td>
+                  <td className="whitespace-nowrap px-2 py-[3px] text-slate-500">
+                    {toFaDigits(d.jd)} {JALALI_MONTHS[jm - 1]}
+                    {d.occasionTitle && (
+                      <span
+                        className="mr-1 rounded bg-amber-50 px-1 text-[9px] text-amber-700"
+                        title={d.occasionTitle}
+                      >
+                        ●
+                      </span>
+                    )}
+                  </td>
                   <td className="px-2 py-[3px] text-[10px] text-slate-400" dir="ltr">{d.isWorkingDay ? shift : "—"}</td>
                   <td className="px-2 py-[3px]">
                     <Timeline stamps={d.stamps} />

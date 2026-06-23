@@ -35,6 +35,7 @@ export interface SheetDay {
   isWorkingDay: boolean;
   isHoliday: boolean;
   holidayTitle?: string;
+  occasionTitle?: string; // مناسبت غیرتعطیل (informational, day stays working)
   leaveLabel?: string; // leave-type name for مرخصی/مأموریت days
   hourlyLeave?: { from: string; to: string }; // مرخصی ساعتی window (Persian HH:MM)
   stamps: DayStamp[]; // full ordered timeline: ورود/خروج + مرز مرخصی ساعتی
@@ -108,12 +109,17 @@ export async function loadMonthSheet(
     const dailyMinutes =
       emp?.daily_work_minutes ?? policy?.standard_daily_minutes ?? 480;
 
-    const holidays = await tx<{ holiday_date: string; title: string }[]>`
-      SELECT holiday_date::text, title FROM holidays
+    const holidays = await tx<{ holiday_date: string; title: string; is_off: boolean }[]>`
+      SELECT holiday_date::text, title, is_off FROM holidays
       WHERE holiday_date BETWEEN ${firstIso} AND ${lastIso}
     `;
+    // Days off vs informational occasions (مناسبت غیرتعطیل) — only the former
+    // make a day a holiday; occasions are surfaced as a marker.
     const holidayMap = new Map(
-      holidays.map((h) => [h.holiday_date.slice(0, 10), h.title])
+      holidays.filter((h) => h.is_off).map((h) => [h.holiday_date.slice(0, 10), h.title])
+    );
+    const occasionMap = new Map(
+      holidays.filter((h) => !h.is_off).map((h) => [h.holiday_date.slice(0, 10), h.title])
     );
 
     // Approved full-day leaves/missions overlapping the month (with type name).
@@ -271,6 +277,7 @@ export async function loadMonthSheet(
         isWorkingDay,
         isHoliday,
         holidayTitle: holidayMap.get(iso),
+        occasionTitle: occasionMap.get(iso),
         leaveLabel,
         hourlyLeave,
         stamps,

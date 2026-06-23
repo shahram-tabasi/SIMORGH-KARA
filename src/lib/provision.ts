@@ -4,6 +4,7 @@ import { tenantDDL } from "./sql";
 import { DEFAULT_ROLES } from "./rbac";
 import { DEFAULT_LEAVE_TYPES } from "./leave-types";
 import { fetchOfficialHolidays } from "./online-holidays";
+import { officialOccasionsFor } from "./iran-events";
 import { todayJalali } from "./jalali";
 import { hashPassword } from "./password";
 import { slugify, shortId, schemaNameFromSlug } from "./utils";
@@ -143,8 +144,16 @@ export async function provisionCompany(
       const { holidays } = await fetchOfficialHolidays(jy);
       for (const h of holidays) {
         await tx`
-          INSERT INTO holidays (holiday_date, title, is_official)
-          VALUES (${h.iso}, ${h.title}, true)
+          INSERT INTO holidays (holiday_date, title, is_official, is_off)
+          VALUES (${h.iso}, ${h.title}, true, true)
+          ON CONFLICT (holiday_date) DO NOTHING
+        `;
+      }
+      // Informational occasions (مناسبت‌های غیرتعطیل).
+      for (const o of officialOccasionsFor(jy)) {
+        await tx`
+          INSERT INTO holidays (holiday_date, title, is_official, is_off)
+          VALUES (${o.iso}, ${o.title}, true, false)
           ON CONFLICT (holiday_date) DO NOTHING
         `;
       }

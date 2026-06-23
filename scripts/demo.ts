@@ -12,6 +12,7 @@ import { DEFAULT_LEAVE_TYPES } from "../src/lib/leave-types";
 import { schemaNameFromSlug } from "../src/lib/utils";
 import { todayJalali, toGregorian, isoDate } from "../src/lib/jalali";
 import { fetchOfficialHolidays } from "../src/lib/online-holidays";
+import { officialOccasionsFor } from "../src/lib/iran-events";
 
 const CREDS = {
   superadmin: { email: process.env.SUPERADMIN_EMAIL ?? "admin@simorgh.local", password: process.env.SUPERADMIN_PASSWORD ?? "ChangeMe123!" },
@@ -120,8 +121,15 @@ async function main() {
         console.log(`  holidays ${jy}: ${holidays.length} (${source})`);
         for (const h of holidays) {
           await tx`
-            INSERT INTO holidays (holiday_date, title, is_official)
-            VALUES (${h.iso}, ${h.title}, true)
+            INSERT INTO holidays (holiday_date, title, is_official, is_off)
+            VALUES (${h.iso}, ${h.title}, true, true)
+            ON CONFLICT (holiday_date) DO NOTHING`;
+        }
+        // Informational occasions (مناسبت‌های غیرتعطیل).
+        for (const o of officialOccasionsFor(jy)) {
+          await tx`
+            INSERT INTO holidays (holiday_date, title, is_official, is_off)
+            VALUES (${o.iso}, ${o.title}, true, false)
             ON CONFLICT (holiday_date) DO NOTHING`;
         }
       }

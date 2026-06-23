@@ -192,6 +192,8 @@ CREATE TABLE IF NOT EXISTS holidays (
   holiday_date date NOT NULL UNIQUE,
   title        text NOT NULL,
   is_official  boolean NOT NULL DEFAULT true,
+  -- true = day off (تعطیل)؛ false = informational occasion (مناسبت غیرتعطیل)
+  is_off       boolean NOT NULL DEFAULT true,
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 

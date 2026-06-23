@@ -5,6 +5,7 @@ import { withTenant } from "@/lib/db";
 import { requireTenant, ensurePermission } from "@/lib/session";
 import { toGregorian, isoDate } from "@/lib/jalali";
 import { fetchOfficialHolidays } from "@/lib/online-holidays";
+import { officialOccasionsFor } from "@/lib/iran-events";
 
 function rev(slug: string, sub = "") {
   revalidatePath(`/app/${slug}${sub}`);
@@ -145,19 +146,28 @@ export async function importOfficialHolidaysAction(
   if (!jy || jy < 1300 || jy > 1500) return { error: "سال نامعتبر است." };
 
   const { holidays, source } = await fetchOfficialHolidays(jy);
+  const occasions = officialOccasionsFor(jy);
   await withTenant(ctx.company.schema, async (tx) => {
     for (const h of holidays) {
       await tx`
-        INSERT INTO holidays (holiday_date, title, is_official)
-        VALUES (${h.iso}, ${h.title}, true)
+        INSERT INTO holidays (holiday_date, title, is_official, is_off)
+        VALUES (${h.iso}, ${h.title}, true, true)
         ON CONFLICT (holiday_date)
-        DO UPDATE SET title = EXCLUDED.title, is_official = true
+        DO UPDATE SET title = EXCLUDED.title, is_official = true, is_off = true
+      `;
+    }
+    // Informational occasions (مناسبت‌های غیرتعطیل) — never override a day off.
+    for (const o of occasions) {
+      await tx`
+        INSERT INTO holidays (holiday_date, title, is_official, is_off)
+        VALUES (${o.iso}, ${o.title}, true, false)
+        ON CONFLICT (holiday_date) DO NOTHING
       `;
     }
   });
   rev(slug, "/calendar/settings");
   rev(slug, "/calendar");
-  return { ok: true, count: holidays.length, source };
+  return { ok: true, count: holidays.length + occasions.length, source };
 }
 
 export async function deleteHolidayAction(formData: FormData) {

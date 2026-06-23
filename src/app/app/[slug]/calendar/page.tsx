@@ -21,8 +21,8 @@ async function loadCalendarData(schema: string) {
       SELECT name, work_days, start_time, end_time FROM work_schedules
       WHERE is_default = true LIMIT 1
     `;
-    const holidays = await tx<{ holiday_date: string; title: string; is_official: boolean }[]>`
-      SELECT holiday_date::text, title, is_official FROM holidays
+    const holidays = await tx<{ holiday_date: string; title: string; is_official: boolean; is_off: boolean }[]>`
+      SELECT holiday_date::text, title, is_official, is_off FROM holidays
     `;
     return { sched, holidays };
   });
@@ -67,12 +67,15 @@ export default async function CalendarPage({
 
   let workCount = 0;
   let holidayCount = 0;
+  let occasionCount = 0;
   for (const c of cells) {
     if (!c) continue;
-    const isHol = holidayMap.has(c.iso) || c.weekday === 6; // Friday always off
-    const isWork = workDays.has(c.weekday) && !isHol;
+    const hol = holidayMap.get(c.iso);
+    const isDayOff = (hol?.is_off ?? false) || c.weekday === 6; // Friday always off
+    const isWork = workDays.has(c.weekday) && !isDayOff;
     if (isWork) workCount++;
-    if (holidayMap.has(c.iso)) holidayCount++;
+    if (hol?.is_off) holidayCount++;
+    if (hol && !hol.is_off) occasionCount++;
   }
 
   return (
@@ -113,16 +116,19 @@ export default async function CalendarPage({
             if (!c) return <div key={`b${idx}`} />;
             const hol = holidayMap.get(c.iso);
             const isFriday = c.weekday === 6;
-            const isOff = !!hol || isFriday;
+            const occasion = hol && !hol.is_off; // مناسبت غیرتعطیل
+            const isOff = (hol?.is_off ?? false) || isFriday;
             const isWork = workDays.has(c.weekday) && !isOff;
             const isToday =
               jy === today.jy && jm === today.jm && c.jd === today.jd;
 
             const tone = isOff
               ? "bg-red-50 text-red-600 border-red-100"
-              : isWork
-                ? "bg-green-50 text-green-700 border-green-100"
-                : "bg-slate-50 text-slate-400 border-slate-100";
+              : occasion
+                ? "bg-amber-50 text-amber-700 border-amber-100"
+                : isWork
+                  ? "bg-green-50 text-green-700 border-green-100"
+                  : "bg-slate-50 text-slate-400 border-slate-100";
 
             return (
               <div
@@ -132,9 +138,14 @@ export default async function CalendarPage({
                 }`}
                 title={hol?.title}
               >
-                <div className="text-sm font-bold">{toFaDigits(c.jd)}</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold">{toFaDigits(c.jd)}</span>
+                  {occasion && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  )}
+                </div>
                 {hol && (
-                  <div className="mt-1 truncate text-[10px] leading-tight">
+                  <div className="mt-1 line-clamp-2 text-[10px] leading-tight">
                     {hol.title}
                   </div>
                 )}
@@ -154,6 +165,10 @@ export default async function CalendarPage({
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-3 w-3 rounded bg-red-100" /> تعطیل
             ({toFaDigits(holidayCount)} مناسبت)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-3 w-3 rounded bg-amber-100" /> مناسبت
+            ({toFaDigits(occasionCount)})
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-3 w-3 rounded bg-slate-100" /> غیرکاری
