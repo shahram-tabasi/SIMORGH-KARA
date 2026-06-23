@@ -85,6 +85,11 @@ async function main() {
 
     const today = todayJalali();
     const iso = (d: number) => isoDate(toGregorian(today.jy, today.jm, d));
+    // attendance on the last two days up to today; leave a few days ahead
+    const d1 = Math.max(1, today.jd - 1);
+    const d2 = Math.max(1, today.jd);
+    const lv1 = Math.min(28, today.jd + 4);
+    const lv2 = Math.min(28, today.jd + 5);
 
     await sql.begin(async (tx) => {
       await tx.unsafe(`SET LOCAL search_path TO "${schema}", platform, public`);
@@ -127,20 +132,19 @@ async function main() {
       const mgrId = await addMember(mgr[0].id, CREDS.manager.name, "مدیر بخش", "مدیر سامانه");
       await tx`INSERT INTO member_roles (member_id, role_id)
                SELECT ${mgrId}, id FROM roles WHERE name='کارگزینی' ON CONFLICT DO NOTHING`; // manager can also act as HR for the demo
-      const hrId = await addMember(hr[0].id, CREDS.hr.name, "مسئول کارگزینی", "کارگزینی");
-      await tx`UPDATE member_roles SET role_id=${roleId.get("کاربر")} WHERE member_id=${hrId} AND role_id=${hrRole.id}`; // give HR the base role too is unnecessary; keep کارگزینی
+      await addMember(hr[0].id, CREDS.hr.name, "مسئول کارگزینی", "کارگزینی");
       const empId = await addMember(emp[0].id, CREDS.employee.name, "آهنگر", "کاربر");
 
       // Sample attendance for the employee (a normal day + a late day)
       const punch = (d: number, t: string, k: string) =>
         tx`INSERT INTO attendance_punches (member_id, punched_at, kind) VALUES (${empId}, ${`${iso(d)} ${t}`}, ${k})`;
-      await punch(3, "08:00", "in"); await punch(3, "16:30", "out");   // ~8:30 worked → overtime vs 440
-      await punch(4, "08:40", "in"); await punch(4, "15:00", "out");   // late + short → deficit
+      await punch(d1, "08:00", "in"); await punch(d1, "16:30", "out");   // ~8:30 worked → overtime vs 440
+      await punch(d2, "08:40", "in"); await punch(d2, "15:00", "out");   // late + short → deficit
 
       // A pending leave request from the employee → lands in the manager's kartabl
       const [req] = await tx<{ id: string }[]>`
         INSERT INTO leave_requests (member_id, type_id, kind, from_date, to_date, status, effective_days, total_steps, current_step)
-        VALUES (${empId}, (SELECT id FROM leave_types WHERE code='entitlement_daily'), 'leave', ${iso(12)}, ${iso(13)}, 'pending', 2, 2, 1)
+        VALUES (${empId}, (SELECT id FROM leave_types WHERE code='entitlement_daily'), 'leave', ${iso(lv1)}, ${iso(lv2)}, 'pending', 2, 2, 1)
         RETURNING id`;
       await tx`INSERT INTO leave_approvals (request_id, step_order, perm_key) VALUES (${req.id}, 1, 'leave.approve'), (${req.id}, 2, 'leave.approve.hr')`;
       const [mk] = await tx<{ id: string }[]>`SELECT id FROM kartabls WHERE member_id=${mgrId} ORDER BY created_at LIMIT 1`;
