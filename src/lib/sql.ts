@@ -113,9 +113,12 @@ CREATE TABLE IF NOT EXISTS kartabl_items (
   title       text NOT NULL,
   body        text,
   kind        text NOT NULL DEFAULT 'task'
-                CHECK (kind IN ('task','document','message')),
+                CHECK (kind IN ('task','document','message','approval')),
   status      text NOT NULL DEFAULT 'open'
                 CHECK (status IN ('open','in_progress','done','archived')),
+  -- Optional link to another record (e.g. a leave request awaiting approval).
+  ref_kind    text,
+  ref_id      uuid,
   -- The member who created/assigned this item. Only the assigner (or a
   -- kartabl manager acting on someone else's kartabl) may edit or delete it;
   -- the recipient can only report progress via status. This keeps tasks

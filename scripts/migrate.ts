@@ -171,6 +171,20 @@ async function main() {
           SET annual_leave_days = 30 WHERE annual_leave_days = 26;
       `);
 
+      // Kartabl approval items: link to a leave request + new 'approval' kind.
+      await sql.unsafe(`
+        ALTER TABLE "${schema_name}".kartabl_items
+          ADD COLUMN IF NOT EXISTS ref_kind text,
+          ADD COLUMN IF NOT EXISTS ref_id uuid;
+        ALTER TABLE "${schema_name}".kartabl_items
+          DROP CONSTRAINT IF EXISTS kartabl_items_kind_check;
+        ALTER TABLE "${schema_name}".kartabl_items
+          ADD CONSTRAINT kartabl_items_kind_check
+          CHECK (kind IN ('task','document','message','approval'));
+        UPDATE "${schema_name}".leave_types
+          SET approval_levels = 2 WHERE approval_levels < 2;
+      `);
+
       // Backfill an employment profile for every existing member.
       await sql.unsafe(`
         INSERT INTO "${schema_name}".member_employment (member_id, hire_date)

@@ -26,6 +26,52 @@ function parseIso(d: string): Date {
 /** Max allowed negative entitlement balance (مرخصی منفی), in days. */
 const MAX_NEGATIVE_DAYS = 3;
 
+/* ---- kartabl routing: drop the request into the current approvers' inboxes -- */
+
+type Tx = Parameters<Parameters<typeof withTenant>[1]>[0];
+
+/** Create an approval item in the kartabl of every member holding `perm`. */
+async function notifyApprovers(
+  tx: Tx,
+  requestId: string,
+  perm: string,
+  requesterId: string,
+  requesterName: string,
+  summary: string
+) {
+  const approvers = await tx<{ member_id: string }[]>`
+    SELECT DISTINCT mr.member_id
+    FROM member_roles mr JOIN role_permissions rp ON rp.role_id = mr.role_id
+    WHERE rp.permission_key = ${perm} AND mr.member_id <> ${requesterId}
+  `;
+  for (const a of approvers) {
+    let [k] = await tx<{ id: string }[]>`
+      SELECT id FROM kartabls WHERE member_id = ${a.member_id}
+      ORDER BY created_at LIMIT 1
+    `;
+    if (!k) {
+      [k] = await tx<{ id: string }[]>`
+        INSERT INTO kartabls (member_id, name)
+        VALUES (${a.member_id}, 'کارتابل اصلی') RETURNING id
+      `;
+    }
+    await tx`
+      INSERT INTO kartabl_items
+        (kartabl_id, title, body, kind, ref_kind, ref_id, created_by)
+      VALUES (${k.id}, ${`درخواست مرخصی: ${requesterName}`}, ${summary},
+              'approval', 'leave_request', ${requestId}, ${requesterId})
+    `;
+  }
+}
+
+/** Remove all pending approval items that point at this request. */
+async function clearApprovalItems(tx: Tx, requestId: string) {
+  await tx`
+    DELETE FROM kartabl_items
+    WHERE kind = 'approval' AND ref_kind = 'leave_request' AND ref_id = ${requestId}
+  `;
+}
+
 function rev(slug: string) {
   revalidatePath(`/app/${slug}/leave`);
   revalidatePath(`/app/${slug}/leave/manage`);
@@ -238,6 +284,15 @@ export async function submitLeaveAction(
         VALUES (${req.id}, ${s}, ${stepPerm(s)})
       `;
     }
+    // Drop the request into the first approver's (مدیر بخش) kartabl.
+    await notifyApprovers(
+      tx,
+      req.id,
+      stepPerm(1),
+      ctx.member.memberId,
+      ctx.member.fullName,
+      reason || "درخواست مرخصی جدید"
+    );
     return { ok: true as const };
   });
 
@@ -252,10 +307,12 @@ export async function cancelLeaveAction(formData: FormData) {
   const ctx = await requireTenant(slug);
   const id = String(formData.get("id"));
   await withTenant(ctx.company.schema, async (tx) => {
-    await tx`
+    const [r] = await tx<{ id: string }[]>`
       DELETE FROM leave_requests
       WHERE id = ${id} AND member_id = ${ctx.member.memberId} AND status = 'pending'
+      RETURNING id
     `;
+    if (r) await clearApprovalItems(tx, id);
   });
   rev(slug);
 }
@@ -273,9 +330,12 @@ export async function decideLeaveAction(formData: FormData) {
   if (!["approved", "rejected"].includes(decision)) return;
 
   await withTenant(ctx.company.schema, async (tx) => {
-    const [req] = await tx<{ current_step: number; total_steps: number }[]>`
-      SELECT current_step, total_steps FROM leave_requests
-      WHERE id = ${id} AND status = 'pending'
+    const [req] = await tx<
+      { current_step: number; total_steps: number; member_id: string; full_name: string }[]
+    >`
+      SELECT lr.current_step, lr.total_steps, lr.member_id, m.full_name
+      FROM leave_requests lr JOIN members m ON m.id = lr.member_id
+      WHERE lr.id = ${id} AND lr.status = 'pending'
     `;
     if (!req) return;
 
@@ -290,6 +350,9 @@ export async function decideLeaveAction(formData: FormData) {
       WHERE request_id = ${id} AND step_order = ${req.current_step}
     `;
 
+    // This approver's kartabl item (and peers') is resolved either way.
+    await clearApprovalItems(tx, id);
+
     if (decision === "rejected") {
       await tx`
         UPDATE leave_requests
@@ -300,15 +363,24 @@ export async function decideLeaveAction(formData: FormData) {
     }
 
     if (req.current_step >= req.total_steps) {
+      // Final approval → recorded and deducted from the balance.
       await tx`
         UPDATE leave_requests
         SET status = 'approved', decided_by = ${ctx.member.memberId}, decided_at = now()
         WHERE id = ${id}
       `;
     } else {
-      await tx`
-        UPDATE leave_requests SET current_step = current_step + 1 WHERE id = ${id}
-      `;
+      const next = req.current_step + 1;
+      await tx`UPDATE leave_requests SET current_step = ${next} WHERE id = ${id}`;
+      // Route the request into the next approver's (کارگزینی) kartabl.
+      await notifyApprovers(
+        tx,
+        id,
+        stepPerm(next),
+        req.member_id,
+        req.full_name,
+        "در انتظار تأیید مرحله بعد"
+      );
     }
   });
   rev(slug);

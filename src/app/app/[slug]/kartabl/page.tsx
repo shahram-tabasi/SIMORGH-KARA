@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireTenant } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
@@ -15,6 +16,8 @@ interface Item {
   status: string;
   created_by: string | null;
   assigner: string | null;
+  ref_kind: string | null;
+  ref_id: string | null;
 }
 
 const statusLabel: Record<string, string> = {
@@ -33,6 +36,7 @@ const kindLabel: Record<string, string> = {
   task: "وظیفه",
   document: "سند",
   message: "پیام",
+  approval: "درخواست تأیید",
 };
 
 async function loadData(schema: string, memberId: string, canAssign: boolean) {
@@ -42,7 +46,7 @@ async function loadData(schema: string, memberId: string, canAssign: boolean) {
     `;
     const items = await tx<Item[]>`
       SELECT i.id, i.kartabl_id, i.title, i.body, i.kind, i.status,
-             i.created_by, cb.full_name AS assigner
+             i.created_by, i.ref_kind, i.ref_id, cb.full_name AS assigner
       FROM kartabl_items i
       JOIN kartabls k ON k.id = i.kartabl_id
       LEFT JOIN members cb ON cb.id = i.created_by
@@ -102,6 +106,38 @@ export default async function KartablPage({
                 <li className="text-sm text-slate-400">موردی ثبت نشده است.</li>
               )}
               {myItems.map((i) => {
+                // Approval notifications (e.g. a leave request awaiting my
+                // decision) link straight to the approval screen.
+                if (i.kind === "approval") {
+                  return (
+                    <li
+                      key={i.id}
+                      className="rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-700">
+                              {i.title}
+                            </span>
+                            <span className="badge bg-indigo-100 text-indigo-700">
+                              {kindLabel[i.kind]}
+                            </span>
+                          </div>
+                          {i.body && (
+                            <div className="mt-1 text-xs text-slate-500">{i.body}</div>
+                          )}
+                        </div>
+                        <Link
+                          href={`/app/${params.slug}/leave/manage`}
+                          className="btn-primary px-3 py-1 text-xs"
+                        >
+                          بررسی و تأیید
+                        </Link>
+                      </div>
+                    </li>
+                  );
+                }
                 // On my own kartabl page, I may edit only items I authored.
                 const mine = i.created_by === meId;
                 return (
