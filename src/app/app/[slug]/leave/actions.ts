@@ -16,6 +16,7 @@ import {
   proratedAccrual,
 } from "@/lib/leave-balance";
 import { timeToMinutes } from "@/lib/attendance";
+import { stepPerm } from "./shared";
 
 function parseIso(d: string): Date {
   const [y, m, day] = d.slice(0, 10).split("-").map(Number);
@@ -73,12 +74,13 @@ export async function submitLeaveAction(
         max_count_per_month: number | null;
         max_count_per_week: number | null;
         max_days_per_year: string | null;
+        approval_levels: number;
         is_active: boolean;
       }[]
     >`
       SELECT code, unit, requires_attachment, counts_inner_holidays,
              deducts_entitlement, max_minutes_per_day, max_count_per_month,
-             max_count_per_week, max_days_per_year, is_active
+             max_count_per_week, max_days_per_year, approval_levels, is_active
       FROM leave_types WHERE id = ${typeId}
     `;
     if (!type || !type.is_active) return { error: "نوع مرخصی نامعتبر است." };
@@ -218,14 +220,24 @@ export async function submitLeaveAction(
           ? "hourly"
           : "leave";
 
-    await tx`
+    const totalSteps = Math.max(1, Math.min(3, type.approval_levels || 1));
+    const [req] = await tx<{ id: string }[]>`
       INSERT INTO leave_requests
         (member_id, type_id, kind, from_date, to_date, from_time, to_time,
-         reason, attachment_url, effective_days)
+         reason, attachment_url, effective_days, total_steps, current_step)
       VALUES
         (${ctx.member.memberId}, ${typeId}, ${kind}, ${fromIso}, ${toIso},
-         ${fromTime}, ${toTime}, ${reason}, ${attachment}, ${effectiveDays})
+         ${fromTime}, ${toTime}, ${reason}, ${attachment}, ${effectiveDays},
+         ${totalSteps}, 1)
+      RETURNING id
     `;
+    // Build the approval chain (one row per required level).
+    for (let s = 1; s <= totalSteps; s++) {
+      await tx`
+        INSERT INTO leave_approvals (request_id, step_order, perm_key)
+        VALUES (${req.id}, ${s}, ${stepPerm(s)})
+      `;
+    }
     return { ok: true as const };
   });
 
@@ -248,20 +260,56 @@ export async function cancelLeaveAction(formData: FormData) {
   rev(slug);
 }
 
-/** Approver decides on a request. */
+/**
+ * Approve or reject at the request's *current* approval step. Approving the
+ * final step marks the request approved; any rejection rejects it outright.
+ */
 export async function decideLeaveAction(formData: FormData) {
   const slug = String(formData.get("slug"));
   const ctx = await requireTenant(slug);
-  ensurePermission(ctx, "leave.approve");
   const id = String(formData.get("id"));
   const decision = String(formData.get("decision"));
+  const note = String(formData.get("note") || "").trim() || null;
   if (!["approved", "rejected"].includes(decision)) return;
+
   await withTenant(ctx.company.schema, async (tx) => {
-    await tx`
-      UPDATE leave_requests
-      SET status = ${decision}, decided_by = ${ctx.member.memberId}, decided_at = now()
+    const [req] = await tx<{ current_step: number; total_steps: number }[]>`
+      SELECT current_step, total_steps FROM leave_requests
       WHERE id = ${id} AND status = 'pending'
     `;
+    if (!req) return;
+
+    // Only the holder of the current step's permission may act.
+    const requiredPerm = stepPerm(req.current_step);
+    if (!ctx.member.permissions.has(requiredPerm)) return;
+
+    await tx`
+      UPDATE leave_approvals
+      SET status = ${decision}, decided_by = ${ctx.member.memberId},
+          decided_at = now(), note = ${note}
+      WHERE request_id = ${id} AND step_order = ${req.current_step}
+    `;
+
+    if (decision === "rejected") {
+      await tx`
+        UPDATE leave_requests
+        SET status = 'rejected', decided_by = ${ctx.member.memberId}, decided_at = now()
+        WHERE id = ${id}
+      `;
+      return;
+    }
+
+    if (req.current_step >= req.total_steps) {
+      await tx`
+        UPDATE leave_requests
+        SET status = 'approved', decided_by = ${ctx.member.memberId}, decided_at = now()
+        WHERE id = ${id}
+      `;
+    } else {
+      await tx`
+        UPDATE leave_requests SET current_step = current_step + 1 WHERE id = ${id}
+      `;
+    }
   });
   rev(slug);
 }

@@ -247,9 +247,25 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   effective_days numeric(6,2),                   -- computed billable days
   status        text NOT NULL DEFAULT 'pending'
                   CHECK (status IN ('pending','approved','rejected')),
+  current_step  int NOT NULL DEFAULT 1,
+  total_steps   int NOT NULL DEFAULT 1,
   decided_by    uuid REFERENCES members(id) ON DELETE SET NULL,
   decided_at    timestamptz,
   created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- Per-request approval chain (stage 5.3): one row per required approval level.
+CREATE TABLE IF NOT EXISTS leave_approvals (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  request_id uuid NOT NULL REFERENCES leave_requests(id) ON DELETE CASCADE,
+  step_order int NOT NULL,
+  perm_key   text NOT NULL,
+  status     text NOT NULL DEFAULT 'pending'
+               CHECK (status IN ('pending','approved','rejected')),
+  decided_by uuid REFERENCES members(id) ON DELETE SET NULL,
+  decided_at timestamptz,
+  note       text,
+  UNIQUE (request_id, step_order)
 );
 CREATE INDEX IF NOT EXISTS idx_leave_member ON leave_requests(member_id);
 CREATE INDEX IF NOT EXISTS idx_leave_status ON leave_requests(status);

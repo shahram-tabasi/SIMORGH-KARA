@@ -28,7 +28,7 @@ export default async function TenantLayout({
   if (can("attendance.manage"))
     nav.push({ href: `${base}/attendance/rules`, label: "قوانین حضور", icon: "⚙️" });
   nav.push({ href: `${base}/leave`, label: "مرخصی و مأموریت", icon: "🏖️" });
-  if (can("leave.approve"))
+  if (can("leave.approve") || can("leave.approve.l2") || can("leave.approve.l3"))
     nav.push({ href: `${base}/leave/manage`, label: "تأیید مرخصی‌ها", icon: "✅" });
   if (can("leave.types.manage"))
     nav.push({ href: `${base}/leave/types`, label: "انواع مرخصی", icon: "🗂️" });

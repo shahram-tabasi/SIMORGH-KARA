@@ -2,7 +2,14 @@ import { requireTenant, ensurePermission } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { toFaDigits } from "@/lib/jalali";
-import { KIND_LABEL, STATUS_LABEL, STATUS_TONE, faDate } from "../shared";
+import {
+  KIND_LABEL,
+  STATUS_LABEL,
+  STATUS_TONE,
+  STEP_LABEL,
+  stepPerm,
+  faDate,
+} from "../shared";
 import { decideLeaveAction } from "../actions";
 
 interface Row {
@@ -15,6 +22,8 @@ interface Row {
   to_time: string | null;
   reason: string | null;
   status: string;
+  current_step: number;
+  total_steps: number;
 }
 
 async function loadRequests(schema: string) {
@@ -23,7 +32,7 @@ async function loadRequests(schema: string) {
       SELECT lr.id, m.full_name AS member_name,
              COALESCE(lt.name, lr.kind) AS kind,
              lr.from_date::text, lr.to_date::text, lr.from_time, lr.to_time,
-             lr.reason, lr.status
+             lr.reason, lr.status, lr.current_step, lr.total_steps
       FROM leave_requests lr JOIN members m ON m.id = lr.member_id
       LEFT JOIN leave_types lt ON lt.id = lr.type_id
       WHERE lr.status = 'pending'
@@ -33,7 +42,7 @@ async function loadRequests(schema: string) {
       SELECT lr.id, m.full_name AS member_name,
              COALESCE(lt.name, lr.kind) AS kind,
              lr.from_date::text, lr.to_date::text, lr.from_time, lr.to_time,
-             lr.reason, lr.status
+             lr.reason, lr.status, lr.current_step, lr.total_steps
       FROM leave_requests lr JOIN members m ON m.id = lr.member_id
       LEFT JOIN leave_types lt ON lt.id = lr.type_id
       WHERE lr.status <> 'pending'
@@ -66,8 +75,18 @@ export default async function LeaveManagePage({
   params: { slug: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensurePermission(ctx, "leave.approve");
-  const { pending, history } = await loadRequests(ctx.company.schema);
+  const canAny =
+    ctx.member.permissions.has("leave.approve") ||
+    ctx.member.permissions.has("leave.approve.l2") ||
+    ctx.member.permissions.has("leave.approve.l3");
+  if (!canAny) ensurePermission(ctx, "leave.approve"); // throws
+
+  const { pending: allPending, history } = await loadRequests(ctx.company.schema);
+  // Show only requests whose *current* step this approver is allowed to act on.
+  const pending = allPending.filter((r) =>
+    ctx.member.permissions.has(stepPerm(r.current_step))
+  );
+  const waiting = allPending.length - pending.length;
 
   return (
     <>
@@ -78,7 +97,12 @@ export default async function LeaveManagePage({
 
       <div className="card mb-6">
         <h3 className="mb-3 text-sm font-semibold text-slate-700">
-          در انتظار تأیید ({toFaDigits(pending.length)})
+          در انتظار تأیید شما ({toFaDigits(pending.length)})
+          {waiting > 0 && (
+            <span className="mr-2 text-xs font-normal text-slate-400">
+              ({toFaDigits(waiting)} درخواست در مراحل دیگر)
+            </span>
+          )}
         </h3>
         {pending.length === 0 ? (
           <div className="text-sm text-slate-400">درخواست بازی وجود ندارد.</div>
@@ -97,6 +121,13 @@ export default async function LeaveManagePage({
                     <span className="badge bg-slate-100 text-slate-600">
                       {KIND_LABEL[r.kind] ?? r.kind}
                     </span>
+                    {r.total_steps > 1 && (
+                      <span className="badge bg-indigo-50 text-indigo-700">
+                        مرحله {toFaDigits(r.current_step)} از{" "}
+                        {toFaDigits(r.total_steps)} ·{" "}
+                        {STEP_LABEL[r.current_step - 1]}
+                      </span>
+                    )}
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
                     <Range r={r} />

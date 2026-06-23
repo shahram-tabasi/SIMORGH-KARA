@@ -151,7 +151,21 @@ async function main() {
         ALTER TABLE "${schema_name}".leave_requests
           ADD COLUMN IF NOT EXISTS type_id uuid REFERENCES "${schema_name}".leave_types(id),
           ADD COLUMN IF NOT EXISTS attachment_url text,
-          ADD COLUMN IF NOT EXISTS effective_days numeric(6,2);
+          ADD COLUMN IF NOT EXISTS effective_days numeric(6,2),
+          ADD COLUMN IF NOT EXISTS current_step int NOT NULL DEFAULT 1,
+          ADD COLUMN IF NOT EXISTS total_steps int NOT NULL DEFAULT 1;
+
+        CREATE TABLE IF NOT EXISTS "${schema_name}".leave_approvals (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          request_id uuid NOT NULL REFERENCES "${schema_name}".leave_requests(id) ON DELETE CASCADE,
+          step_order int NOT NULL,
+          perm_key text NOT NULL,
+          status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+          decided_by uuid REFERENCES "${schema_name}".members(id) ON DELETE SET NULL,
+          decided_at timestamptz,
+          note text,
+          UNIQUE (request_id, step_order)
+        );
 
         UPDATE "${schema_name}".attendance_policy
           SET annual_leave_days = 30 WHERE annual_leave_days = 26;

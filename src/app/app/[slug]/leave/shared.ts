@@ -16,6 +16,15 @@ export const STATUS_TONE: Record<string, string> = {
   rejected: "bg-red-100 text-red-700",
 };
 
+/** Approval step → required permission. Steps beyond 3 also need the CEO step. */
+export const STEP_PERMS = ["leave.approve", "leave.approve.l2", "leave.approve.l3"];
+
+export function stepPerm(step: number): string {
+  return STEP_PERMS[Math.min(step, STEP_PERMS.length) - 1];
+}
+
+export const STEP_LABEL = ["سرپرست/مدیر", "معاونت/کمیته", "مدیرعامل"];
+
 export function parseIso(d: string): Date {
   const [y, m, day] = d.slice(0, 10).split("-").map(Number);
   return new Date(y, m - 1, day);
