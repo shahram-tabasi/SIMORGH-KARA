@@ -6,7 +6,28 @@ import { KartablItemForm } from "./KartablItemForm";
 import { AssignTaskForm } from "./AssignTaskForm";
 import { ItemActions } from "./ItemActions";
 import { setKartablItemStatusAction } from "../actions";
-import { decideLeaveAction } from "../leave/actions";
+import { decideLeaveAction, cancelLeaveAction } from "../leave/actions";
+import {
+  KIND_LABEL,
+  STATUS_LABEL,
+  STATUS_TONE,
+  STEP_LABEL,
+  faDate,
+} from "../leave/shared";
+import { toFaDigits } from "@/lib/jalali";
+
+interface LeaveRow {
+  id: string;
+  kind: string;
+  type_name: string | null;
+  from_date: string;
+  to_date: string;
+  from_time: string | null;
+  to_time: string | null;
+  status: string;
+  current_step: number;
+  total_steps: number;
+}
 
 interface Item {
   id: string;
@@ -60,7 +81,18 @@ async function loadData(schema: string, memberId: string, canAssign: boolean) {
           WHERE status = 'active' ORDER BY full_name
         `
       : [];
-    return { kartabls, items, members };
+    // The member's own leave/mission requests, so they appear in کارتابل من too.
+    const myLeaves = await tx<LeaveRow[]>`
+      SELECT lr.id, lr.kind, COALESCE(lt.name, lr.kind) AS type_name,
+             lr.from_date::text, lr.to_date::text, lr.from_time, lr.to_time,
+             lr.status, lr.current_step, lr.total_steps
+      FROM leave_requests lr
+      LEFT JOIN leave_types lt ON lt.id = lr.type_id
+      WHERE lr.member_id = ${memberId}
+      ORDER BY (lr.status = 'pending') DESC, lr.created_at DESC
+      LIMIT 15
+    `;
+    return { kartabls, items, members, myLeaves };
   });
 }
 
@@ -72,7 +104,7 @@ export default async function KartablPage({
   const ctx = await requireTenant(params.slug);
   const meId = ctx.member.memberId;
   const canAssign = ctx.member.permissions.has("kartabl.assign");
-  const { kartabls, items, members } = await loadData(
+  const { kartabls, items, members, myLeaves } = await loadData(
     ctx.company.schema,
     meId,
     canAssign
@@ -84,6 +116,69 @@ export default async function KartablPage({
         title="کارتابل من"
         description="کارها، اسناد و پیام‌های ارجاع‌شده به شما"
       />
+
+      {/* The member's own leave/mission requests live here too. */}
+      <div className="card mb-6">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-700">
+            درخواست‌های مرخصی من
+          </h3>
+          <Link
+            href={`/app/${params.slug}/leave`}
+            className="text-xs text-brand-600 hover:underline"
+          >
+            ثبت درخواست جدید ›
+          </Link>
+        </div>
+        {myLeaves.length === 0 ? (
+          <div className="text-sm text-slate-400">درخواست مرخصی ثبت نشده است.</div>
+        ) : (
+          <ul className="space-y-2">
+            {myLeaves.map((r) => (
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="badge bg-slate-100 text-slate-600">
+                      {r.type_name ?? KIND_LABEL[r.kind]}
+                    </span>
+                    <span className={`badge ${STATUS_TONE[r.status]}`}>
+                      {STATUS_LABEL[r.status]}
+                    </span>
+                    {r.status === "pending" && r.total_steps > 1 && (
+                      <span className="badge bg-indigo-50 text-indigo-700">
+                        مرحله {toFaDigits(r.current_step)} از {toFaDigits(r.total_steps)} ·{" "}
+                        {STEP_LABEL[r.current_step - 1]}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {r.kind === "hourly" ? (
+                      <span>
+                        {faDate(r.from_date)} — ساعت {toFaDigits(r.from_time ?? "")} تا{" "}
+                        {toFaDigits(r.to_time ?? "")}
+                      </span>
+                    ) : (
+                      <span>
+                        از {faDate(r.from_date)} تا {faDate(r.to_date)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {r.status === "pending" && (
+                  <form action={cancelLeaveAction}>
+                    <input type="hidden" name="slug" value={params.slug} />
+                    <input type="hidden" name="id" value={r.id} />
+                    <button className="text-xs text-red-600 hover:underline">لغو</button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {canAssign && (
         <div className="mb-6">
