@@ -6,6 +6,7 @@ import { KartablItemForm } from "./KartablItemForm";
 import { AssignTaskForm } from "./AssignTaskForm";
 import { ItemActions } from "./ItemActions";
 import { setKartablItemStatusAction } from "../actions";
+import { decideLeaveAction } from "../leave/actions";
 
 interface Item {
   id: string;
@@ -128,12 +129,26 @@ export default async function KartablPage({
                             <div className="mt-1 text-xs text-slate-500">{i.body}</div>
                           )}
                         </div>
-                        <Link
-                          href={`/app/${params.slug}/leave/manage`}
-                          className="btn-primary px-3 py-1 text-xs"
-                        >
-                          بررسی و تأیید
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <form action={decideLeaveAction}>
+                            <input type="hidden" name="slug" value={params.slug} />
+                            <input type="hidden" name="id" value={i.ref_id ?? ""} />
+                            <input type="hidden" name="decision" value="approved" />
+                            <button className="btn-primary px-3 py-1 text-xs">تأیید</button>
+                          </form>
+                          <form action={decideLeaveAction}>
+                            <input type="hidden" name="slug" value={params.slug} />
+                            <input type="hidden" name="id" value={i.ref_id ?? ""} />
+                            <input type="hidden" name="decision" value="rejected" />
+                            <button className="btn-danger px-3 py-1 text-xs">رد</button>
+                          </form>
+                          <Link
+                            href={`/app/${params.slug}/leave/manage`}
+                            className="text-xs text-brand-600 hover:underline"
+                          >
+                            جزئیات
+                          </Link>
+                        </div>
                       </div>
                     </li>
                   );

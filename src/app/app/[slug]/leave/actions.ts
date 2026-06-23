@@ -76,6 +76,8 @@ function rev(slug: string) {
   revalidatePath(`/app/${slug}/leave`);
   revalidatePath(`/app/${slug}/leave/manage`);
   revalidatePath(`/app/${slug}/attendance`);
+  revalidatePath(`/app/${slug}/kartabl`);
+  revalidatePath(`/app/${slug}`);
 }
 
 export interface LeaveState {

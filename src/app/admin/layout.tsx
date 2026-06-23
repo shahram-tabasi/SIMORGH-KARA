@@ -13,12 +13,22 @@ export default async function AdminLayout({
       brand="سیمرغ لجر"
       subtitle="پنل مدیریت پلتفرم"
       userName={session.name}
-      nav={[
-        { href: "/admin", label: "داشبورد", icon: "▣" },
-        { href: "/admin/companies", label: "شرکت‌ها", icon: "🏢" },
-        { href: "/admin/companies/new", label: "افزودن شرکت", icon: "＋" },
-        { href: "/admin/holdings", label: "هولدینگ‌ها", icon: "🏬" },
-        { href: "/admin/holdings/new", label: "افزودن هولدینگ", icon: "＋" },
+      groups={[
+        { items: [{ href: "/admin", label: "داشبورد", icon: "▣" }] },
+        {
+          title: "شرکت‌ها",
+          items: [
+            { href: "/admin/companies", label: "شرکت‌ها", icon: "🏢" },
+            { href: "/admin/companies/new", label: "افزودن شرکت", icon: "＋" },
+          ],
+        },
+        {
+          title: "هولدینگ‌ها",
+          items: [
+            { href: "/admin/holdings", label: "هولدینگ‌ها", icon: "🏬" },
+            { href: "/admin/holdings/new", label: "افزودن هولدینگ", icon: "＋" },
+          ],
+        },
       ]}
     >
       {children}
