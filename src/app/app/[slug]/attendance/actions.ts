@@ -81,3 +81,33 @@ export async function saveAttendanceAction(formData: FormData) {
   });
   revalidatePath(`/app/${slug}/attendance/team`);
 }
+
+/** Save company attendance rules (grace, daily minutes, leave quotas, overtime). */
+export async function savePolicyAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "attendance.manage");
+
+  const grace = Math.max(0, Math.min(240, Number(formData.get("grace_minutes")) || 0));
+  const daily = Math.max(60, Math.min(1440, Number(formData.get("standard_daily_minutes")) || 480));
+  const monthly = Math.max(0, Number(formData.get("monthly_leave_days")) || 0);
+  const annual = Math.max(0, Number(formData.get("annual_leave_days")) || 0);
+  const overtime = formData.get("overtime_enabled") === "on";
+
+  await withTenant(ctx.company.schema, async (tx) => {
+    await tx`
+      INSERT INTO attendance_policy
+        (id, grace_minutes, standard_daily_minutes, monthly_leave_days,
+         annual_leave_days, overtime_enabled)
+      VALUES (1, ${grace}, ${daily}, ${monthly}, ${annual}, ${overtime})
+      ON CONFLICT (id) DO UPDATE SET
+        grace_minutes = ${grace},
+        standard_daily_minutes = ${daily},
+        monthly_leave_days = ${monthly},
+        annual_leave_days = ${annual},
+        overtime_enabled = ${overtime}
+    `;
+  });
+  revalidatePath(`/app/${slug}/attendance/rules`);
+  revalidatePath(`/app/${slug}/attendance`);
+}

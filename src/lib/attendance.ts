@@ -43,7 +43,9 @@ export type DayStatus =
   | "pending"
   | "future"
   | "off"
-  | "holiday";
+  | "holiday"
+  | "leave"
+  | "mission";
 
 export const STATUS_LABEL: Record<DayStatus, string> = {
   present: "حاضر",
@@ -53,6 +55,8 @@ export const STATUS_LABEL: Record<DayStatus, string> = {
   future: "—",
   off: "غیرکاری",
   holiday: "تعطیل",
+  leave: "مرخصی",
+  mission: "مأموریت",
 };
 
 export const STATUS_TONE: Record<DayStatus, string> = {
@@ -63,6 +67,8 @@ export const STATUS_TONE: Record<DayStatus, string> = {
   future: "bg-white text-slate-300",
   off: "bg-slate-50 text-slate-400",
   holiday: "bg-red-50 text-red-500",
+  leave: "bg-blue-100 text-blue-700",
+  mission: "bg-purple-100 text-purple-700",
 };
 
 export interface DayComputeInput {

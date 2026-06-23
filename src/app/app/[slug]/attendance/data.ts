@@ -55,6 +55,11 @@ export async function loadMonthSheet(
     const workDays = new Set(sched?.work_days ?? [0, 1, 2, 3, 4]);
     const start = sched?.start_time ?? "08:00";
 
+    const [policy] = await tx<{ grace_minutes: number }[]>`
+      SELECT grace_minutes FROM attendance_policy WHERE id = 1
+    `;
+    const grace = policy?.grace_minutes ?? 0;
+
     const holidays = await tx<{ holiday_date: string; title: string }[]>`
       SELECT holiday_date::text, title FROM holidays
       WHERE holiday_date BETWEEN ${firstIso} AND ${lastIso}
@@ -62,6 +67,23 @@ export async function loadMonthSheet(
     const holidayMap = new Map(
       holidays.map((h) => [h.holiday_date.slice(0, 10), h.title])
     );
+
+    // Approved full-day leaves/missions overlapping the month.
+    const leaves = await tx<{ kind: string; from_date: string; to_date: string }[]>`
+      SELECT kind, from_date::text, to_date::text FROM leave_requests
+      WHERE member_id = ${memberId} AND status = 'approved'
+        AND kind IN ('leave','mission')
+        AND from_date <= ${lastIso} AND to_date >= ${firstIso}
+    `;
+    const leaveMap = new Map<string, "leave" | "mission">();
+    for (const lv of leaves) {
+      for (let day = 1; day <= len; day++) {
+        const iso = isoDate(toGregorian(jy, jm, day));
+        if (iso >= lv.from_date.slice(0, 10) && iso <= lv.to_date.slice(0, 10)) {
+          if (!leaveMap.has(iso)) leaveMap.set(iso, lv.kind as "leave" | "mission");
+        }
+      }
+    }
 
     const rows = await tx<
       { work_date: string; check_in: Date | null; check_out: Date | null }[]
@@ -94,7 +116,18 @@ export async function loadMonthSheet(
         checkOut,
         dayOrder,
         scheduleStart: start,
+        graceMinutes: grace,
       });
+
+      // An approved leave/mission overrides an otherwise empty working day.
+      if (
+        isWorkingDay &&
+        !checkIn &&
+        (result.status === "absent" || result.status === "pending")
+      ) {
+        const lv = leaveMap.get(iso);
+        if (lv) result.status = lv;
+      }
 
       if (result.status === "present" || result.status === "late")
         totals.presentDays++;

@@ -67,6 +67,36 @@ async function main() {
         );
         CREATE INDEX IF NOT EXISTS idx_attendance_date
           ON "${schema_name}".attendance_days(work_date);
+
+        CREATE TABLE IF NOT EXISTS "${schema_name}".attendance_policy (
+          id int PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+          grace_minutes int NOT NULL DEFAULT 0,
+          standard_daily_minutes int NOT NULL DEFAULT 480,
+          monthly_leave_days numeric(5,1) NOT NULL DEFAULT 2.5,
+          annual_leave_days numeric(5,1) NOT NULL DEFAULT 26,
+          overtime_enabled boolean NOT NULL DEFAULT true
+        );
+
+        CREATE TABLE IF NOT EXISTS "${schema_name}".leave_requests (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          member_id uuid NOT NULL REFERENCES "${schema_name}".members(id) ON DELETE CASCADE,
+          kind text NOT NULL DEFAULT 'leave' CHECK (kind IN ('leave','mission','hourly')),
+          from_date date NOT NULL,
+          to_date date NOT NULL,
+          from_time text,
+          to_time text,
+          reason text,
+          status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+          decided_by uuid REFERENCES "${schema_name}".members(id) ON DELETE SET NULL,
+          decided_at timestamptz,
+          created_at timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_leave_member ON "${schema_name}".leave_requests(member_id);
+        CREATE INDEX IF NOT EXISTS idx_leave_status ON "${schema_name}".leave_requests(status);
+      `);
+      await sql.unsafe(`
+        INSERT INTO "${schema_name}".attendance_policy (id) VALUES (1)
+        ON CONFLICT DO NOTHING;
       `);
       // Seed a default schedule if the company has none yet.
       await sql.unsafe(`

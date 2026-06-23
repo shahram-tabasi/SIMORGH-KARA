@@ -162,6 +162,36 @@ CREATE TABLE IF NOT EXISTS attendance_days (
 );
 CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance_days(work_date);
 
+-- Attendance policy / company rules (stage 3): single settings row.
+CREATE TABLE IF NOT EXISTS attendance_policy (
+  id                     int PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  grace_minutes          int NOT NULL DEFAULT 0,        -- allowed lateness
+  standard_daily_minutes int NOT NULL DEFAULT 480,      -- 8h working day
+  monthly_leave_days     numeric(5,1) NOT NULL DEFAULT 2.5,
+  annual_leave_days      numeric(5,1) NOT NULL DEFAULT 26,
+  overtime_enabled       boolean NOT NULL DEFAULT true
+);
+
+-- Leave / mission requests (stage 3).
+CREATE TABLE IF NOT EXISTS leave_requests (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  member_id   uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  kind        text NOT NULL DEFAULT 'leave'
+                CHECK (kind IN ('leave','mission','hourly')),
+  from_date   date NOT NULL,
+  to_date     date NOT NULL,
+  from_time   text,                            -- for hourly leave
+  to_time     text,
+  reason      text,
+  status      text NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','approved','rejected')),
+  decided_by  uuid REFERENCES members(id) ON DELETE SET NULL,
+  decided_at  timestamptz,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_leave_member ON leave_requests(member_id);
+CREATE INDEX IF NOT EXISTS idx_leave_status ON leave_requests(status);
+
 -- Ledger module (double-entry foundation, extend later).
 CREATE TABLE IF NOT EXISTS ledger_accounts (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -23,6 +23,11 @@ export default async function TenantLayout({
   nav.push({ href: `${base}/attendance`, label: "حضور و غیاب", icon: "🕒" });
   if (can("attendance.manage"))
     nav.push({ href: `${base}/attendance/team`, label: "حضور تیم", icon: "👫" });
+  if (can("attendance.manage"))
+    nav.push({ href: `${base}/attendance/rules`, label: "قوانین حضور", icon: "⚙️" });
+  nav.push({ href: `${base}/leave`, label: "مرخصی و مأموریت", icon: "🏖️" });
+  if (can("leave.approve"))
+    nav.push({ href: `${base}/leave/manage`, label: "تأیید مرخصی‌ها", icon: "✅" });
   if (can("calendar.view") || can("calendar.manage"))
     nav.push({ href: `${base}/calendar`, label: "تقویم کاری", icon: "📅" });
   if (can("calendar.manage"))

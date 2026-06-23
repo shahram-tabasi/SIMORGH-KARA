@@ -117,6 +117,9 @@ export async function provisionCompany(
       INSERT INTO work_schedules (name, work_days, start_time, end_time, is_default)
       VALUES ('شیفت اداری', '{0,1,2,3,4}', '08:00', '17:00', true)
     `;
+
+    // Default attendance policy row.
+    await tx`INSERT INTO attendance_policy (id) VALUES (1) ON CONFLICT DO NOTHING`;
   });
 
   return { companyId, slug, schema, adminAccountId };
