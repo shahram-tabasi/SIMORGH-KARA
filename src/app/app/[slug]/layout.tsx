@@ -33,6 +33,8 @@ export default async function TenantLayout({
     nav.push({ href: `${base}/leave/manage`, label: "تأیید مرخصی‌ها", icon: "✅" });
   if (can("leave.types.manage"))
     nav.push({ href: `${base}/leave/types`, label: "انواع مرخصی", icon: "🗂️" });
+  if (can("leave.ledger.manage"))
+    nav.push({ href: `${base}/leave/ledger`, label: "مدیریت مانده", icon: "💼" });
   if (can("calendar.view") || can("calendar.manage"))
     nav.push({ href: `${base}/calendar`, label: "تقویم کاری", icon: "📅" });
   if (can("calendar.manage"))

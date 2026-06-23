@@ -175,3 +175,30 @@ export async function loadBalance(
     };
   });
 }
+
+export interface MemberBalanceRow {
+  memberId: string;
+  name: string;
+  balance: LeaveBalance;
+}
+
+/** Entitlement balance for every active member, for a Jalali year. */
+export async function loadAllBalances(
+  schema: string,
+  jyear: number
+): Promise<MemberBalanceRow[]> {
+  const members = await withTenant(schema, async (tx) =>
+    tx<{ id: string; full_name: string }[]>`
+      SELECT id, full_name FROM members WHERE status = 'active' ORDER BY full_name
+    `
+  );
+  const out: MemberBalanceRow[] = [];
+  for (const m of members) {
+    out.push({
+      memberId: m.id,
+      name: m.full_name,
+      balance: await loadBalance(schema, m.id, jyear),
+    });
+  }
+  return out;
+}
