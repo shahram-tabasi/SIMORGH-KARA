@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireTenant } from "@/lib/session";
 import { withTenant } from "@/lib/db";
+import { ensureYearHolidays } from "@/lib/holiday-sync";
 import { PageHeader } from "@/components/Shell";
 import {
   JALALI_MONTHS,
@@ -35,11 +36,14 @@ export default async function CalendarPage({
   searchParams: { y?: string; m?: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  const { sched, holidays } = await loadCalendarData(ctx.company.schema);
 
   const today = todayJalali();
   const jy = Number(searchParams.y) || today.jy;
   const jm = Number(searchParams.m) || today.jm;
+
+  // Auto-seed this year's official holidays on first view of a (future) year.
+  await ensureYearHolidays(ctx.company.schema, jy);
+  const { sched, holidays } = await loadCalendarData(ctx.company.schema);
 
   const workDays = new Set(sched?.work_days ?? [0, 1, 2, 3, 4]);
   const holidayMap = new Map(

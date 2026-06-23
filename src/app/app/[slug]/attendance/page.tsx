@@ -1,5 +1,6 @@
 import { requireTenant } from "@/lib/session";
 import { todayJalali, isoDate } from "@/lib/jalali";
+import { ensureYearHolidays } from "@/lib/holiday-sync";
 import { loadMonthSheet } from "./data";
 import { SheetTable } from "./SheetTable";
 import { PunchWidget } from "./PunchWidget";
@@ -15,6 +16,9 @@ export default async function AttendancePage({
   const today = todayJalali();
   const jy = Number(searchParams.y) || today.jy;
   const jm = Number(searchParams.m) || today.jm;
+
+  // Auto-seed official holidays for this year on first view (covers future years).
+  await ensureYearHolidays(ctx.company.schema, jy);
 
   const sheet = await loadMonthSheet(
     ctx.company.schema,
