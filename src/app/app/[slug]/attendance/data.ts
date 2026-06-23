@@ -21,6 +21,7 @@ export interface SheetDay {
   isWorkingDay: boolean;
   isHoliday: boolean;
   holidayTitle?: string;
+  leaveLabel?: string; // leave-type name for مرخصی/مأموریت days
   checkIn: Date | null;
   checkOut: Date | null;
   punches: DayPunch[];
@@ -32,6 +33,7 @@ export interface SheetDay {
 export interface MonthSheet {
   days: SheetDay[];
   scheduleStart: string;
+  scheduleEnd: string;
   scheduleName: string;
   dailyMinutes: number;
   totals: {
@@ -59,18 +61,19 @@ export async function loadMonthSheet(
   return withTenant(schema, async (tx) => {
     // member's schedule, falling back to the company default
     const [sched] = await tx<
-      { name: string; work_days: number[]; start_time: string }[]
+      { name: string; work_days: number[]; start_time: string; end_time: string }[]
     >`
-      SELECT ws.name, ws.work_days, ws.start_time
+      SELECT ws.name, ws.work_days, ws.start_time, ws.end_time
       FROM work_schedules ws
       WHERE ws.id = (SELECT schedule_id FROM members WHERE id = ${memberId})
       UNION ALL
-      SELECT ws.name, ws.work_days, ws.start_time
+      SELECT ws.name, ws.work_days, ws.start_time, ws.end_time
       FROM work_schedules ws WHERE ws.is_default = true
       LIMIT 1
     `;
     const workDays = new Set(sched?.work_days ?? [0, 1, 2, 3, 4]);
     const start = sched?.start_time ?? "08:00";
+    const end = sched?.end_time ?? "17:00";
 
     const [policy] = await tx<
       { grace_minutes: number; standard_daily_minutes: number; overtime_enabled: boolean }[]
@@ -97,19 +100,24 @@ export async function loadMonthSheet(
       holidays.map((h) => [h.holiday_date.slice(0, 10), h.title])
     );
 
-    // Approved full-day leaves/missions overlapping the month.
-    const leaves = await tx<{ kind: string; from_date: string; to_date: string }[]>`
-      SELECT kind, from_date::text, to_date::text FROM leave_requests
-      WHERE member_id = ${memberId} AND status = 'approved'
-        AND kind IN ('leave','mission')
-        AND from_date <= ${lastIso} AND to_date >= ${firstIso}
+    // Approved full-day leaves/missions overlapping the month (with type name).
+    const leaves = await tx<
+      { kind: string; name: string | null; from_date: string; to_date: string }[]
+    >`
+      SELECT lr.kind, lt.name, lr.from_date::text, lr.to_date::text
+      FROM leave_requests lr
+      LEFT JOIN leave_types lt ON lt.id = lr.type_id
+      WHERE lr.member_id = ${memberId} AND lr.status = 'approved'
+        AND lr.kind IN ('leave','mission')
+        AND lr.from_date <= ${lastIso} AND lr.to_date >= ${firstIso}
     `;
-    const leaveMap = new Map<string, "leave" | "mission">();
+    const leaveMap = new Map<string, { kind: "leave" | "mission"; name?: string }>();
     for (const lv of leaves) {
       for (let day = 1; day <= len; day++) {
         const iso = isoDate(toGregorian(jy, jm, day));
         if (iso >= lv.from_date.slice(0, 10) && iso <= lv.to_date.slice(0, 10)) {
-          if (!leaveMap.has(iso)) leaveMap.set(iso, lv.kind as "leave" | "mission");
+          if (!leaveMap.has(iso))
+            leaveMap.set(iso, { kind: lv.kind as "leave" | "mission", name: lv.name ?? undefined });
         }
       }
     }
@@ -168,13 +176,17 @@ export async function loadMonthSheet(
       result.worked = agg.worked > 0 ? agg.worked : null;
 
       // An approved leave/mission overrides an otherwise empty working day.
+      let leaveLabel: string | undefined;
       if (
         isWorkingDay &&
         !checkIn &&
         (result.status === "absent" || result.status === "pending")
       ) {
         const lv = leaveMap.get(iso);
-        if (lv) result.status = lv;
+        if (lv) {
+          result.status = lv.kind;
+          leaveLabel = lv.name;
+        }
       }
 
       // کسرکار / اضافه‌کار vs the daily working minutes (present days only).
@@ -206,6 +218,7 @@ export async function loadMonthSheet(
         isWorkingDay,
         isHoliday,
         holidayTitle: holidayMap.get(iso),
+        leaveLabel,
         deficitMinutes,
         overtimeMinutes,
         checkIn,
@@ -218,6 +231,7 @@ export async function loadMonthSheet(
     return {
       days,
       scheduleStart: start,
+      scheduleEnd: end,
       scheduleName: sched?.name ?? "—",
       dailyMinutes,
       totals,
