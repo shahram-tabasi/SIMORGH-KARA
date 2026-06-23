@@ -111,6 +111,12 @@ export async function provisionCompany(
       INSERT INTO kartabls (member_id, name)
       VALUES (${member.id}, 'کارتابل اصلی')
     `;
+
+    // Default company work schedule (Sat–Wed, 08:00–17:00).
+    await tx`
+      INSERT INTO work_schedules (name, work_days, start_time, end_time, is_default)
+      VALUES ('شیفت اداری', '{0,1,2,3,4}', '08:00', '17:00', true)
+    `;
   });
 
   return { companyId, slug, schema, adminAccountId };

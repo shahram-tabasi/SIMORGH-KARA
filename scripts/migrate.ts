@@ -3,12 +3,13 @@
  * Idempotent — safe to run repeatedly. Run with:  npm run db:migrate
  */
 import postgres from "postgres";
+import { ALL_PERMISSIONS } from "../src/lib/rbac";
 
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set.");
 
-  const sql = postgres(url, { max: 1 });
+  const sql = postgres(url, { max: 1, onnotice: () => {} });
   try {
     const tenants = await sql<{ schema_name: string }[]>`
       SELECT schema_name FROM platform.companies
@@ -30,6 +31,53 @@ async function main() {
         FROM "${schema_name}".kartabls k
         WHERE i.kartabl_id = k.id AND i.created_by IS NULL;
       `);
+
+      // HR / Calendar module (stage 1)
+      await sql.unsafe(`
+        ALTER TABLE "${schema_name}".members
+          ADD COLUMN IF NOT EXISTS schedule_id uuid;
+
+        CREATE TABLE IF NOT EXISTS "${schema_name}".work_schedules (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          name text NOT NULL,
+          work_days int[] NOT NULL DEFAULT '{0,1,2,3,4}',
+          start_time text NOT NULL DEFAULT '08:00',
+          end_time text NOT NULL DEFAULT '17:00',
+          is_default boolean NOT NULL DEFAULT false,
+          created_at timestamptz NOT NULL DEFAULT now()
+        );
+
+        CREATE TABLE IF NOT EXISTS "${schema_name}".holidays (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          holiday_date date NOT NULL UNIQUE,
+          title text NOT NULL,
+          is_official boolean NOT NULL DEFAULT true,
+          created_at timestamptz NOT NULL DEFAULT now()
+        );
+      `);
+      // Seed a default schedule if the company has none yet.
+      await sql.unsafe(`
+        INSERT INTO "${schema_name}".work_schedules
+          (name, work_days, start_time, end_time, is_default)
+        SELECT 'شیفت اداری', '{0,1,2,3,4}', '08:00', '17:00', true
+        WHERE NOT EXISTS (SELECT 1 FROM "${schema_name}".work_schedules);
+      `);
+
+      // Grant any newly-added permission keys to the full-access system role
+      // ("مدیر سامانه") so existing admins gain new capabilities automatically.
+      const [adminRole] = await sql.unsafe(
+        `SELECT id FROM "${schema_name}".roles
+         WHERE is_system = true AND name = 'مدیر سامانه' LIMIT 1`
+      );
+      if (adminRole) {
+        for (const key of ALL_PERMISSIONS) {
+          await sql.unsafe(
+            `INSERT INTO "${schema_name}".role_permissions (role_id, permission_key)
+             VALUES ('${adminRole.id}', '${key}')
+             ON CONFLICT DO NOTHING`
+          );
+        }
+      }
     }
     console.log("✔ Migration complete.");
   } finally {

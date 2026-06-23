@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS members (
   title       text,                          -- job title / position
   status      text NOT NULL DEFAULT 'active'
                 CHECK (status IN ('active','disabled')),
+  schedule_id uuid,                          -- work_schedules.id (HR module)
   created_at  timestamptz NOT NULL DEFAULT now(),
   UNIQUE (account_id)
 );
@@ -124,6 +125,29 @@ CREATE TABLE IF NOT EXISTS kartabl_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_kartabl_items_kartabl ON kartabl_items(kartabl_id);
+
+-- HR / Calendar module (stage 1) ------------------------------------------
+
+-- A work schedule: which weekdays are working days and the daily hours.
+-- work_days holds Iranian weekday indices (0=Saturday … 6=Friday).
+CREATE TABLE IF NOT EXISTS work_schedules (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        text NOT NULL,
+  work_days   int[] NOT NULL DEFAULT '{0,1,2,3,4}',
+  start_time  text NOT NULL DEFAULT '08:00',
+  end_time    text NOT NULL DEFAULT '17:00',
+  is_default  boolean NOT NULL DEFAULT false,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- Holidays (official or company-specific), keyed by Gregorian date.
+CREATE TABLE IF NOT EXISTS holidays (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  holiday_date date NOT NULL UNIQUE,
+  title        text NOT NULL,
+  is_official  boolean NOT NULL DEFAULT true,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
 
 -- Ledger module (double-entry foundation, extend later).
 CREATE TABLE IF NOT EXISTS ledger_accounts (

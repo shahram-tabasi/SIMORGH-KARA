@@ -14,6 +14,8 @@ export const PERMISSIONS = {
   "kartabl.assign": "ارجاع کار به کارتابل دیگران",
   "kartabl.view_all": "مشاهده کارتابل همه اعضا",
   "kartabl.manage": "مدیریت کامل کارتابل‌ها (ویرایش/حذف کار دیگران)",
+  "calendar.view": "مشاهده تقویم کاری",
+  "calendar.manage": "مدیریت تقویم، ساعت کاری و تعطیلات",
   "ledger.view": "مشاهده دفتر کل",
   "ledger.manage": "ثبت و مدیریت اسناد دفتر کل",
   "settings.manage": "مدیریت تنظیمات شرکت",
@@ -43,7 +45,7 @@ export const DEFAULT_ROLES: {
   {
     name: "کاربر",
     description: "دسترسی پایه — فقط کارتابل شخصی خود",
-    permissions: ["ledger.view"],
+    permissions: ["calendar.view", "ledger.view"],
     is_system: true,
   },
 ];

@@ -15,7 +15,7 @@ async function main() {
   const password = process.env.SUPERADMIN_PASSWORD ?? "ChangeMe123!";
   const name = process.env.SUPERADMIN_NAME ?? "مدیر سیمرغ";
 
-  const sql = postgres(url, { max: 1 });
+  const sql = postgres(url, { max: 1, onnotice: () => {} });
   try {
     console.log("→ applying platform schema…");
     await sql.unsafe(PLATFORM_DDL);
