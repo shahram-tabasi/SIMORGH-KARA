@@ -5,8 +5,32 @@ import {
   toFaDigits,
   isoDate,
 } from "@/lib/jalali";
-import { formatTime, formatDuration } from "@/lib/attendance";
-import type { MonthSheet, SheetDay } from "./data";
+import { formatDuration } from "@/lib/attendance";
+import type { MonthSheet, SheetDay, DayStamp } from "./data";
+
+/** Colored chronological clock stamps: ۸:۰۰ ۱۱:۰۰ ۱۲:۰۰ ۱۷:۰۰ */
+function Timeline({ stamps }: { stamps: DayStamp[] }) {
+  if (stamps.length === 0) return <span className="text-slate-300">—</span>;
+  return (
+    <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5" dir="ltr">
+      {stamps.map((s, i) => (
+        <span
+          key={i}
+          className={`font-semibold tabular-nums ${
+            s.kind === "in"
+              ? "text-emerald-600"
+              : s.kind === "out"
+                ? "text-rose-500"
+                : "text-blue-600"
+          }`}
+          title={s.kind === "leave" ? "مرز مرخصی ساعتی" : s.kind === "in" ? "ورود" : "خروج"}
+        >
+          {s.display}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 /** Vibrant status chip + meaning for a day. */
 function dayStatus(d: SheetDay): { text: string; cls: string } {
@@ -79,7 +103,7 @@ export function SheetTable({
         <table className="w-full text-[11px] leading-tight">
           <thead>
             <tr className="bg-brand-700 text-right text-[10px] text-white">
-              <Th>روز</Th><Th>تاریخ</Th><Th>شیفت</Th><Th>ورود</Th><Th>خروج</Th>
+              <Th>روز</Th><Th>تاریخ</Th><Th>شیفت</Th><Th>ترددها</Th>
               <Th>کارکرد</Th><Th>تأخیر</Th><Th>کسرکار</Th><Th>اضافه‌کار</Th><Th>وضعیت</Th>
             </tr>
           </thead>
@@ -106,8 +130,12 @@ export function SheetTable({
                   </td>
                   <td className="whitespace-nowrap px-2 py-[3px] text-slate-500">{toFaDigits(d.jd)} {JALALI_MONTHS[jm - 1]}</td>
                   <td className="px-2 py-[3px] text-[10px] text-slate-400" dir="ltr">{d.isWorkingDay ? shift : "—"}</td>
-                  <td className="px-2 py-[3px] font-semibold text-emerald-600" dir="ltr">{formatTime(d.checkIn)}</td>
-                  <td className="px-2 py-[3px] font-semibold text-rose-500" dir="ltr">{formatTime(d.checkOut)}</td>
+                  <td className="px-2 py-[3px]">
+                    <Timeline stamps={d.stamps} />
+                    {d.hourlyLeave && (
+                      <span className="mr-1 rounded bg-blue-50 px-1 text-[9px] text-blue-600">م. ساعتی</span>
+                    )}
+                  </td>
                   <td className="px-2 py-[3px] font-bold text-brand-700">{formatDuration(d.result.worked)}</td>
                   <td className="px-2 py-[3px] text-amber-600">{d.result.lateMinutes > 0 ? formatDuration(d.result.lateMinutes) : "—"}</td>
                   <td className="px-2 py-[3px] text-rose-600">{d.deficitMinutes > 0 ? formatDuration(d.deficitMinutes) : "—"}</td>
@@ -122,7 +150,6 @@ export function SheetTable({
           <tfoot>
             <tr className="border-t-2 border-brand-200 bg-brand-50 text-[11px] font-bold text-slate-700">
               <td className="px-2 py-1" colSpan={3}>جمع ماه</td>
-              <td className="px-2 py-1"></td>
               <td className="px-2 py-1"></td>
               <td className="px-2 py-1 text-brand-700">{formatDuration(t.workedMinutes)}</td>
               <td className="px-2 py-1 text-amber-600">{formatDuration(t.lateMinutes)}</td>

@@ -11,7 +11,7 @@ import { DEFAULT_ROLES, ALL_PERMISSIONS } from "../src/lib/rbac";
 import { DEFAULT_LEAVE_TYPES } from "../src/lib/leave-types";
 import { schemaNameFromSlug } from "../src/lib/utils";
 import { todayJalali, toGregorian, isoDate } from "../src/lib/jalali";
-import { officialHolidaysFor } from "../src/lib/iran-holidays";
+import { fetchOfficialHolidays } from "../src/lib/online-holidays";
 
 const CREDS = {
   superadmin: { email: process.env.SUPERADMIN_EMAIL ?? "admin@simorgh.local", password: process.env.SUPERADMIN_PASSWORD ?? "ChangeMe123!" },
@@ -112,10 +112,13 @@ async function main() {
       await tx`INSERT INTO work_schedules (name, work_days, start_time, end_time, is_default) VALUES ('شیفت اداری', '{0,1,2,3,4}', '08:00', '17:00', true)`;
       await tx`INSERT INTO attendance_policy (id, annual_leave_days) VALUES (1, 30) ON CONFLICT DO NOTHING`;
 
-      // Official Iranian holidays for this and next Jalali year (so تاسوعا/عاشورا
-      // and the rest show up by name in the calendar and the attendance sheet).
+      // Official Iranian holidays for this and next Jalali year, read online
+      // (so تاسوعا/عاشورا and the rest show up by name in the calendar and the
+      // attendance sheet); falls back to the offline computation if offline.
       for (const jy of [today.jy, today.jy + 1]) {
-        for (const h of officialHolidaysFor(jy)) {
+        const { holidays, source } = await fetchOfficialHolidays(jy);
+        console.log(`  holidays ${jy}: ${holidays.length} (${source})`);
+        for (const h of holidays) {
           await tx`
             INSERT INTO holidays (holiday_date, title, is_official)
             VALUES (${h.iso}, ${h.title}, true)
@@ -150,8 +153,13 @@ async function main() {
       // Sample attendance for the employee (a normal day + a late day)
       const punch = (d: number, t: string, k: string) =>
         tx`INSERT INTO attendance_punches (member_id, punched_at, kind) VALUES (${empId}, ${`${iso(d)} ${t}`}, ${k})`;
-      await punch(d1, "08:00", "in"); await punch(d1, "16:30", "out");   // ~8:30 worked → overtime vs 440
+      await punch(d1, "08:00", "in"); await punch(d1, "17:00", "out");   // full day + hourly leave window below
       await punch(d2, "08:40", "in"); await punch(d2, "15:00", "out");   // late + short → deficit
+
+      // Approved مرخصی ساعتی on d1 (11:00–12:00) → timeline shows ۸:۰۰ ۱۱:۰۰ ۱۲:۰۰ ۱۷:۰۰
+      await tx`
+        INSERT INTO leave_requests (member_id, type_id, kind, from_date, to_date, from_time, to_time, status, effective_days, total_steps, current_step)
+        VALUES (${empId}, (SELECT id FROM leave_types WHERE code='entitlement_hourly'), 'hourly', ${iso(d1)}, ${iso(d1)}, '11:00', '12:00', 'approved', 0.12, 2, 2)`;
 
       // A pending leave request from the employee → lands in the manager's kartabl
       const [req] = await tx<{ id: string }[]>`

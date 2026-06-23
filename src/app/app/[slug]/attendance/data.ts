@@ -6,12 +6,26 @@ import {
   iranianWeekday,
   isoDate,
 } from "@/lib/jalali";
-import { computeDay, aggregatePunches, type DayResult } from "@/lib/attendance";
+import {
+  computeDay,
+  aggregatePunches,
+  formatTime,
+  dateToMinutes,
+  timeToMinutes,
+  type DayResult,
+} from "@/lib/attendance";
+import { toFaDigits } from "@/lib/jalali";
 
 export interface DayPunch {
   id: string;
   at: Date;
   kind: "in" | "out";
+}
+
+/** A single clock event in a day's timeline (تردد). */
+export interface DayStamp {
+  display: string; // HH:MM in Persian digits
+  kind: "in" | "out" | "leave";
 }
 
 export interface SheetDay {
@@ -22,6 +36,8 @@ export interface SheetDay {
   isHoliday: boolean;
   holidayTitle?: string;
   leaveLabel?: string; // leave-type name for مرخصی/مأموریت days
+  hourlyLeave?: { from: string; to: string }; // مرخصی ساعتی window (Persian HH:MM)
+  stamps: DayStamp[]; // full ordered timeline: ورود/خروج + مرز مرخصی ساعتی
   checkIn: Date | null;
   checkOut: Date | null;
   punches: DayPunch[];
@@ -122,6 +138,24 @@ export async function loadMonthSheet(
       }
     }
 
+    // Approved hourly leaves (مرخصی ساعتی) — a within-day window per occurrence.
+    const hourly = await tx<
+      { from_date: string; from_time: string | null; to_time: string | null }[]
+    >`
+      SELECT from_date::text, from_time, to_time
+      FROM leave_requests
+      WHERE member_id = ${memberId} AND status = 'approved' AND kind = 'hourly'
+        AND from_time IS NOT NULL AND to_time IS NOT NULL
+        AND from_date BETWEEN ${firstIso} AND ${lastIso}
+    `;
+    const hourlyMap = new Map<string, { from: string; to: string }[]>();
+    for (const h of hourly) {
+      const iso = h.from_date.slice(0, 10);
+      const list = hourlyMap.get(iso) ?? [];
+      list.push({ from: h.from_time!, to: h.to_time! });
+      hourlyMap.set(iso, list);
+    }
+
     // Punches across the month (padded so timezone edges still bucket locally).
     const punches = await tx<DayPunch[]>`
       SELECT id, punched_at AS at, kind
@@ -203,6 +237,25 @@ export async function loadMonthSheet(
           : 0;
       }
 
+      // Build the day's clock timeline (تردد): punches + hourly-leave boundaries,
+      // ordered. This renders as e.g. ۸:۰۰ ۱۱:۰۰ ۱۲:۰۰ ۱۷:۰۰ in the sheet.
+      const dayHourly = hourlyMap.get(iso) ?? [];
+      const stampSeed: { min: number; stamp: DayStamp }[] = [];
+      for (const p of dayPunches)
+        stampSeed.push({
+          min: dateToMinutes(p.at),
+          stamp: { display: formatTime(p.at), kind: p.kind },
+        });
+      for (const hl of dayHourly) {
+        stampSeed.push({ min: timeToMinutes(hl.from), stamp: { display: toFaDigits(hl.from), kind: "leave" } });
+        stampSeed.push({ min: timeToMinutes(hl.to), stamp: { display: toFaDigits(hl.to), kind: "leave" } });
+      }
+      stampSeed.sort((a, b) => a.min - b.min);
+      const stamps = stampSeed.map((s) => s.stamp);
+      const hourlyLeave = dayHourly[0]
+        ? { from: toFaDigits(dayHourly[0].from), to: toFaDigits(dayHourly[0].to) }
+        : undefined;
+
       if (result.status === "present" || result.status === "late")
         totals.presentDays++;
       if (result.status === "absent") totals.absentDays++;
@@ -219,6 +272,8 @@ export async function loadMonthSheet(
         isHoliday,
         holidayTitle: holidayMap.get(iso),
         leaveLabel,
+        hourlyLeave,
+        stamps,
         deficitMinutes,
         overtimeMinutes,
         checkIn,

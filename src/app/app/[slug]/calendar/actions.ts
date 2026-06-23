@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { withTenant } from "@/lib/db";
 import { requireTenant, ensurePermission } from "@/lib/session";
 import { toGregorian, isoDate } from "@/lib/jalali";
-import { officialHolidaysFor } from "@/lib/iran-holidays";
+import { fetchOfficialHolidays } from "@/lib/online-holidays";
 
 function rev(slug: string, sub = "") {
   revalidatePath(`/app/${slug}${sub}`);
@@ -13,6 +13,9 @@ function rev(slug: string, sub = "") {
 export interface CalState {
   error?: string;
   ok?: boolean;
+  /** how many holidays were imported, and whether from the online source */
+  count?: number;
+  source?: "online" | "offline";
 }
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -125,9 +128,10 @@ export async function addHolidayAction(
 }
 
 /**
- * Bulk-import official Iranian holidays for a Jalali year. Solar holidays are
- * exact; religious (lunar) ones are converted and may need a ±1 day tweak, so
- * they stay editable. Existing dates are left untouched.
+ * Bulk-import official Iranian holidays for a Jalali year, read *online* from
+ * the curated dataset (accurate religious dates, correctable without redeploy).
+ * Falls back to the offline tabular computation if the network is unavailable.
+ * Existing dates are updated to the latest official title.
  */
 export async function importOfficialHolidaysAction(
   _prev: CalState,
@@ -140,19 +144,20 @@ export async function importOfficialHolidaysAction(
   const jy = Number(formData.get("jy"));
   if (!jy || jy < 1300 || jy > 1500) return { error: "سال نامعتبر است." };
 
-  const holidays = officialHolidaysFor(jy);
+  const { holidays, source } = await fetchOfficialHolidays(jy);
   await withTenant(ctx.company.schema, async (tx) => {
     for (const h of holidays) {
       await tx`
         INSERT INTO holidays (holiday_date, title, is_official)
         VALUES (${h.iso}, ${h.title}, true)
-        ON CONFLICT (holiday_date) DO NOTHING
+        ON CONFLICT (holiday_date)
+        DO UPDATE SET title = EXCLUDED.title, is_official = true
       `;
     }
   });
   rev(slug, "/calendar/settings");
   rev(slug, "/calendar");
-  return { ok: true };
+  return { ok: true, count: holidays.length, source };
 }
 
 export async function deleteHolidayAction(formData: FormData) {
