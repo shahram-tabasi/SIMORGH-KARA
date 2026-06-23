@@ -5,6 +5,14 @@ import { useFormState, useFormStatus } from "react-dom";
 import { JALALI_MONTHS } from "@/lib/jalali";
 import { submitLeaveAction, type LeaveState } from "./actions";
 
+export interface LeaveTypeOption {
+  id: string;
+  name: string;
+  unit: "day" | "hour";
+  requires_attachment: boolean;
+  description: string | null;
+}
+
 function Submit() {
   const { pending } = useFormStatus();
   return (
@@ -41,16 +49,38 @@ function DateGroup({ prefix, year }: { prefix: string; year: number }) {
   );
 }
 
-export function LeaveForm({ slug, year }: { slug: string; year: number }) {
+export function LeaveForm({
+  slug,
+  year,
+  types,
+}: {
+  slug: string;
+  year: number;
+  types: LeaveTypeOption[];
+}) {
   const [state, action] = useFormState<LeaveState, FormData>(
     submitLeaveAction,
     {}
   );
-  const [kind, setKind] = useState("leave");
+  const [typeId, setTypeId] = useState(types[0]?.id ?? "");
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
-    if (state.ok) ref.current?.reset();
-  }, [state.ok]);
+    if (state.ok) {
+      ref.current?.reset();
+      setTypeId(types[0]?.id ?? "");
+    }
+  }, [state.ok, types]);
+
+  const selected = types.find((t) => t.id === typeId);
+  const hourly = selected?.unit === "hour";
+
+  if (types.length === 0) {
+    return (
+      <div className="card text-sm text-slate-500">
+        هنوز نوع مرخصی فعالی تعریف نشده است.
+      </div>
+    );
+  }
 
   return (
     <form ref={ref} action={action} className="card space-y-4">
@@ -66,41 +96,30 @@ export function LeaveForm({ slug, year }: { slug: string; year: number }) {
       <input type="hidden" name="slug" value={slug} />
 
       <div>
-        <label className="label">نوع</label>
-        <div className="flex gap-2">
-          {[
-            { v: "leave", l: "مرخصی روزانه" },
-            { v: "mission", l: "مأموریت" },
-            { v: "hourly", l: "مرخصی ساعتی" },
-          ].map((o) => (
-            <label
-              key={o.v}
-              className={`cursor-pointer rounded-md border px-3 py-1.5 text-sm ${
-                kind === o.v
-                  ? "border-brand-500 bg-brand-50 text-brand-700"
-                  : "border-slate-200 text-slate-600"
-              }`}
-            >
-              <input
-                type="radio"
-                name="kind"
-                value={o.v}
-                className="hidden"
-                checked={kind === o.v}
-                onChange={() => setKind(o.v)}
-              />
-              {o.l}
-            </label>
+        <label className="label">نوع مرخصی</label>
+        <select
+          name="type_id"
+          value={typeId}
+          onChange={(e) => setTypeId(e.target.value)}
+          className="input"
+        >
+          {types.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name} ({t.unit === "hour" ? "ساعتی" : "روزانه"})
+            </option>
           ))}
-        </div>
+        </select>
+        {selected?.description && (
+          <p className="mt-1 text-[11px] text-slate-400">{selected.description}</p>
+        )}
       </div>
 
       <div>
-        <label className="label">{kind === "hourly" ? "تاریخ" : "از تاریخ"}</label>
+        <label className="label">{hourly ? "تاریخ" : "از تاریخ"}</label>
         <DateGroup prefix="f" year={year} />
       </div>
 
-      {kind === "hourly" ? (
+      {hourly ? (
         <div className="flex items-end gap-2">
           <div>
             <label className="label">از ساعت</label>
@@ -115,6 +134,21 @@ export function LeaveForm({ slug, year }: { slug: string; year: number }) {
         <div>
           <label className="label">تا تاریخ</label>
           <DateGroup prefix="t" year={year} />
+        </div>
+      )}
+
+      {selected?.requires_attachment && (
+        <div>
+          <label className="label">پیوست مدرک (لینک)</label>
+          <input
+            name="attachment_url"
+            className="input"
+            dir="ltr"
+            placeholder="https://… (گواهی پزشک، سند و…)"
+          />
+          <p className="mt-0.5 text-[11px] text-amber-600">
+            برای این نوع مرخصی، ارائه مدرک الزامی است.
+          </p>
         </div>
       )}
 

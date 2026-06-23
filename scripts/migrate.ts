@@ -4,6 +4,7 @@
  */
 import postgres from "postgres";
 import { ALL_PERMISSIONS } from "../src/lib/rbac";
+import { DEFAULT_LEAVE_TYPES } from "../src/lib/leave-types";
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -104,7 +105,56 @@ async function main() {
         );
         CREATE INDEX IF NOT EXISTS idx_leave_member ON "${schema_name}".leave_requests(member_id);
         CREATE INDEX IF NOT EXISTS idx_leave_status ON "${schema_name}".leave_requests(status);
+
+        CREATE TABLE IF NOT EXISTS "${schema_name}".leave_types (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          code text NOT NULL UNIQUE,
+          name text NOT NULL,
+          unit text NOT NULL DEFAULT 'day' CHECK (unit IN ('day','hour')),
+          paid boolean NOT NULL DEFAULT true,
+          deducts_entitlement boolean NOT NULL DEFAULT true,
+          counts_inner_holidays boolean NOT NULL DEFAULT false,
+          requires_attachment boolean NOT NULL DEFAULT false,
+          max_minutes_per_day int,
+          max_count_per_month int,
+          max_count_per_week int,
+          max_days_per_year numeric(6,1),
+          approval_levels int NOT NULL DEFAULT 1,
+          is_active boolean NOT NULL DEFAULT true,
+          is_system boolean NOT NULL DEFAULT false,
+          sort_order int NOT NULL DEFAULT 0,
+          description text,
+          created_at timestamptz NOT NULL DEFAULT now()
+        );
+
+        ALTER TABLE "${schema_name}".leave_requests
+          ADD COLUMN IF NOT EXISTS type_id uuid REFERENCES "${schema_name}".leave_types(id),
+          ADD COLUMN IF NOT EXISTS attachment_url text,
+          ADD COLUMN IF NOT EXISTS effective_days numeric(6,2);
+
+        UPDATE "${schema_name}".attendance_policy
+          SET annual_leave_days = 30 WHERE annual_leave_days = 26;
       `);
+
+      // Seed/refresh the leave-type catalogue (system types only; never clobber
+      // a company's own edits — insert missing ones by code).
+      for (const t of DEFAULT_LEAVE_TYPES) {
+        await sql.unsafe(
+          `INSERT INTO "${schema_name}".leave_types
+            (code, name, unit, paid, deducts_entitlement, counts_inner_holidays,
+             requires_attachment, max_minutes_per_day, max_count_per_month,
+             max_count_per_week, max_days_per_year, approval_levels, sort_order,
+             description, is_system)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true)
+           ON CONFLICT (code) DO NOTHING`,
+          [
+            t.code, t.name, t.unit, t.paid, t.deducts_entitlement,
+            t.counts_inner_holidays, t.requires_attachment, t.max_minutes_per_day,
+            t.max_count_per_month, t.max_count_per_week, t.max_days_per_year,
+            t.approval_levels, t.sort_order, t.description,
+          ]
+        );
+      }
       await sql.unsafe(`
         INSERT INTO "${schema_name}".attendance_policy (id) VALUES (1)
         ON CONFLICT DO NOTHING;

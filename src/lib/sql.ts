@@ -184,22 +184,47 @@ CREATE TABLE IF NOT EXISTS attendance_policy (
   overtime_enabled       boolean NOT NULL DEFAULT true
 );
 
--- Leave / mission requests (stage 3).
+-- Configurable leave-type catalogue (stage 5): each company tunes its rules.
+CREATE TABLE IF NOT EXISTS leave_types (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code                  text NOT NULL UNIQUE,
+  name                  text NOT NULL,
+  unit                  text NOT NULL DEFAULT 'day' CHECK (unit IN ('day','hour')),
+  paid                  boolean NOT NULL DEFAULT true,
+  deducts_entitlement   boolean NOT NULL DEFAULT true,
+  counts_inner_holidays boolean NOT NULL DEFAULT false,
+  requires_attachment   boolean NOT NULL DEFAULT false,
+  max_minutes_per_day   int,
+  max_count_per_month   int,
+  max_count_per_week    int,
+  max_days_per_year     numeric(6,1),
+  approval_levels       int NOT NULL DEFAULT 1,
+  is_active             boolean NOT NULL DEFAULT true,
+  is_system             boolean NOT NULL DEFAULT false,
+  sort_order            int NOT NULL DEFAULT 0,
+  description           text,
+  created_at            timestamptz NOT NULL DEFAULT now()
+);
+
+-- Leave / mission requests (stage 3, extended in stage 5).
 CREATE TABLE IF NOT EXISTS leave_requests (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  member_id   uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-  kind        text NOT NULL DEFAULT 'leave'
-                CHECK (kind IN ('leave','mission','hourly')),
-  from_date   date NOT NULL,
-  to_date     date NOT NULL,
-  from_time   text,                            -- for hourly leave
-  to_time     text,
-  reason      text,
-  status      text NOT NULL DEFAULT 'pending'
-                CHECK (status IN ('pending','approved','rejected')),
-  decided_by  uuid REFERENCES members(id) ON DELETE SET NULL,
-  decided_at  timestamptz,
-  created_at  timestamptz NOT NULL DEFAULT now()
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  member_id     uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  type_id       uuid REFERENCES leave_types(id),
+  kind          text NOT NULL DEFAULT 'leave'
+                  CHECK (kind IN ('leave','mission','hourly')),
+  from_date     date NOT NULL,
+  to_date       date NOT NULL,
+  from_time     text,                            -- for hourly leave
+  to_time       text,
+  reason        text,
+  attachment_url text,                           -- medical certificate, etc.
+  effective_days numeric(6,2),                   -- computed billable days
+  status        text NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending','approved','rejected')),
+  decided_by    uuid REFERENCES members(id) ON DELETE SET NULL,
+  decided_at    timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_leave_member ON leave_requests(member_id);
 CREATE INDEX IF NOT EXISTS idx_leave_status ON leave_requests(status);

@@ -26,14 +26,14 @@ export async function submitLeaveAction(
   const slug = String(formData.get("slug"));
   const ctx = await requireTenant(slug);
 
-  const kind = String(formData.get("kind") || "leave");
-  if (!["leave", "mission", "hourly"].includes(kind))
-    return { error: "نوع درخواست نامعتبر است." };
+  const typeId = String(formData.get("type_id") || "");
+  if (!typeId) return { error: "نوع مرخصی را انتخاب کنید." };
 
   const fy = Number(formData.get("fy"));
   const fm = Number(formData.get("fm"));
   const fd = Number(formData.get("fd"));
   const reason = String(formData.get("reason") || "").trim();
+  const attachment = String(formData.get("attachment_url") || "").trim() || null;
   if (!fy || !fm || !fd) return { error: "تاریخ شروع را وارد کنید." };
 
   const fromIso = isoDate(toGregorian(fy, fm, fd));
@@ -41,29 +41,57 @@ export async function submitLeaveAction(
   let fromTime: string | null = null;
   let toTime: string | null = null;
 
-  if (kind === "hourly") {
-    fromTime = String(formData.get("from_time") || "");
-    toTime = String(formData.get("to_time") || "");
-    if (!TIME_RE.test(fromTime) || !TIME_RE.test(toTime))
-      return { error: "ساعت شروع/پایان مرخصی ساعتی را وارد کنید." };
-  } else {
-    const ty = Number(formData.get("ty"));
-    const tm = Number(formData.get("tm"));
-    const td = Number(formData.get("td"));
-    if (!ty || !tm || !td) return { error: "تاریخ پایان را وارد کنید." };
-    toIso = isoDate(toGregorian(ty, tm, td));
-    if (toIso < fromIso) return { error: "تاریخ پایان نباید قبل از شروع باشد." };
-  }
+  const result = await withTenant(ctx.company.schema, async (tx) => {
+    const [type] = await tx<
+      {
+        code: string;
+        unit: "day" | "hour";
+        requires_attachment: boolean;
+        is_active: boolean;
+      }[]
+    >`
+      SELECT code, unit, requires_attachment, is_active
+      FROM leave_types WHERE id = ${typeId}
+    `;
+    if (!type || !type.is_active) return { error: "نوع مرخصی نامعتبر است." };
 
-  await withTenant(ctx.company.schema, async (tx) => {
+    if (type.unit === "hour") {
+      fromTime = String(formData.get("from_time") || "");
+      toTime = String(formData.get("to_time") || "");
+      if (!TIME_RE.test(fromTime) || !TIME_RE.test(toTime))
+        return { error: "ساعت شروع و پایان را وارد کنید." };
+    } else {
+      const ty = Number(formData.get("ty"));
+      const tm = Number(formData.get("tm"));
+      const td = Number(formData.get("td"));
+      if (!ty || !tm || !td) return { error: "تاریخ پایان را وارد کنید." };
+      toIso = isoDate(toGregorian(ty, tm, td));
+      if (toIso < fromIso) return { error: "تاریخ پایان نباید قبل از شروع باشد." };
+    }
+
+    if (type.requires_attachment && !attachment)
+      return { error: "برای این نوع مرخصی پیوست مدرک الزامی است." };
+
+    // Map to the legacy `kind` used by the attendance sheet reflection.
+    const kind =
+      type.code === "mission"
+        ? "mission"
+        : type.unit === "hour"
+          ? "hourly"
+          : "leave";
+
     await tx`
       INSERT INTO leave_requests
-        (member_id, kind, from_date, to_date, from_time, to_time, reason)
+        (member_id, type_id, kind, from_date, to_date, from_time, to_time,
+         reason, attachment_url)
       VALUES
-        (${ctx.member.memberId}, ${kind}, ${fromIso}, ${toIso},
-         ${fromTime}, ${toTime}, ${reason})
+        (${ctx.member.memberId}, ${typeId}, ${kind}, ${fromIso}, ${toIso},
+         ${fromTime}, ${toTime}, ${reason}, ${attachment})
     `;
+    return { ok: true as const };
   });
+
+  if ("error" in result) return result;
   rev(slug);
   return { ok: true };
 }

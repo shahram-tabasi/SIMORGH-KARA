@@ -9,6 +9,7 @@ import { KIND_LABEL, STATUS_LABEL, STATUS_TONE, faDate } from "./shared";
 interface Req {
   id: string;
   kind: string;
+  type_name: string | null;
   from_date: string;
   to_date: string;
   from_time: string | null;
@@ -23,14 +24,29 @@ export default async function LeavePage({
   params: { slug: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  const requests = await withTenant(ctx.company.schema, async (tx) =>
-    tx<Req[]>`
-      SELECT id, kind, from_date::text, to_date::text, from_time, to_time,
-             reason, status
-      FROM leave_requests WHERE member_id = ${ctx.member.memberId}
-      ORDER BY created_at DESC
-    `
-  );
+  const { requests, types } = await withTenant(ctx.company.schema, async (tx) => {
+    const requests = await tx<Req[]>`
+      SELECT lr.id, lr.kind, lt.name AS type_name, lr.from_date::text,
+             lr.to_date::text, lr.from_time, lr.to_time, lr.reason, lr.status
+      FROM leave_requests lr
+      LEFT JOIN leave_types lt ON lt.id = lr.type_id
+      WHERE lr.member_id = ${ctx.member.memberId}
+      ORDER BY lr.created_at DESC
+    `;
+    const types = await tx<
+      {
+        id: string;
+        name: string;
+        unit: "day" | "hour";
+        requires_attachment: boolean;
+        description: string | null;
+      }[]
+    >`
+      SELECT id, name, unit, requires_attachment, description
+      FROM leave_types WHERE is_active = true ORDER BY sort_order, name
+    `;
+    return { requests, types };
+  });
 
   return (
     <>
@@ -40,7 +56,7 @@ export default async function LeavePage({
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <LeaveForm slug={params.slug} year={todayJalali().jy} />
+        <LeaveForm slug={params.slug} year={todayJalali().jy} types={types} />
 
         <div className="card">
           <h3 className="mb-3 text-sm font-semibold text-slate-700">
@@ -58,7 +74,7 @@ export default async function LeavePage({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="badge bg-slate-100 text-slate-600">
-                        {KIND_LABEL[r.kind]}
+                        {r.type_name ?? KIND_LABEL[r.kind]}
                       </span>
                       <span className={`badge ${STATUS_TONE[r.status]}`}>
                         {STATUS_LABEL[r.status]}

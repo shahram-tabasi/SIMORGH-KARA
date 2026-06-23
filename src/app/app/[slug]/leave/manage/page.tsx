@@ -20,18 +20,22 @@ interface Row {
 async function loadRequests(schema: string) {
   return withTenant(schema, async (tx) => {
     const pending = await tx<Row[]>`
-      SELECT lr.id, m.full_name AS member_name, lr.kind,
+      SELECT lr.id, m.full_name AS member_name,
+             COALESCE(lt.name, lr.kind) AS kind,
              lr.from_date::text, lr.to_date::text, lr.from_time, lr.to_time,
              lr.reason, lr.status
       FROM leave_requests lr JOIN members m ON m.id = lr.member_id
+      LEFT JOIN leave_types lt ON lt.id = lr.type_id
       WHERE lr.status = 'pending'
       ORDER BY lr.created_at
     `;
     const history = await tx<Row[]>`
-      SELECT lr.id, m.full_name AS member_name, lr.kind,
+      SELECT lr.id, m.full_name AS member_name,
+             COALESCE(lt.name, lr.kind) AS kind,
              lr.from_date::text, lr.to_date::text, lr.from_time, lr.to_time,
              lr.reason, lr.status
       FROM leave_requests lr JOIN members m ON m.id = lr.member_id
+      LEFT JOIN leave_types lt ON lt.id = lr.type_id
       WHERE lr.status <> 'pending'
       ORDER BY lr.decided_at DESC NULLS LAST
       LIMIT 50
@@ -91,7 +95,7 @@ export default async function LeaveManagePage({
                       {r.member_name}
                     </span>
                     <span className="badge bg-slate-100 text-slate-600">
-                      {KIND_LABEL[r.kind]}
+                      {KIND_LABEL[r.kind] ?? r.kind}
                     </span>
                   </div>
                   <div className="mt-1 text-xs text-slate-500">
@@ -135,7 +139,7 @@ export default async function LeaveManagePage({
                     {r.member_name}
                   </span>
                   <span className="mr-2 text-xs text-slate-500">
-                    {KIND_LABEL[r.kind]} — <Range r={r} />
+                    {KIND_LABEL[r.kind] ?? r.kind} — <Range r={r} />
                   </span>
                 </div>
                 <span className={`badge ${STATUS_TONE[r.status]}`}>

@@ -2,6 +2,7 @@ import "server-only";
 import { sql, withTenant, assertSafeSchema } from "./db";
 import { tenantDDL } from "./sql";
 import { DEFAULT_ROLES } from "./rbac";
+import { DEFAULT_LEAVE_TYPES } from "./leave-types";
 import { hashPassword } from "./password";
 import { slugify, shortId, schemaNameFromSlug } from "./utils";
 
@@ -118,8 +119,28 @@ export async function provisionCompany(
       VALUES ('شیفت اداری', '{0,1,2,3,4}', '08:00', '17:00', true)
     `;
 
-    // Default attendance policy row.
-    await tx`INSERT INTO attendance_policy (id) VALUES (1) ON CONFLICT DO NOTHING`;
+    // Default attendance policy row (30 days annual entitlement per labour law).
+    await tx`
+      INSERT INTO attendance_policy (id, annual_leave_days)
+      VALUES (1, 30) ON CONFLICT DO NOTHING
+    `;
+
+    // Seed the configurable leave-type catalogue from labour-law defaults.
+    for (const t of DEFAULT_LEAVE_TYPES) {
+      await tx`
+        INSERT INTO leave_types
+          (code, name, unit, paid, deducts_entitlement, counts_inner_holidays,
+           requires_attachment, max_minutes_per_day, max_count_per_month,
+           max_count_per_week, max_days_per_year, approval_levels, sort_order,
+           description, is_system)
+        VALUES
+          (${t.code}, ${t.name}, ${t.unit}, ${t.paid}, ${t.deducts_entitlement},
+           ${t.counts_inner_holidays}, ${t.requires_attachment},
+           ${t.max_minutes_per_day}, ${t.max_count_per_month},
+           ${t.max_count_per_week}, ${t.max_days_per_year}, ${t.approval_levels},
+           ${t.sort_order}, ${t.description}, true)
+      `;
+    }
   });
 
   return { companyId, slug, schema, adminAccountId };
