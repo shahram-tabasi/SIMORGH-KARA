@@ -16,6 +16,7 @@ export const PERMISSIONS = {
   "kartabl.manage": "مدیریت کامل کارتابل‌ها (ویرایش/حذف کار دیگران)",
   "calendar.view": "مشاهده تقویم کاری",
   "calendar.manage": "مدیریت تقویم، ساعت کاری و تعطیلات",
+  "attendance.manage": "مدیریت حضور و غیاب همه اعضا",
   "ledger.view": "مشاهده دفتر کل",
   "ledger.manage": "ثبت و مدیریت اسناد دفتر کل",
   "settings.manage": "مدیریت تنظیمات شرکت",

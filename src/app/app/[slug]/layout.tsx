@@ -20,6 +20,9 @@ export default async function TenantLayout({
   if (can("groups.view") || can("groups.manage"))
     nav.push({ href: `${base}/groups`, label: "زیرگروه‌ها", icon: "🗂" });
   nav.push({ href: `${base}/kartabl`, label: "کارتابل من", icon: "📥" });
+  nav.push({ href: `${base}/attendance`, label: "حضور و غیاب", icon: "🕒" });
+  if (can("attendance.manage"))
+    nav.push({ href: `${base}/attendance/team`, label: "حضور تیم", icon: "👫" });
   if (can("calendar.view") || can("calendar.manage"))
     nav.push({ href: `${base}/calendar`, label: "تقویم کاری", icon: "📅" });
   if (can("calendar.manage"))

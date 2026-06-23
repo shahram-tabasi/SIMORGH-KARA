@@ -149,6 +149,19 @@ CREATE TABLE IF NOT EXISTS holidays (
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 
+-- Attendance (stage 2): one row per member per day, with punch times.
+CREATE TABLE IF NOT EXISTS attendance_days (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  member_id  uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  work_date  date NOT NULL,
+  check_in   timestamptz,
+  check_out  timestamptz,
+  note       text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (member_id, work_date)
+);
+CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance_days(work_date);
+
 -- Ledger module (double-entry foundation, extend later).
 CREATE TABLE IF NOT EXISTS ledger_accounts (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
