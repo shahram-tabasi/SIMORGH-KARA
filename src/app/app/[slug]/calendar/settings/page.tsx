@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/Shell";
 import { WEEKDAYS, toJalali, toFaDigits, todayJalali, JALALI_MONTHS } from "@/lib/jalali";
 import { ScheduleForm } from "./ScheduleForm";
 import { HolidayForm } from "./HolidayForm";
+import { ImportHolidays } from "./ImportHolidays";
 import {
   setDefaultScheduleAction,
   deleteScheduleAction,
@@ -109,6 +110,7 @@ export default async function CalendarSettingsPage({
         </div>
 
         <div className="space-y-4">
+          <ImportHolidays slug={params.slug} defaultYear={todayJalali().jy} />
           <HolidayForm slug={params.slug} defaultYear={todayJalali().jy} />
           <div className="card">
             <h3 className="mb-3 text-sm font-semibold text-slate-700">
@@ -137,15 +139,13 @@ export default async function CalendarSettingsPage({
                           </span>
                         )}
                       </div>
-                      {!h.is_official && (
-                        <form action={deleteHolidayAction}>
-                          <input type="hidden" name="slug" value={params.slug} />
-                          <input type="hidden" name="id" value={h.id} />
-                          <button className="text-xs text-red-600 hover:underline">
-                            حذف
-                          </button>
-                        </form>
-                      )}
+                      <form action={deleteHolidayAction}>
+                        <input type="hidden" name="slug" value={params.slug} />
+                        <input type="hidden" name="id" value={h.id} />
+                        <button className="text-xs text-red-600 hover:underline">
+                          حذف
+                        </button>
+                      </form>
                     </li>
                   );
                 })}

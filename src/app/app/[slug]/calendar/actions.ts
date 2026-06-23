@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { withTenant } from "@/lib/db";
 import { requireTenant, ensurePermission } from "@/lib/session";
 import { toGregorian, isoDate } from "@/lib/jalali";
+import { officialHolidaysFor } from "@/lib/iran-holidays";
 
 function rev(slug: string, sub = "") {
   revalidatePath(`/app/${slug}${sub}`);
@@ -118,6 +119,37 @@ export async function addHolidayAction(
   } catch {
     return { error: "خطا در ثبت تعطیلی." };
   }
+  rev(slug, "/calendar/settings");
+  rev(slug, "/calendar");
+  return { ok: true };
+}
+
+/**
+ * Bulk-import official Iranian holidays for a Jalali year. Solar holidays are
+ * exact; religious (lunar) ones are converted and may need a ±1 day tweak, so
+ * they stay editable. Existing dates are left untouched.
+ */
+export async function importOfficialHolidaysAction(
+  _prev: CalState,
+  formData: FormData
+): Promise<CalState> {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "calendar.manage");
+
+  const jy = Number(formData.get("jy"));
+  if (!jy || jy < 1300 || jy > 1500) return { error: "سال نامعتبر است." };
+
+  const holidays = officialHolidaysFor(jy);
+  await withTenant(ctx.company.schema, async (tx) => {
+    for (const h of holidays) {
+      await tx`
+        INSERT INTO holidays (holiday_date, title, is_official)
+        VALUES (${h.iso}, ${h.title}, true)
+        ON CONFLICT (holiday_date) DO NOTHING
+      `;
+    }
+  });
   rev(slug, "/calendar/settings");
   rev(slug, "/calendar");
   return { ok: true };
