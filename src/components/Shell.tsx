@@ -20,9 +20,9 @@ export function Shell({
 
   return (
     <div className="flex min-h-screen bg-slate-100">
-      <aside className="flex w-64 shrink-0 flex-col border-l border-slate-200 bg-white">
-        <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-bold text-white">
+      <aside className="flex w-52 shrink-0 flex-col border-l border-slate-200 bg-white">
+        <div className="flex items-center gap-2.5 border-b border-slate-200 px-3 py-3.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-bold text-white">
             {initials}
           </div>
           <div className="min-w-0">

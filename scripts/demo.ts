@@ -11,6 +11,7 @@ import { DEFAULT_ROLES, ALL_PERMISSIONS } from "../src/lib/rbac";
 import { DEFAULT_LEAVE_TYPES } from "../src/lib/leave-types";
 import { schemaNameFromSlug } from "../src/lib/utils";
 import { todayJalali, toGregorian, isoDate } from "../src/lib/jalali";
+import { officialHolidaysFor } from "../src/lib/iran-holidays";
 
 const CREDS = {
   superadmin: { email: process.env.SUPERADMIN_EMAIL ?? "admin@simorgh.local", password: process.env.SUPERADMIN_PASSWORD ?? "ChangeMe123!" },
@@ -110,6 +111,17 @@ async function main() {
       // Default schedule + policy + leave types
       await tx`INSERT INTO work_schedules (name, work_days, start_time, end_time, is_default) VALUES ('شیفت اداری', '{0,1,2,3,4}', '08:00', '17:00', true)`;
       await tx`INSERT INTO attendance_policy (id, annual_leave_days) VALUES (1, 30) ON CONFLICT DO NOTHING`;
+
+      // Official Iranian holidays for this and next Jalali year (so تاسوعا/عاشورا
+      // and the rest show up by name in the calendar and the attendance sheet).
+      for (const jy of [today.jy, today.jy + 1]) {
+        for (const h of officialHolidaysFor(jy)) {
+          await tx`
+            INSERT INTO holidays (holiday_date, title, is_official)
+            VALUES (${h.iso}, ${h.title}, true)
+            ON CONFLICT (holiday_date) DO NOTHING`;
+        }
+      }
       for (const t of DEFAULT_LEAVE_TYPES) {
         await tx`
           INSERT INTO leave_types (code, name, unit, paid, deducts_entitlement, counts_inner_holidays,
