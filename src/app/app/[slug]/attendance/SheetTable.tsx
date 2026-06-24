@@ -133,7 +133,7 @@ export function SheetTable({
                     {toFaDigits(d.jd)} {JALALI_MONTHS[jm - 1]}
                     {d.occasionTitle && (
                       <span
-                        className="mr-1 rounded bg-amber-50 px-1 text-[9px] text-amber-700"
+                        className="mr-1 rounded bg-yellow-100 px-1 text-[9px] text-yellow-800"
                         title={d.occasionTitle}
                       >
                         ●

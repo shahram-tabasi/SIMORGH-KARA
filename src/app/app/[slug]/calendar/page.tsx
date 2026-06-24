@@ -138,13 +138,13 @@ export default async function CalendarPage({
             const isToday =
               jy === today.jy && jm === today.jm && c.jd === today.jd;
 
-            // holiday = red; today = green; occasion = amber; rest = استراحت
+            // holiday = red; today = green; occasion = yellow; rest = استراحت
             const tone = isOff
               ? "bg-red-50 text-red-600 border-red-100"
               : isToday
                 ? "bg-green-100 text-green-800 border-green-300"
                 : occasion
-                  ? "bg-amber-50 text-amber-700 border-amber-100"
+                  ? "bg-yellow-100 text-yellow-800 border-yellow-300"
                   : working
                     ? "bg-green-50 text-green-700 border-green-100"
                     : "bg-slate-50 text-slate-400 border-slate-100";
@@ -160,7 +160,7 @@ export default async function CalendarPage({
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold">{toFaDigits(c.jd)}</span>
                   {occasion && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
                   )}
                   {ov && (
                     <span className="rounded bg-sky-100 px-1 text-[8px] text-sky-700">دستی</span>
@@ -198,7 +198,7 @@ export default async function CalendarPage({
             ({toFaDigits(holidayCount)} مناسبت)
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded bg-amber-100" /> مناسبت
+            <span className="inline-block h-3 w-3 rounded bg-yellow-300" /> مناسبت
             ({toFaDigits(occasionCount)})
           </span>
           <span className="flex items-center gap-1.5">
