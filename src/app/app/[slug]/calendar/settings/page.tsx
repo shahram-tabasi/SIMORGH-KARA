@@ -5,10 +5,12 @@ import { WEEKDAYS, toJalali, toFaDigits, todayJalali, JALALI_MONTHS } from "@/li
 import { ScheduleForm } from "./ScheduleForm";
 import { HolidayForm } from "./HolidayForm";
 import { ImportHolidays } from "./ImportHolidays";
+import { OverrideForm } from "./OverrideForm";
 import {
   setDefaultScheduleAction,
   deleteScheduleAction,
   deleteHolidayAction,
+  deleteOverrideAction,
 } from "../actions";
 
 interface Schedule {
@@ -35,7 +37,11 @@ async function loadData(schema: string) {
       SELECT id, holiday_date::text, title, is_official
       FROM holidays ORDER BY holiday_date DESC
     `;
-    return { schedules, holidays };
+    const overrides = await tx<{ id: string; override_date: string; is_working: boolean; note: string | null }[]>`
+      SELECT id, override_date::text, is_working, note
+      FROM schedule_overrides ORDER BY override_date DESC
+    `;
+    return { schedules, holidays, overrides };
   });
 }
 
@@ -46,7 +52,7 @@ export default async function CalendarSettingsPage({
 }) {
   const ctx = await requireTenant(params.slug);
   ensurePermission(ctx, "calendar.manage");
-  const { schedules, holidays } = await loadData(ctx.company.schema);
+  const { schedules, holidays, overrides } = await loadData(ctx.company.schema);
 
   return (
     <>
@@ -111,6 +117,46 @@ export default async function CalendarSettingsPage({
 
         <div className="space-y-4">
           <ImportHolidays slug={params.slug} defaultYear={todayJalali().jy} />
+          <OverrideForm slug={params.slug} defaultYear={todayJalali().jy} />
+          {overrides.length > 0 && (
+            <div className="card">
+              <h3 className="mb-3 text-sm font-semibold text-slate-700">
+                استثناهای شیفت
+              </h3>
+              <ul className="space-y-2">
+                {overrides.map((o) => {
+                  const j = toJalali(parseIso(o.override_date));
+                  return (
+                    <li
+                      key={o.id}
+                      className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2"
+                    >
+                      <div className="text-sm text-slate-700">
+                        <span className="font-medium">
+                          {toFaDigits(j.jd)} {JALALI_MONTHS[j.jm - 1]} {toFaDigits(j.jy)}
+                        </span>
+                        <span
+                          className={`badge mr-2 ${
+                            o.is_working
+                              ? "bg-green-100 text-green-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {o.is_working ? "روز کاری" : "استراحت"}
+                        </span>
+                        {o.note && <span className="text-slate-500">— {o.note}</span>}
+                      </div>
+                      <form action={deleteOverrideAction}>
+                        <input type="hidden" name="slug" value={params.slug} />
+                        <input type="hidden" name="id" value={o.id} />
+                        <button className="text-xs text-red-600 hover:underline">حذف</button>
+                      </form>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           <HolidayForm slug={params.slug} defaultYear={todayJalali().jy} />
           <div className="card">
             <h3 className="mb-3 text-sm font-semibold text-slate-700">

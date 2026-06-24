@@ -3,7 +3,6 @@ import { requireTenant } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { KartablItemForm } from "./KartablItemForm";
-import { AssignTaskForm } from "./AssignTaskForm";
 import { ItemActions } from "./ItemActions";
 import { setKartablItemStatusAction } from "../actions";
 import { decideLeaveAction, cancelLeaveAction } from "../leave/actions";
@@ -104,7 +103,7 @@ export default async function KartablPage({
   const ctx = await requireTenant(params.slug);
   const meId = ctx.member.memberId;
   const canAssign = ctx.member.permissions.has("kartabl.assign");
-  const { kartabls, items, members, myLeaves } = await loadData(
+  const { kartabls, items, myLeaves } = await loadData(
     ctx.company.schema,
     meId,
     canAssign
@@ -180,11 +179,7 @@ export default async function KartablPage({
         )}
       </div>
 
-      {canAssign && (
-        <div className="mb-6">
-          <AssignTaskForm slug={params.slug} members={members} />
-        </div>
-      )}
+      {/* ارجاع کار به دیگران در «میز کار» انجام می‌شود تا با کارتابل قاطی نشود. */}
 
       {kartabls.map((k) => {
         const myItems = items.filter((i) => i.kartabl_id === k.id);

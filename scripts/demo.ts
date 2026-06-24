@@ -107,7 +107,9 @@ async function main() {
       }
       const [hrRole] = await tx<{ id: string }[]>`
         INSERT INTO roles (name, description) VALUES ('کارگزینی', 'تأیید مرخصی در مرحله کارگزینی') RETURNING id`;
-      await tx`INSERT INTO role_permissions (role_id, permission_key) VALUES (${hrRole.id}, 'leave.approve.hr')`;
+      // کارگزینی: تأیید مرحلهٔ کارگزینی + مدیریت تقویم/شیفت (استثناهای شیفت)
+      for (const p of ['leave.approve.hr', 'calendar.view', 'calendar.manage'])
+        await tx`INSERT INTO role_permissions (role_id, permission_key) VALUES (${hrRole.id}, ${p})`;
 
       // Default schedule + policy + leave types
       await tx`INSERT INTO work_schedules (name, work_days, start_time, end_time, is_default) VALUES ('شیفت اداری', '{0,1,2,3,4}', '08:00', '17:00', true)`;

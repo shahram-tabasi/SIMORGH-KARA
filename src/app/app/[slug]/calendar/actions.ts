@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { withTenant } from "@/lib/db";
 import { requireTenant, ensurePermission } from "@/lib/session";
-import { toGregorian, isoDate } from "@/lib/jalali";
+import { toGregorian, isoDate, jalaliMonthLength } from "@/lib/jalali";
 import { fetchOfficialHolidays } from "@/lib/online-holidays";
 import { officialOccasionsFor } from "@/lib/iran-events";
 
@@ -147,7 +147,16 @@ export async function importOfficialHolidaysAction(
 
   const { holidays, source } = await fetchOfficialHolidays(jy);
   const occasions = officialOccasionsFor(jy);
+  const firstIso = isoDate(toGregorian(jy, 1, 1));
+  const lastIso = isoDate(toGregorian(jy, 12, jalaliMonthLength(jy, 12)));
   await withTenant(ctx.company.schema, async (tx) => {
+    // Clear this year's official rows first so corrected/moved dates (e.g. a
+    // religious holiday shifted by a day) replace the old ones. Company-added
+    // custom days (is_official = false) are preserved.
+    await tx`
+      DELETE FROM holidays
+      WHERE is_official = true AND holiday_date BETWEEN ${firstIso} AND ${lastIso}
+    `;
     for (const h of holidays) {
       await tx`
         INSERT INTO holidays (holiday_date, title, is_official, is_off)
@@ -177,6 +186,54 @@ export async function deleteHolidayAction(formData: FormData) {
   const id = String(formData.get("id"));
   await withTenant(ctx.company.schema, async (tx) => {
     await tx`DELETE FROM holidays WHERE id = ${id}`;
+  });
+  rev(slug, "/calendar/settings");
+  rev(slug, "/calendar");
+}
+
+/* --------------------------- schedule overrides ------------------------- */
+
+/**
+ * HR (کارگزینی) sets a per-date exception: turn a working day into استراحت, or
+ * a shift's rest day into a working day (e.g. a bridge day between two
+ * holidays). Upsert by date.
+ */
+export async function saveOverrideAction(
+  _prev: CalState,
+  formData: FormData
+): Promise<CalState> {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "calendar.manage");
+
+  const jy = Number(formData.get("jy"));
+  const jm = Number(formData.get("jm"));
+  const jd = Number(formData.get("jd"));
+  const isWorking = String(formData.get("is_working")) === "1";
+  const note = String(formData.get("note") || "").trim() || null;
+  if (!jy || !jm || !jd) return { error: "تاریخ را کامل وارد کنید." };
+
+  const date = isoDate(toGregorian(jy, jm, jd));
+  await withTenant(ctx.company.schema, async (tx) => {
+    await tx`
+      INSERT INTO schedule_overrides (override_date, is_working, note)
+      VALUES (${date}, ${isWorking}, ${note})
+      ON CONFLICT (override_date)
+      DO UPDATE SET is_working = EXCLUDED.is_working, note = EXCLUDED.note
+    `;
+  });
+  rev(slug, "/calendar/settings");
+  rev(slug, "/calendar");
+  return { ok: true };
+}
+
+export async function deleteOverrideAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "calendar.manage");
+  const id = String(formData.get("id"));
+  await withTenant(ctx.company.schema, async (tx) => {
+    await tx`DELETE FROM schedule_overrides WHERE id = ${id}`;
   });
   rev(slug, "/calendar/settings");
   rev(slug, "/calendar");

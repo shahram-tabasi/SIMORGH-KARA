@@ -34,6 +34,7 @@ function Timeline({ stamps }: { stamps: DayStamp[] }) {
 
 /** Vibrant status chip + meaning for a day. */
 function dayStatus(d: SheetDay): { text: string; cls: string } {
+  if (d.holidayWork) return { text: "کار در تعطیل", cls: "bg-indigo-100 text-indigo-700" };
   if (d.leaveLabel) return { text: d.leaveLabel, cls: "bg-blue-100 text-blue-700" };
   switch (d.result.status) {
     case "present":
@@ -149,7 +150,10 @@ export function SheetTable({
                   <td className="px-2 py-[3px] font-bold text-brand-700">{formatDuration(d.result.worked)}</td>
                   <td className="px-2 py-[3px] text-amber-600">{d.result.lateMinutes > 0 ? formatDuration(d.result.lateMinutes) : "—"}</td>
                   <td className="px-2 py-[3px] text-rose-600">{d.deficitMinutes > 0 ? formatDuration(d.deficitMinutes) : "—"}</td>
-                  <td className="px-2 py-[3px] text-indigo-600">{d.overtimeMinutes > 0 ? formatDuration(d.overtimeMinutes) : "—"}</td>
+                  <td className="px-2 py-[3px] text-indigo-600">
+                    {d.overtimeMinutes > 0 ? formatDuration(d.overtimeMinutes) : "—"}
+                    {d.holidayWork && <span className="mr-1 text-[8px] text-indigo-400">×۱.۴</span>}
+                  </td>
                   <td className="px-2 py-[3px]">
                     <span className={`inline-block rounded px-1.5 py-[1px] text-[10px] font-medium ${s.cls}`}>{s.text}</span>
                   </td>

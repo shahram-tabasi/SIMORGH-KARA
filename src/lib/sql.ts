@@ -197,6 +197,16 @@ CREATE TABLE IF NOT EXISTS holidays (
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 
+-- Per-date schedule exceptions set by HR (کارگزینی): force a normally-working
+-- day off, or turn a shift's rest day into a working day (e.g. a bridge day).
+CREATE TABLE IF NOT EXISTS schedule_overrides (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  override_date date NOT NULL UNIQUE,
+  is_working    boolean NOT NULL,  -- true = working day، false = استراحت/تعطیل
+  note          text,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
 -- Attendance (stage 2): one row per member per day, with punch times.
 CREATE TABLE IF NOT EXISTS attendance_days (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -43,7 +43,7 @@ export function KartablItemForm({
           <input name="title" required className="input" placeholder="عنوان کار / سند…" />
         </div>
         <select name="kind" className="input w-32">
-          <option value="task">وظیفه</option>
+          <option value="task">یادداشت</option>
           <option value="document">سند</option>
           <option value="message">پیام</option>
         </select>

@@ -38,6 +38,7 @@ export interface SheetDay {
   occasionTitle?: string; // مناسبت غیرتعطیل (informational, day stays working)
   leaveLabel?: string; // leave-type name for مرخصی/مأموریت days
   hourlyLeave?: { from: string; to: string }; // مرخصی ساعتی window (Persian HH:MM)
+  holidayWork: boolean; // worked on a day off → اضافه‌کار با ضریب ۱.۴
   stamps: DayStamp[]; // full ordered timeline: ورود/خروج + مرز مرخصی ساعتی
   checkIn: Date | null;
   checkOut: Date | null;
@@ -118,6 +119,13 @@ export async function loadMonthSheet(
     const holidayMap = new Map(
       holidays.filter((h) => h.is_off).map((h) => [h.holiday_date.slice(0, 10), h.title])
     );
+    const overrideRows = await tx<{ override_date: string; is_working: boolean }[]>`
+      SELECT override_date::text, is_working FROM schedule_overrides
+      WHERE override_date BETWEEN ${firstIso} AND ${lastIso}
+    `;
+    const overrideMap = new Map(
+      overrideRows.map((o) => [o.override_date.slice(0, 10), o.is_working])
+    );
     const occasionMap = new Map(
       holidays.filter((h) => !h.is_off).map((h) => [h.holiday_date.slice(0, 10), h.title])
     );
@@ -194,8 +202,18 @@ export async function loadMonthSheet(
       const g = toGregorian(jy, jm, d);
       const iso = isoDate(g);
       const weekday = iranianWeekday(g);
-      const isHoliday = holidayMap.has(iso) || weekday === 6; // Friday off
-      const isWorkingDay = workDays.has(weekday) && !isHoliday;
+      // Effective working/off status, honouring HR overrides:
+      //  - official day off always wins (تعطیل رسمی)
+      //  - else an explicit override decides (bridge day off / rest day working)
+      //  - else the schedule (Friday always off)
+      const officialOff = holidayMap.has(iso);
+      const ov = overrideMap.get(iso);
+      let isWorkingDay: boolean;
+      if (officialOff) isWorkingDay = false;
+      else if (ov !== undefined) isWorkingDay = ov;
+      else isWorkingDay = workDays.has(weekday) && weekday !== 6;
+      // "holiday" (red) = official day off, or the weekly Friday unless overridden.
+      const isHoliday = officialOff || (weekday === 6 && !isWorkingDay);
       const dayOrder = iso < todayIso ? -1 : iso === todayIso ? 0 : 1;
 
       const dayPunches = punchesByDay.get(iso) ?? [];
@@ -233,6 +251,7 @@ export async function loadMonthSheet(
       // Late arrival naturally surfaces here as کسرکار (no grace on deduction).
       let deficitMinutes = 0;
       let overtimeMinutes = 0;
+      let holidayWork = false;
       if (
         (result.status === "present" || result.status === "late") &&
         result.worked != null
@@ -241,6 +260,16 @@ export async function loadMonthSheet(
         overtimeMinutes = overtimeEnabled
           ? Math.max(0, result.worked - dailyMinutes)
           : 0;
+      } else if (
+        !isWorkingDay &&
+        agg.worked > 0 &&
+        (result.status === "holiday" || result.status === "off")
+      ) {
+        // Work on a day off (تعطیل/استراحت): all of it counts as اضافه‌کار with
+        // the statutory holiday coefficient ۱.۴ (کار در تعطیل، طبق قانون کار).
+        result.worked = agg.worked;
+        overtimeMinutes = overtimeEnabled ? Math.round(agg.worked * 1.4) : 0;
+        holidayWork = true;
       }
 
       // Build the day's clock timeline (تردد): punches + hourly-leave boundaries,
@@ -281,6 +310,7 @@ export async function loadMonthSheet(
         leaveLabel,
         hourlyLeave,
         stamps,
+        holidayWork,
         deficitMinutes,
         overtimeMinutes,
         checkIn,

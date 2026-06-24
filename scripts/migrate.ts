@@ -76,6 +76,14 @@ async function main() {
         ALTER TABLE "${schema_name}".holidays
           ADD COLUMN IF NOT EXISTS is_off boolean NOT NULL DEFAULT true;
 
+        CREATE TABLE IF NOT EXISTS "${schema_name}".schedule_overrides (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          override_date date NOT NULL UNIQUE,
+          is_working boolean NOT NULL,
+          note text,
+          created_at timestamptz NOT NULL DEFAULT now()
+        );
+
         CREATE TABLE IF NOT EXISTS "${schema_name}".attendance_days (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
           member_id uuid NOT NULL REFERENCES "${schema_name}".members(id) ON DELETE CASCADE,

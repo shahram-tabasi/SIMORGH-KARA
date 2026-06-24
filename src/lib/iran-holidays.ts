@@ -112,7 +112,11 @@ export function officialHolidaysFor(jy: number): OfficialHoliday[] {
   const hyEstimate = Math.floor((jy - 1) * 1.0307) + 1;
   for (let iy = hyEstimate - 2; iy <= hyEstimate + 2; iy++) {
     for (const [hm, hd, title] of LUNAR) {
-      const jdn = islamicToJDN(iy, hm, hd);
+      // Calibrate the tabular Islamic date to the official Iranian one. Iran
+      // fixes religious days by moon sighting, which in recent years runs ~1
+      // day before the arithmetic/tabular calendar — so e.g. تاسوعا/عاشورا
+      // land on the correct Wednesday/Thursday rather than a day late.
+      const jdn = islamicToJDN(iy, hm, hd) - 1;
       if (jdn >= start && jdn <= end) {
         out.push({ iso: isoDate(jdnToDate(jdn)), title, lunar: true });
       }
