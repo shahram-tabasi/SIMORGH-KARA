@@ -5,6 +5,9 @@
 import postgres from "postgres";
 import { ALL_PERMISSIONS } from "../src/lib/rbac";
 import { DEFAULT_LEAVE_TYPES } from "../src/lib/leave-types";
+import { officialHolidaysFor } from "../src/lib/iran-holidays";
+import { officialOccasionsFor } from "../src/lib/iran-events";
+import { todayJalali, toGregorian, isoDate, jalaliMonthLength } from "../src/lib/jalali";
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -290,6 +293,34 @@ async function main() {
             `INSERT INTO "${schema_name}".role_permissions (role_id, permission_key)
              VALUES ('${adminRole.id}', '${key}')
              ON CONFLICT DO NOTHING`
+          );
+        }
+      }
+
+      // Re-sync official days for current + next Jalali year from the corrected
+      // offline computation (deterministic, network-free). This fixes legacy
+      // data where religious dates were a day off (e.g. تاسوعا/عاشورا). Company
+      // -added custom days (is_official = false) are preserved.
+      const jyNow = todayJalali().jy;
+      for (const jy of [jyNow, jyNow + 1]) {
+        const first = isoDate(toGregorian(jy, 1, 1));
+        const last = isoDate(toGregorian(jy, 12, jalaliMonthLength(jy, 12)));
+        await sql.unsafe(
+          `DELETE FROM "${schema_name}".holidays
+           WHERE is_official = true AND holiday_date BETWEEN '${first}' AND '${last}'`
+        );
+        for (const h of officialHolidaysFor(jy)) {
+          await sql.unsafe(
+            `INSERT INTO "${schema_name}".holidays (holiday_date, title, is_official, is_off)
+             VALUES ($1, $2, true, true) ON CONFLICT (holiday_date) DO NOTHING`,
+            [h.iso, h.title]
+          );
+        }
+        for (const o of officialOccasionsFor(jy)) {
+          await sql.unsafe(
+            `INSERT INTO "${schema_name}".holidays (holiday_date, title, is_official, is_off)
+             VALUES ($1, $2, true, false) ON CONFLICT (holiday_date) DO NOTHING`,
+            [o.iso, o.title]
           );
         }
       }

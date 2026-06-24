@@ -10,8 +10,9 @@ import { PLATFORM_DDL, tenantDDL } from "../src/lib/sql";
 import { DEFAULT_ROLES, ALL_PERMISSIONS } from "../src/lib/rbac";
 import { DEFAULT_LEAVE_TYPES } from "../src/lib/leave-types";
 import { schemaNameFromSlug } from "../src/lib/utils";
-import { todayJalali, toGregorian, isoDate } from "../src/lib/jalali";
+import { todayJalali, toGregorian, isoDate, jalaliMonthLength } from "../src/lib/jalali";
 import { fetchOfficialHolidays } from "../src/lib/online-holidays";
+import { officialHolidaysFor } from "../src/lib/iran-holidays";
 import { officialOccasionsFor } from "../src/lib/iran-events";
 
 const CREDS = {
@@ -61,7 +62,30 @@ async function main() {
     const schema = schemaNameFromSlug(slug);
     const [existing] = await sql`SELECT id FROM platform.companies WHERE slug = ${slug}`;
     if (existing) {
-      console.log("→ demo section already exists — skipping (credentials below).");
+      console.log("→ demo section already exists — re-syncing holidays (corrected dates).");
+      // Even on the skip path, refresh official days so legacy installs pick up
+      // corrected religious dates (تاسوعا/عاشورا) without a full reseed.
+      const jyNow = todayJalali().jy;
+      for (const jy of [jyNow, jyNow + 1]) {
+        const first = isoDate(toGregorian(jy, 1, 1));
+        const last = isoDate(toGregorian(jy, 12, jalaliMonthLength(jy, 12)));
+        await sql.unsafe(
+          `DELETE FROM "${schema}".holidays
+           WHERE is_official = true AND holiday_date BETWEEN '${first}' AND '${last}'`
+        );
+        for (const h of officialHolidaysFor(jy))
+          await sql.unsafe(
+            `INSERT INTO "${schema}".holidays (holiday_date, title, is_official, is_off)
+             VALUES ($1, $2, true, true) ON CONFLICT (holiday_date) DO NOTHING`,
+            [h.iso, h.title]
+          );
+        for (const o of officialOccasionsFor(jy))
+          await sql.unsafe(
+            `INSERT INTO "${schema}".holidays (holiday_date, title, is_official, is_off)
+             VALUES ($1, $2, true, false) ON CONFLICT (holiday_date) DO NOTHING`,
+            [o.iso, o.title]
+          );
+      }
       printCreds();
       return;
     }
