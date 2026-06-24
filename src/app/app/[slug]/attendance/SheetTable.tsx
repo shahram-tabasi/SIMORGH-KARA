@@ -131,14 +131,6 @@ export function SheetTable({
                   </td>
                   <td className="whitespace-nowrap px-2 py-[3px] text-slate-500">
                     {toFaDigits(d.jd)} {JALALI_MONTHS[jm - 1]}
-                    {d.occasionTitle && (
-                      <span
-                        className="mr-1 rounded bg-yellow-100 px-1 text-[9px] text-yellow-800"
-                        title={d.occasionTitle}
-                      >
-                        ●
-                      </span>
-                    )}
                   </td>
                   <td className="px-2 py-[3px] text-[10px] text-slate-400" dir="ltr">{d.isWorkingDay ? shift : "—"}</td>
                   <td className="px-2 py-[3px]">
@@ -156,6 +148,9 @@ export function SheetTable({
                   </td>
                   <td className="px-2 py-[3px]">
                     <span className={`inline-block rounded px-1.5 py-[1px] text-[10px] font-medium ${s.cls}`}>{s.text}</span>
+                    {d.holidayWork && d.holidayTitle && (
+                      <span className="mr-1 text-[9px] text-rose-500">{d.holidayTitle}</span>
+                    )}
                   </td>
                 </tr>
               );

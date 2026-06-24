@@ -227,6 +227,9 @@ async function main() {
         );
         CREATE INDEX IF NOT EXISTS idx_task_assignee_member ON "${schema_name}".work_task_assignees(member_id);
         CREATE INDEX IF NOT EXISTS idx_work_tasks_creator ON "${schema_name}".work_tasks(created_by);
+        ALTER TABLE "${schema_name}".work_task_assignees
+          ADD COLUMN IF NOT EXISTS delegated_from uuid
+          REFERENCES "${schema_name}".members(id) ON DELETE SET NULL;
       `);
 
       // Kartabl approval items: link to a leave request + new 'approval' kind.

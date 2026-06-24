@@ -14,6 +14,7 @@ export const PERMISSIONS = {
   "kartabl.assign": "ارجاع کار به کارتابل دیگران",
   "kartabl.view_all": "مشاهده کارتابل همه اعضا",
   "kartabl.manage": "مدیریت کامل کارتابل‌ها (ویرایش/حذف کار دیگران)",
+  "tasks.assign": "ارسال و ارجاع وظیفه در میز کار (مدیر/سرگروه)",
   "calendar.view": "مشاهده تقویم کاری",
   "calendar.manage": "مدیریت تقویم، ساعت کاری و تعطیلات",
   "attendance.manage": "مدیریت حضور و غیاب همه اعضا",

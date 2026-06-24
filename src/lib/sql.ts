@@ -166,6 +166,8 @@ CREATE TABLE IF NOT EXISTS work_task_assignees (
   member_id   uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
   status      text NOT NULL DEFAULT 'open'
                 CHECK (status IN ('open','in_progress','done')),
+  -- set when a member transfers (واگذاری) a received task to a colleague
+  delegated_from uuid REFERENCES members(id) ON DELETE SET NULL,
   updated_at  timestamptz NOT NULL DEFAULT now(),
   UNIQUE (task_id, member_id)
 );

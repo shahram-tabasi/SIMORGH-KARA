@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { withTenant } from "@/lib/db";
-import { requireTenant } from "@/lib/session";
+import { requireTenant, ensurePermission } from "@/lib/session";
 import { toGregorian, isoDate } from "@/lib/jalali";
 
 export interface TaskState {
@@ -31,6 +31,9 @@ export async function createTaskAction(
 ): Promise<TaskState> {
   const slug = String(formData.get("slug"));
   const ctx = await requireTenant(slug);
+  // Only managers/sub-group leads may assign tasks to others.
+  if (!ctx.member.permissions.has("tasks.assign"))
+    return { error: "شما اجازهٔ ارسال وظیفه ندارید؛ تنها می‌توانید وظیفه را واگذار کنید." };
 
   const title = String(formData.get("title") || "").trim();
   if (title.length < 2) return { error: "عنوان کار را وارد کنید." };
@@ -98,6 +101,54 @@ export async function setTaskStatusAction(formData: FormData) {
     `;
   });
   rev(slug);
+}
+
+/**
+ * Transfer (واگذاری) a received task to a colleague. Any assignee may do this —
+ * it is the only way a regular sub-group member can move work — without needing
+ * the assign permission. The assignment moves to the target and remembers who
+ * delegated it.
+ */
+export async function delegateTaskAction(
+  _prev: TaskState,
+  formData: FormData
+): Promise<TaskState> {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  const me = ctx.member.memberId;
+  const taskId = String(formData.get("taskId"));
+  const toId = String(formData.get("toMemberId") || "");
+  if (!toId) return { error: "گیرنده را انتخاب کنید." };
+  if (toId === me) return { error: "نمی‌توانید کار را به خودتان واگذار کنید." };
+
+  const result = await withTenant(ctx.company.schema, async (tx) => {
+    const [mine] = await tx<{ id: string }[]>`
+      SELECT id FROM work_task_assignees
+      WHERE task_id = ${taskId} AND member_id = ${me}
+    `;
+    if (!mine) return { error: "این کار به شما ارجاع نشده است." };
+
+    const [exists] = await tx<{ id: string }[]>`
+      SELECT id FROM work_task_assignees
+      WHERE task_id = ${taskId} AND member_id = ${toId}
+    `;
+    if (exists) {
+      // Target already has it — just drop mine.
+      await tx`DELETE FROM work_task_assignees WHERE id = ${mine.id}`;
+    } else {
+      await tx`
+        UPDATE work_task_assignees
+        SET member_id = ${toId}, delegated_from = ${me},
+            status = 'open', updated_at = now()
+        WHERE id = ${mine.id}
+      `;
+    }
+    return { ok: true as const };
+  });
+
+  if ("error" in result) return result;
+  rev(slug);
+  return { ok: true };
 }
 
 /** The creator deletes a task they assigned. */

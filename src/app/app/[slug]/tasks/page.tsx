@@ -3,6 +3,7 @@ import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { toJalali, toFaDigits, JALALI_MONTHS, todayJalali } from "@/lib/jalali";
 import { TaskForm } from "./TaskForm";
+import { DelegateControl } from "./DelegateControl";
 import { setTaskStatusAction, deleteTaskAction } from "./actions";
 
 const PRIORITY = {
@@ -33,6 +34,7 @@ interface MyTask {
   due_date: string | null;
   status: string;
   assigner: string | null;
+  delegated_from: string | null;
 }
 interface SentTask {
   id: string;
@@ -53,6 +55,7 @@ interface SentAssignee {
 export default async function TasksPage({ params }: { params: { slug: string } }) {
   const ctx = await requireTenant(params.slug);
   const me = ctx.member.memberId;
+  const canAssign = ctx.member.permissions.has("tasks.assign");
 
   const data = await withTenant(ctx.company.schema, async (tx) => {
     const groups = await tx<{ id: string; name: string }[]>`
@@ -61,10 +64,11 @@ export default async function TasksPage({ params }: { params: { slug: string } }
       SELECT id, full_name AS name FROM members WHERE status='active' AND id <> ${me} ORDER BY full_name`;
     const myTasks = await tx<MyTask[]>`
       SELECT a.task_id, t.title, t.body, t.code, t.priority, t.due_date::text,
-             a.status, m.full_name AS assigner
+             a.status, m.full_name AS assigner, df.full_name AS delegated_from
       FROM work_task_assignees a
       JOIN work_tasks t ON t.id = a.task_id
       LEFT JOIN members m ON m.id = t.created_by
+      LEFT JOIN members df ON df.id = a.delegated_from
       WHERE a.member_id = ${me}
       ORDER BY (t.priority='forced') DESC, (t.priority='urgent') DESC, t.created_at DESC`;
     const sent = await tx<SentTask[]>`
@@ -96,14 +100,20 @@ export default async function TasksPage({ params }: { params: { slug: string } }
     <>
       <PageHeader
         title="میز کار"
-        description="ارسال کار به افراد یا زیرگروه‌ها، پیگیری وضعیت و گزارش کارهای ارسالی"
+        description={
+          canAssign
+            ? "ارسال کار به افراد یا زیرگروه‌ها، پیگیری وضعیت و گزارش کارهای ارسالی"
+            : "کارهای ارجاع‌شده به شما — می‌توانید وضعیت را به‌روز یا کار را به هم‌گروه واگذار کنید"
+        }
       />
 
-      <div className="mb-6">
-        <TaskForm slug={params.slug} year={todayJalali().jy} groups={data.groups} members={data.members} />
-      </div>
+      {canAssign && (
+        <div className="mb-6">
+          <TaskForm slug={params.slug} year={todayJalali().jy} groups={data.groups} members={data.members} />
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className={canAssign ? "grid grid-cols-1 gap-6 lg:grid-cols-2" : ""}>
         {/* کارهای من */}
         <div>
           <h3 className="mb-3 text-sm font-semibold text-slate-700">
@@ -127,6 +137,16 @@ export default async function TasksPage({ params }: { params: { slug: string } }
                         {t.body && <div className="mt-1 text-xs text-slate-500">{t.body}</div>}
                         <div className="mt-1 text-[11px] text-slate-400">
                           از طرف: {t.assigner ?? "—"} · سررسید: {faDate(t.due_date)}
+                          {t.delegated_from && (
+                            <span className="mr-1 text-sky-600">· واگذارشده از {t.delegated_from}</span>
+                          )}
+                        </div>
+                        <div className="mt-2">
+                          <DelegateControl
+                            slug={params.slug}
+                            taskId={t.task_id}
+                            colleagues={data.members}
+                          />
                         </div>
                       </div>
                       <form action={setTaskStatusAction} className="shrink-0">
@@ -145,7 +165,8 @@ export default async function TasksPage({ params }: { params: { slug: string } }
           )}
         </div>
 
-        {/* کارهای ارسالی من (گزارش) */}
+        {/* کارهای ارسالی من (گزارش) — فقط برای ارسال‌کنندگان */}
+        {canAssign && (
         <div>
           <h3 className="mb-3 text-sm font-semibold text-slate-700">
             گزارش کارهای ارسالی من ({toFaDigits(data.sent.length)})
@@ -193,6 +214,7 @@ export default async function TasksPage({ params }: { params: { slug: string } }
             </div>
           )}
         </div>
+        )}
       </div>
     </>
   );
