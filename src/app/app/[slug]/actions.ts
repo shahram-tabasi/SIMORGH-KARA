@@ -479,6 +479,29 @@ export async function setKartablItemStatusAction(formData: FormData) {
   rev(slug, "/kartabl");
 }
 
+/**
+ * Cycle a kartabl item's status (باز → در حال انجام → انجام‌شده). Called by
+ * double-clicking the item on the unified calendar. Only the owner (or a
+ * kartabl manager) may change it.
+ */
+export async function cycleKartablStatusAction(slug: string, itemId: string) {
+  const ctx = await requireTenant(slug);
+  const order = ["open", "in_progress", "done"];
+  await withTenant(ctx.company.schema, async (tx) => {
+    const [item] = await tx<{ owner_id: string; created_by: string | null; status: string }[]>`
+      SELECT k.member_id AS owner_id, i.created_by, i.status
+      FROM kartabl_items i JOIN kartabls k ON k.id = i.kartabl_id
+      WHERE i.id = ${itemId}
+    `;
+    if (!item) return;
+    if (!canSetStatus(item, ctx.member.memberId, ctx.member.permissions)) return;
+    const next = order[(order.indexOf(item.status) + 1) % order.length];
+    await tx`UPDATE kartabl_items SET status = ${next} WHERE id = ${itemId}`;
+  });
+  rev(slug, "/kartabl");
+  rev(slug, "/calendar");
+}
+
 export async function createKartablAction(formData: FormData) {
   const slug = String(formData.get("slug"));
   const ctx = await requireTenant(slug);

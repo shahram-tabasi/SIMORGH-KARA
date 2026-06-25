@@ -3,7 +3,7 @@ import { requireTenant } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { ensureYearHolidays } from "@/lib/holiday-sync";
 import { PageHeader } from "@/components/Shell";
-import { CalendarGrid, type GridDay, type GridTask } from "./CalendarGrid";
+import { CalendarGrid, type GridDay, type GridItem } from "./CalendarGrid";
 import {
   JALALI_MONTHS,
   jalaliMonthLength,
@@ -38,7 +38,16 @@ async function loadCalendarData(schema: string, memberId: string, firstIso: stri
         AND (t.created_by = ${memberId} OR mine.member_id = ${memberId})
       ORDER BY t.due_date::text
     `;
-    return { sched, holidays, overrides, tasks };
+    // Personal kartabl items with a reminder land on the same calendar.
+    const kartabl = await tx<
+      { id: string; title: string; kind: string; status: string; remind_at: string }[]
+    >`
+      SELECT i.id, i.title, i.kind, i.status, i.remind_at::text
+      FROM kartabl_items i JOIN kartabls k ON k.id = i.kartabl_id
+      WHERE k.member_id = ${memberId} AND i.remind_at IS NOT NULL
+        AND i.remind_at::date BETWEEN ${firstIso} AND ${lastIso}
+    `;
+    return { sched, holidays, overrides, tasks, kartabl };
   });
 }
 
@@ -61,7 +70,7 @@ export default async function CalendarPage({
 
   // Auto-seed this year's official holidays on first view of a (future) year.
   await ensureYearHolidays(ctx.company.schema, jy);
-  const { sched, holidays, overrides, tasks } = await loadCalendarData(
+  const { sched, holidays, overrides, tasks, kartabl } = await loadCalendarData(
     ctx.company.schema,
     ctx.member.memberId,
     firstIso,
@@ -72,22 +81,47 @@ export default async function CalendarPage({
   const holidayMap = new Map(holidays.map((h) => [h.holiday_date.slice(0, 10), h]));
   const overrideMap = new Map(overrides.map((o) => [o.override_date.slice(0, 10), o]));
 
-  // Tasks grouped by their due-date ISO.
-  const tasksByDay = new Map<string, GridTask[]>();
+  // Unified items per day: میز کار tasks (priority colours) + کارتابل items
+  // (a distinct violet, so they stand apart from the three task colours).
+  const TASK_DOT: Record<string, string> = {
+    normal: "bg-slate-400",
+    urgent: "bg-amber-500",
+    forced: "bg-red-500",
+  };
+  const norm = (s: string | null): GridItem["status"] =>
+    s === "in_progress" || s === "done" ? s : "open";
+
+  const itemsByDay = new Map<string, GridItem[]>();
+  const add = (iso: string, it: GridItem) => {
+    const l = itemsByDay.get(iso);
+    if (l) l.push(it);
+    else itemsByDay.set(iso, [it]);
+  };
   for (const t of tasks) {
-    const iso = t.due_date.slice(0, 10);
-    const gt: GridTask = {
+    add(t.due_date.slice(0, 10), {
       id: t.id,
       title: t.title,
       code: t.code,
-      priority: (["normal", "urgent", "forced"].includes(t.priority) ? t.priority : "normal") as GridTask["priority"],
-      status: (t.my_status ?? "open") as GridTask["status"],
-      canEdit: t.my_status != null, // only my own assignment is editable
-      sent: t.sent,
-    };
-    const l = tasksByDay.get(iso);
-    if (l) l.push(gt);
-    else tasksByDay.set(iso, [gt]);
+      dot: TASK_DOT[t.priority] ?? TASK_DOT.normal,
+      status: norm(t.my_status),
+      canEdit: t.my_status != null,
+      source: "task",
+      tag: "میز کار",
+      tagTone: "bg-slate-100 text-slate-500",
+    });
+  }
+  for (const k of kartabl) {
+    add(k.remind_at.slice(0, 10), {
+      id: k.id,
+      title: k.title,
+      code: null,
+      dot: "bg-violet-500",
+      status: norm(k.status),
+      canEdit: true, // own kartabl items
+      source: "kartabl",
+      tag: "کارتابل",
+      tagTone: "bg-violet-100 text-violet-700",
+    });
   }
 
   const firstWeekday = iranianWeekday(toGregorian(jy, jm, 1)); // 0=Sat
@@ -135,11 +169,10 @@ export default async function CalendarPage({
       note: ov?.note ?? undefined,
       occasion,
       ov: !!ov,
-      ovWork: !!ov?.is_working,
       friHoliday: !hol && isFriday && !working,
       rest: isRest && !isFriday,
       today: isToday,
-      tasks: tasksByDay.get(iso) ?? [],
+      items: itemsByDay.get(iso) ?? [],
     });
   }
 
