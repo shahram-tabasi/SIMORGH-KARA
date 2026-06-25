@@ -87,6 +87,22 @@ export async function createTaskAction(
   return { ok: true };
 }
 
+/** Assignee confirms receipt (تأیید دریافت) — a read receipt the sender sees. */
+export async function acknowledgeTaskAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  const taskId = String(formData.get("taskId"));
+  await withTenant(ctx.company.schema, async (tx) => {
+    await tx`
+      UPDATE work_task_assignees
+      SET acknowledged_at = now(), updated_at = now()
+      WHERE task_id = ${taskId} AND member_id = ${ctx.member.memberId}
+        AND acknowledged_at IS NULL
+    `;
+  });
+  rev(slug);
+}
+
 /** Assignee updates the progress status of their own task. */
 export async function setTaskStatusAction(formData: FormData) {
   const slug = String(formData.get("slug"));

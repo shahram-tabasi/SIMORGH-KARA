@@ -170,6 +170,8 @@ CREATE TABLE IF NOT EXISTS work_task_assignees (
                 CHECK (status IN ('open','in_progress','done')),
   -- set when a member transfers (واگذاری) a received task to a colleague
   delegated_from uuid REFERENCES members(id) ON DELETE SET NULL,
+  -- set when the assignee confirms receipt (تأیید دریافت) — a read receipt
+  acknowledged_at timestamptz,
   updated_at  timestamptz NOT NULL DEFAULT now(),
   UNIQUE (task_id, member_id)
 );

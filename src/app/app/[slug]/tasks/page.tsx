@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/Shell";
 import { toJalali, toFaDigits, JALALI_MONTHS, todayJalali } from "@/lib/jalali";
 import { TaskForm } from "./TaskForm";
 import { DelegateControl } from "./DelegateControl";
-import { setTaskStatusAction, deleteTaskAction } from "./actions";
+import { setTaskStatusAction, deleteTaskAction, acknowledgeTaskAction } from "./actions";
 
 const PRIORITY = {
   normal: { label: "عادی", badge: "bg-slate-100 text-slate-500", row: "" },
@@ -35,6 +35,7 @@ interface MyTask {
   status: string;
   assigner: string | null;
   delegated_from: string | null;
+  acknowledged: boolean;
 }
 interface SentTask {
   id: string;
@@ -50,6 +51,7 @@ interface SentAssignee {
   task_id: string;
   name: string;
   status: string;
+  acknowledged: boolean;
 }
 
 export default async function TasksPage({ params }: { params: { slug: string } }) {
@@ -64,7 +66,8 @@ export default async function TasksPage({ params }: { params: { slug: string } }
       SELECT id, full_name AS name FROM members WHERE status='active' AND id <> ${me} ORDER BY full_name`;
     const myTasks = await tx<MyTask[]>`
       SELECT a.task_id, t.title, t.body, t.code, t.priority, t.due_date::text,
-             a.status, m.full_name AS assigner, df.full_name AS delegated_from
+             a.status, m.full_name AS assigner, df.full_name AS delegated_from,
+             (a.acknowledged_at IS NOT NULL) AS acknowledged
       FROM work_task_assignees a
       JOIN work_tasks t ON t.id = a.task_id
       LEFT JOIN members m ON m.id = t.created_by
@@ -82,7 +85,8 @@ export default async function TasksPage({ params }: { params: { slug: string } }
       GROUP BY t.id, g.name
       ORDER BY t.created_at DESC`;
     const sentAssignees = await tx<SentAssignee[]>`
-      SELECT a.task_id, m.full_name AS name, a.status
+      SELECT a.task_id, m.full_name AS name, a.status,
+             (a.acknowledged_at IS NOT NULL) AS acknowledged
       FROM work_task_assignees a JOIN members m ON m.id = a.member_id
       JOIN work_tasks t ON t.id = a.task_id
       WHERE t.created_by = ${me} ORDER BY m.full_name`;
@@ -141,7 +145,27 @@ export default async function TasksPage({ params }: { params: { slug: string } }
                             <span className="mr-1 text-sky-600">· واگذارشده از {t.delegated_from}</span>
                           )}
                         </div>
-                        <div className="mt-2">
+                        {/* دریافت → افزودن به تقویم */}
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {t.acknowledged ? (
+                            <>
+                              <span className="badge bg-blue-100 text-blue-700">✓✓ دریافت‌شده</span>
+                              <a
+                                href={`/app/${params.slug}/tasks/ics/${t.task_id}`}
+                                className="text-xs text-brand-600 hover:underline"
+                              >
+                                📅 افزودن به تقویم
+                              </a>
+                            </>
+                          ) : (
+                            <form action={acknowledgeTaskAction}>
+                              <input type="hidden" name="slug" value={params.slug} />
+                              <input type="hidden" name="taskId" value={t.task_id} />
+                              <button className="badge bg-emerald-100 text-emerald-700 hover:bg-emerald-200">
+                                ✓ تأیید دریافت
+                              </button>
+                            </form>
+                          )}
                           <DelegateControl
                             slug={params.slug}
                             taskId={t.task_id}
@@ -197,6 +221,9 @@ export default async function TasksPage({ params }: { params: { slug: string } }
                         <div className="mt-2 flex flex-wrap gap-1">
                           {(assigneesByTask.get(t.id) ?? []).map((a, i) => (
                             <span key={i} className={`badge ${STATUS_TONE[a.status]}`}>
+                              <span title={a.acknowledged ? "دریافت‌شده" : "هنوز دریافت نشده"} className={a.acknowledged ? "text-blue-600" : "text-slate-300"}>
+                                {a.acknowledged ? "✓✓" : "✓"}
+                              </span>{" "}
                               {a.name}: {STATUS[a.status]}
                             </span>
                           ))}

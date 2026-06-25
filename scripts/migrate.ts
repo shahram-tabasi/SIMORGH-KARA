@@ -230,6 +230,8 @@ async function main() {
         ALTER TABLE "${schema_name}".work_task_assignees
           ADD COLUMN IF NOT EXISTS delegated_from uuid
           REFERENCES "${schema_name}".members(id) ON DELETE SET NULL;
+        ALTER TABLE "${schema_name}".work_task_assignees
+          ADD COLUMN IF NOT EXISTS acknowledged_at timestamptz;
       `);
 
       // Kartabl approval items: link to a leave request + new 'approval' kind.
