@@ -50,6 +50,7 @@ export default async function TenantLayout({
         ...push(can("attendance.manage"), { href: `${base}/attendance/team`, label: "حضور تیم", icon: "👫" }),
         ...push(can("attendance.manage"), { href: `${base}/attendance/reports`, label: "گزارش حضور", icon: "📊" }),
         ...push(can("attendance.manage"), { href: `${base}/attendance/rules`, label: "قوانین حضور", icon: "⚙️" }),
+        ...push(can("attendance.manage"), { href: `${base}/attendance/devices`, label: "دستگاه‌های تردد", icon: "📟" }),
         ...push(can("calendar.view") || can("calendar.manage"), { href: `${base}/calendar`, label: "تقویم کاری", icon: "📅" }),
         ...push(can("calendar.manage"), { href: `${base}/calendar/settings`, label: "ساعت کاری و تعطیلات", icon: "⏰" }),
       ],
