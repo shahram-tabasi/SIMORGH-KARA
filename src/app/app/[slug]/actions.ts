@@ -6,6 +6,19 @@ import { sql, withTenant } from "@/lib/db";
 import { requireTenant, ensurePermission } from "@/lib/session";
 import { hashPassword } from "@/lib/password";
 import { isPermissionKey } from "@/lib/rbac";
+import { toGregorian } from "@/lib/jalali";
+
+/** Build a reminder Date from Jalali y/m/d + "HH:MM", or null if incomplete. */
+function reminderDate(fd: FormData): Date | null {
+  const y = Number(fd.get("ry"));
+  const m = Number(fd.get("rm"));
+  const d = Number(fd.get("rd"));
+  const time = String(fd.get("rtime") || "").trim();
+  if (!y || !m || !d) return null;
+  const g = toGregorian(y, m, d);
+  const [hh, mm] = time && /^\d{1,2}:\d{2}$/.test(time) ? time.split(":").map(Number) : [9, 0];
+  return new Date(g.getFullYear(), g.getMonth(), g.getDate(), hh, mm, 0);
+}
 
 function rev(slug: string, sub = "") {
   revalidatePath(`/app/${slug}${sub}`);
@@ -330,6 +343,7 @@ export async function addKartablItemAction(
   const body = String(formData.get("body") || "");
   const kind = String(formData.get("kind") || "task");
   if (title.length < 1) return { error: "عنوان را وارد کنید." };
+  const remindAt = reminderDate(formData);
 
   await withTenant(ctx.company.schema, async (tx) => {
     const [k] = await tx<{ member_id: string }[]>`
@@ -343,8 +357,8 @@ export async function addKartablItemAction(
       throw new Error("دسترسی غیرمجاز.");
     }
     await tx`
-      INSERT INTO kartabl_items (kartabl_id, title, body, kind, created_by)
-      VALUES (${kartablId}, ${title}, ${body}, ${kind}, ${ctx.member.memberId})
+      INSERT INTO kartabl_items (kartabl_id, title, body, kind, created_by, remind_at)
+      VALUES (${kartablId}, ${title}, ${body}, ${kind}, ${ctx.member.memberId}, ${remindAt})
     `;
   });
   rev(slug, "/kartabl");

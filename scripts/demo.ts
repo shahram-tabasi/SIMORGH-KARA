@@ -205,6 +205,14 @@ async function main() {
       await tx`INSERT INTO kartabl_items (kartabl_id, title, body, kind, ref_kind, ref_id, created_by)
                VALUES (${mk.id}, ${`درخواست مرخصی: ${CREDS.employee.name}`}, 'مرحله مدیر بخش', 'approval', 'leave_request', ${req.id}, ${empId})`;
 
+      // A personal kartabl note with a reminder (demonstrates the on-screen
+      // popup, browser notification and «افزودن به تقویم» ICS export).
+      const [ek] = await tx<{ id: string }[]>`SELECT id FROM kartabls WHERE member_id=${empId} ORDER BY created_at LIMIT 1`;
+      await tx`
+        INSERT INTO kartabl_items (kartabl_id, title, body, kind, created_by, remind_at)
+        VALUES (${ek.id}, 'ارسال گزارش روزانه', 'نمونهٔ یادآوری — قابل افزودن به تقویم ویندوز/گوگل',
+                'task', ${empId}, now() + interval '1 hour')`;
+
       // The manager's *own* in-flight leave (so «کارتابل مرخصی» shows both their
       // approval queue and their own pending requests).
       await tx`

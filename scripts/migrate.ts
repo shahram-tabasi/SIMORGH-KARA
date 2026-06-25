@@ -242,6 +242,8 @@ async function main() {
         ALTER TABLE "${schema_name}".kartabl_items
           ADD CONSTRAINT kartabl_items_kind_check
           CHECK (kind IN ('task','document','message','approval'));
+        ALTER TABLE "${schema_name}".kartabl_items
+          ADD COLUMN IF NOT EXISTS remind_at timestamptz;
         UPDATE "${schema_name}".leave_types
           SET approval_levels = 2 WHERE approval_levels < 2;
       `);

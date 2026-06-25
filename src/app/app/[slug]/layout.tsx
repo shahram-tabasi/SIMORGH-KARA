@@ -1,5 +1,6 @@
 import { requireTenant } from "@/lib/session";
 import { Shell, type NavGroup, type NavItem } from "@/components/Shell";
+import { ReminderWatcher } from "@/components/ReminderWatcher";
 
 export default async function TenantLayout({
   children,
@@ -82,6 +83,7 @@ export default async function TenantLayout({
       groups={groups}
     >
       {children}
+      <ReminderWatcher slug={params.slug} />
     </Shell>
   );
 }

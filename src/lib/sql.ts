@@ -137,6 +137,8 @@ CREATE TABLE IF NOT EXISTS kartabl_items (
   -- the recipient can only report progress via status. This keeps tasks
   -- assigned to a person — even the CEO — tamper-proof for accountability.
   created_by  uuid REFERENCES members(id) ON DELETE SET NULL,
+  -- optional reminder time (یادآوری) — surfaced in-app and exportable to ICS
+  remind_at   timestamptz,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 

@@ -13,7 +13,7 @@ import {
   STEP_LABEL,
   faDate,
 } from "../leave/shared";
-import { toFaDigits } from "@/lib/jalali";
+import { toFaDigits, toJalali, JALALI_MONTHS } from "@/lib/jalali";
 
 interface LeaveRow {
   id: string;
@@ -39,6 +39,15 @@ interface Item {
   assigner: string | null;
   ref_kind: string | null;
   ref_id: string | null;
+  remind_at: string | null;
+}
+
+function faDateTime(iso: string): string {
+  const d = new Date(iso);
+  const j = toJalali(d);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${toFaDigits(j.jd)} ${JALALI_MONTHS[j.jm - 1]} ${toFaDigits(`${hh}:${mm}`)}`;
 }
 
 const statusLabel: Record<string, string> = {
@@ -67,7 +76,8 @@ async function loadData(schema: string, memberId: string, canAssign: boolean) {
     `;
     const items = await tx<Item[]>`
       SELECT i.id, i.kartabl_id, i.title, i.body, i.kind, i.status,
-             i.created_by, i.ref_kind, i.ref_id, cb.full_name AS assigner
+             i.created_by, i.ref_kind, i.ref_id, cb.full_name AS assigner,
+             i.remind_at::text
       FROM kartabl_items i
       JOIN kartabls k ON k.id = i.kartabl_id
       LEFT JOIN members cb ON cb.id = i.created_by
@@ -270,6 +280,19 @@ export default async function KartablPage({
                         </div>
                         {i.body && (
                           <div className="mt-1 text-xs text-slate-500">{i.body}</div>
+                        )}
+                        {i.remind_at && (
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+                            <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700">
+                              ⏰ یادآوری: {faDateTime(i.remind_at)}
+                            </span>
+                            <a
+                              href={`/app/${params.slug}/kartabl/ics/${i.id}`}
+                              className="text-brand-600 hover:underline"
+                            >
+                              📅 افزودن به تقویم
+                            </a>
+                          </div>
                         )}
                         {mine ? (
                           <div className="mt-2">
