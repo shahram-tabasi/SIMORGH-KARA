@@ -30,12 +30,20 @@ export async function GET(
       FROM kartabl_items i JOIN kartabls k ON k.id = i.kartabl_id
       WHERE k.member_id = ${me} AND i.kind = 'approval' AND i.status = 'open'
     `;
-    return { tasks, approvals: appr?.n ?? 0 };
+    const messages = await tx<{ id: string; title: string }[]>`
+      SELECT i.id, i.title
+      FROM kartabl_items i JOIN kartabls k ON k.id = i.kartabl_id
+      WHERE k.member_id = ${me} AND i.kind = 'message' AND i.status = 'open'
+        AND i.created_by <> ${me}
+      ORDER BY i.created_at DESC LIMIT 20
+    `;
+    return { tasks, approvals: appr?.n ?? 0, messages };
   });
 
   return NextResponse.json({
     tasks: data.tasks,
     approvals: data.approvals,
-    count: data.tasks.length + data.approvals,
+    messages: data.messages,
+    count: data.tasks.length + data.approvals + data.messages.length,
   });
 }

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 interface Feed {
   tasks: { id: string; title: string; priority: string }[];
   approvals: number;
+  messages: { id: string; title: string }[];
   count: number;
 }
 
@@ -18,7 +19,7 @@ const PRIORITY_DOT: Record<string, string> = {
 
 /** Bell with a live badge for new (unacknowledged) tasks + pending approvals. */
 export function NotificationBell({ slug }: { slug: string }) {
-  const [feed, setFeed] = useState<Feed>({ tasks: [], approvals: 0, count: 0 });
+  const [feed, setFeed] = useState<Feed>({ tasks: [], approvals: 0, messages: [], count: 0 });
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -93,6 +94,17 @@ export function NotificationBell({ slug }: { slug: string }) {
                 >
                   <span className={`h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT[t.priority] ?? PRIORITY_DOT.normal}`} />
                   <span className="truncate text-slate-700">وظیفهٔ جدید: {t.title}</span>
+                </Link>
+              ))}
+              {feed.messages.map((m) => (
+                <Link
+                  key={m.id}
+                  href={`/app/${slug}/kartabl`}
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50"
+                >
+                  <span className="text-sky-500">✉️</span>
+                  <span className="truncate text-slate-700">پیام جدید: {m.title}</span>
                 </Link>
               ))}
             </div>

@@ -3,6 +3,7 @@ import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { toJalali, toFaDigits, JALALI_MONTHS, todayJalali } from "@/lib/jalali";
 import { TaskForm } from "./TaskForm";
+import { MessageForm } from "./MessageForm";
 import { DelegateControl } from "./DelegateControl";
 import { setTaskStatusAction, deleteTaskAction, acknowledgeTaskAction } from "./actions";
 
@@ -112,8 +113,9 @@ export default async function TasksPage({ params }: { params: { slug: string } }
       />
 
       {canAssign && (
-        <div className="mb-6">
+        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <TaskForm slug={params.slug} year={todayJalali().jy} groups={data.groups} members={data.members} />
+          <MessageForm slug={params.slug} groups={data.groups} members={data.members} />
         </div>
       )}
 

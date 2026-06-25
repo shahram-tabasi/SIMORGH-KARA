@@ -103,6 +103,58 @@ export async function acknowledgeTaskAction(formData: FormData) {
   rev(slug);
 }
 
+/**
+ * Send a plain message (پیام صرف) — not a task — to a whole sub-group or to
+ * chosen individuals. It lands in each recipient's kartabl as a 'message' item.
+ */
+export async function sendMessageAction(
+  _prev: TaskState,
+  formData: FormData
+): Promise<TaskState> {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  if (!ctx.member.permissions.has("tasks.assign"))
+    return { error: "شما اجازهٔ ارسال پیام گروهی ندارید." };
+
+  const title = String(formData.get("title") || "").trim();
+  if (title.length < 2) return { error: "متن پیام را وارد کنید." };
+  const body = String(formData.get("body") || "").trim() || null;
+  const mode = String(formData.get("mode") || "members");
+
+  const result = await withTenant(ctx.company.schema, async (tx) => {
+    let memberIds: string[] = [];
+    if (mode === "group") {
+      const groupId = String(formData.get("groupId") || "");
+      if (!groupId) return { error: "زیرگروه را انتخاب کنید." };
+      const rows = await tx<{ member_id: string }[]>`
+        SELECT member_id FROM member_groups WHERE group_id = ${groupId}
+      `;
+      memberIds = rows.map((r) => r.member_id);
+      if (memberIds.length === 0) return { error: "این زیرگروه عضوی ندارد." };
+    } else {
+      memberIds = formData.getAll("memberIds").map(String).filter(Boolean);
+      if (memberIds.length === 0) return { error: "حداقل یک نفر را انتخاب کنید." };
+    }
+
+    for (const mid of memberIds) {
+      const [k] = await tx<{ id: string }[]>`
+        SELECT id FROM kartabls WHERE member_id = ${mid} ORDER BY created_at LIMIT 1
+      `;
+      if (!k) continue;
+      await tx`
+        INSERT INTO kartabl_items (kartabl_id, title, body, kind, created_by)
+        VALUES (${k.id}, ${title}, ${body}, 'message', ${ctx.member.memberId})
+      `;
+    }
+    return { ok: true as const };
+  });
+
+  if ("error" in result) return result;
+  revalidatePath(`/app/${slug}/kartabl`);
+  rev(slug);
+  return { ok: true };
+}
+
 /** Assignee updates the progress status of their own task. */
 export async function setTaskStatusAction(formData: FormData) {
   const slug = String(formData.get("slug"));
