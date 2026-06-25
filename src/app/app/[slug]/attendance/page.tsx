@@ -55,6 +55,7 @@ export default async function AttendancePage({
         jy={jy}
         jm={jm}
         navBase={`/app/${params.slug}/attendance`}
+        slug={params.slug}
       />
     </>
   );

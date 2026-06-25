@@ -232,11 +232,27 @@ CREATE TABLE IF NOT EXISTS attendance_punches (
   member_id  uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
   punched_at timestamptz NOT NULL DEFAULT now(),
   kind       text NOT NULL CHECK (kind IN ('in','out')),
+  -- self | manual (HR) | device (terminal) | guard (app) | mobile (miner app)
   source     text NOT NULL DEFAULT 'self',
+  photo_url  text,                 -- captured face photo (guard/mobile)
+  lat        double precision,     -- GPS (mobile/mine attendance)
+  lng        double precision,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_punch_member_time
   ON attendance_punches(member_id, punched_at);
+
+-- Time-clock devices & mobile apps authenticate to the ingest API with a token.
+CREATE TABLE IF NOT EXISTS attendance_devices (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       text NOT NULL,
+  token      text NOT NULL UNIQUE,
+  kind       text NOT NULL DEFAULT 'terminal'
+               CHECK (kind IN ('terminal','guard','mobile')),
+  is_active  boolean NOT NULL DEFAULT true,
+  last_seen  timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
 -- Attendance policy / company rules (stage 3): single settings row.
 CREATE TABLE IF NOT EXISTS attendance_policy (
@@ -245,7 +261,10 @@ CREATE TABLE IF NOT EXISTS attendance_policy (
   standard_daily_minutes int NOT NULL DEFAULT 480,      -- 8h working day
   monthly_leave_days     numeric(5,1) NOT NULL DEFAULT 2.5,
   annual_leave_days      numeric(5,1) NOT NULL DEFAULT 26,
-  overtime_enabled       boolean NOT NULL DEFAULT true
+  overtime_enabled       boolean NOT NULL DEFAULT true,
+  -- HR-set caps on manual (self) تردد registrations; 0 = unlimited
+  max_punches_per_week   int NOT NULL DEFAULT 0,
+  max_punches_per_month  int NOT NULL DEFAULT 0
 );
 
 -- Employment profile (stage 5.2): drives entitlement accrual and the

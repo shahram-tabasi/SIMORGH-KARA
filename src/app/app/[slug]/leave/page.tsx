@@ -1,7 +1,7 @@
 import { requireTenant } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
-import { toFaDigits, todayJalali } from "@/lib/jalali";
+import { toFaDigits, todayJalali, toJalali } from "@/lib/jalali";
 import { loadBalance } from "@/lib/leave-balance";
 import { LeaveForm } from "./LeaveForm";
 import { cancelLeaveAction } from "./actions";
@@ -68,8 +68,10 @@ interface Req {
 
 export default async function LeavePage({
   params,
+  searchParams,
 }: {
   params: { slug: string };
+  searchParams: { from?: string; to?: string; kind?: string };
 }) {
   const ctx = await requireTenant(params.slug);
   const { requests, types } = await withTenant(ctx.company.schema, async (tx) => {
@@ -84,17 +86,35 @@ export default async function LeavePage({
     const types = await tx<
       {
         id: string;
+        code: string;
         name: string;
         unit: "day" | "hour";
         requires_attachment: boolean;
         description: string | null;
       }[]
     >`
-      SELECT id, name, unit, requires_attachment, description
+      SELECT id, code, name, unit, requires_attachment, description
       FROM leave_types WHERE is_active = true ORDER BY sort_order, name
     `;
     return { requests, types };
   });
+
+  // Prefill (from the attendance sheet right-click): date range + mission type.
+  const toJ = (iso?: string) => {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return undefined;
+    const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+    const j = toJalali(new Date(y, m - 1, d));
+    return { y: j.jy, m: j.jm, d: j.jd };
+  };
+  const missionType = types.find((t) => t.code === "mission");
+  const prefill =
+    searchParams.from || searchParams.to
+      ? {
+          from: toJ(searchParams.from),
+          to: toJ(searchParams.to ?? searchParams.from),
+          typeId: searchParams.kind === "mission" ? missionType?.id : undefined,
+        }
+      : undefined;
 
   const balance = await loadBalance(
     ctx.company.schema,
@@ -112,7 +132,7 @@ export default async function LeavePage({
       <BalanceCard balance={balance} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <LeaveForm slug={params.slug} year={todayJalali().jy} types={types} />
+        <LeaveForm slug={params.slug} year={todayJalali().jy} types={types} prefill={prefill} />
 
         <div className="card">
           <h3 className="mb-3 text-sm font-semibold text-slate-700">

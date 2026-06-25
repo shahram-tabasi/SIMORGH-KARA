@@ -240,6 +240,8 @@ export default async function TeamAttendancePage({
             jy={jy}
             jm={jm}
             navBase={`/app/${params.slug}/attendance/team?member=${selected}`}
+            slug={params.slug}
+            interactive={false}
           />
         </>
       )}

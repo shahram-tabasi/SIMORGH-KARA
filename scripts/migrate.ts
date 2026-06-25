@@ -279,6 +279,22 @@ async function main() {
       await sql.unsafe(`
         INSERT INTO "${schema_name}".attendance_policy (id) VALUES (1)
         ON CONFLICT DO NOTHING;
+        ALTER TABLE "${schema_name}".attendance_policy
+          ADD COLUMN IF NOT EXISTS max_punches_per_week int NOT NULL DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS max_punches_per_month int NOT NULL DEFAULT 0;
+        ALTER TABLE "${schema_name}".attendance_punches
+          ADD COLUMN IF NOT EXISTS photo_url text,
+          ADD COLUMN IF NOT EXISTS lat double precision,
+          ADD COLUMN IF NOT EXISTS lng double precision;
+        CREATE TABLE IF NOT EXISTS "${schema_name}".attendance_devices (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          name text NOT NULL,
+          token text NOT NULL UNIQUE,
+          kind text NOT NULL DEFAULT 'terminal' CHECK (kind IN ('terminal','guard','mobile')),
+          is_active boolean NOT NULL DEFAULT true,
+          last_seen timestamptz,
+          created_at timestamptz NOT NULL DEFAULT now()
+        );
       `);
       // Seed a default schedule if the company has none yet.
       await sql.unsafe(`

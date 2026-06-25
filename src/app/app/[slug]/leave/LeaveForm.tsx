@@ -22,16 +22,24 @@ function Submit() {
   );
 }
 
-function DateGroup({ prefix, year }: { prefix: string; year: number }) {
+function DateGroup({
+  prefix,
+  year,
+  def,
+}: {
+  prefix: string;
+  year: number;
+  def?: { y: number; m: number; d: number };
+}) {
   return (
     <div className="flex items-end gap-2">
       <div>
         <label className="label">سال</label>
-        <input name={`${prefix}y`} type="number" defaultValue={year} className="input w-24" dir="ltr" />
+        <input name={`${prefix}y`} type="number" defaultValue={def?.y ?? year} className="input w-24" dir="ltr" />
       </div>
       <div>
         <label className="label">ماه</label>
-        <select name={`${prefix}m`} className="input w-28" defaultValue="1">
+        <select name={`${prefix}m`} className="input w-28" defaultValue={String(def?.m ?? 1)}>
           {JALALI_MONTHS.map((mn, i) => (
             <option key={i} value={i + 1}>{mn}</option>
           ))}
@@ -39,7 +47,7 @@ function DateGroup({ prefix, year }: { prefix: string; year: number }) {
       </div>
       <div>
         <label className="label">روز</label>
-        <select name={`${prefix}d`} className="input w-20" defaultValue="1">
+        <select name={`${prefix}d`} className="input w-20" defaultValue={String(def?.d ?? 1)}>
           {Array.from({ length: 31 }, (_, i) => (
             <option key={i} value={i + 1}>{i + 1}</option>
           ))}
@@ -49,20 +57,28 @@ function DateGroup({ prefix, year }: { prefix: string; year: number }) {
   );
 }
 
+export interface LeavePrefill {
+  from?: { y: number; m: number; d: number };
+  to?: { y: number; m: number; d: number };
+  typeId?: string;
+}
+
 export function LeaveForm({
   slug,
   year,
   types,
+  prefill,
 }: {
   slug: string;
   year: number;
   types: LeaveTypeOption[];
+  prefill?: LeavePrefill;
 }) {
   const [state, action] = useFormState<LeaveState, FormData>(
     submitLeaveAction,
     {}
   );
-  const [typeId, setTypeId] = useState(types[0]?.id ?? "");
+  const [typeId, setTypeId] = useState(prefill?.typeId ?? types[0]?.id ?? "");
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (state.ok) {
@@ -116,7 +132,7 @@ export function LeaveForm({
 
       <div>
         <label className="label">{hourly ? "تاریخ" : "از تاریخ"}</label>
-        <DateGroup prefix="f" year={year} />
+        <DateGroup prefix="f" year={year} def={prefill?.from} />
       </div>
 
       {hourly ? (
@@ -133,7 +149,7 @@ export function LeaveForm({
       ) : (
         <div>
           <label className="label">تا تاریخ</label>
-          <DateGroup prefix="t" year={year} />
+          <DateGroup prefix="t" year={year} def={prefill?.to} />
         </div>
       )}
 

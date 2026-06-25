@@ -9,6 +9,8 @@ interface Policy {
   monthly_leave_days: string;
   annual_leave_days: string;
   overtime_enabled: boolean;
+  max_punches_per_week: number;
+  max_punches_per_month: number;
 }
 
 export default async function RulesPage({
@@ -22,7 +24,8 @@ export default async function RulesPage({
   const [policy] = await withTenant(ctx.company.schema, async (tx) =>
     tx<Policy[]>`
       SELECT grace_minutes, standard_daily_minutes, monthly_leave_days,
-             annual_leave_days, overtime_enabled
+             annual_leave_days, overtime_enabled,
+             max_punches_per_week, max_punches_per_month
       FROM attendance_policy WHERE id = 1
     `
   );
@@ -33,6 +36,8 @@ export default async function RulesPage({
     monthly_leave_days: "2.5",
     annual_leave_days: "26",
     overtime_enabled: true,
+    max_punches_per_week: 0,
+    max_punches_per_month: 0,
   };
 
   return (
@@ -108,6 +113,40 @@ export default async function RulesPage({
           />
           محاسبه اضافه‌کاری فعال باشد
         </label>
+
+        <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+          <div className="mb-2 text-sm font-semibold text-slate-700">
+            سقف ثبت تردد دستی (کارگزینی)
+          </div>
+          <p className="mb-3 text-[11px] text-slate-400">
+            بیشینهٔ تعداد ثبت تردد دستی هر کارمند در هفته/ماه. مقدار ۰ یعنی
+            بدون محدودیت. (ترددهای دستگاه شمرده نمی‌شوند.)
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">حداکثر در هفته</label>
+              <input
+                type="number"
+                name="max_punches_per_week"
+                min={0}
+                defaultValue={p.max_punches_per_week}
+                className="input"
+                dir="ltr"
+              />
+            </div>
+            <div>
+              <label className="label">حداکثر در ماه</label>
+              <input
+                type="number"
+                name="max_punches_per_month"
+                min={0}
+                defaultValue={p.max_punches_per_month}
+                className="input"
+                dir="ltr"
+              />
+            </div>
+          </div>
+        </div>
 
         <div className="flex justify-end">
           <button className="btn-primary">ذخیره قوانین</button>
