@@ -12,6 +12,8 @@ dependencies:
   http: ^1.2.0
   image_picker: ^1.0.7
   google_mlkit_face_detection: ^0.11.0
+  tflite_flutter: ^0.10.4
+  image: ^4.1.7
   shared_preferences: ^2.2.2
 
 dev_dependencies:
@@ -19,3 +21,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    # مدل embedding چهره (MobileFaceNet) — فایل را اینجا قرار دهید:
+    - assets/mobilefacenet.tflite

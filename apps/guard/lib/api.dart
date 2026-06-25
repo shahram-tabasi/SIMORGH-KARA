@@ -38,3 +38,61 @@ Future<String?> submitGuardPunch({
     return 'خطای شبکه: $e';
   }
 }
+
+/// Enroll a face embedding for a member (ثبت چهرهٔ اولیه).
+Future<String?> enrollFace({
+  required GuardConfig cfg,
+  required String email,
+  required List<double> embedding,
+}) async {
+  final uri = Uri.parse('${cfg.baseUrl}/api/${cfg.slug}/attendance/face/enroll');
+  try {
+    final res = await http.post(uri,
+        headers: {
+          'Authorization': 'Bearer ${cfg.token}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'email': email, 'embedding': embedding}));
+    if (res.statusCode == 200) return null;
+    return (jsonDecode(res.body)['error']?.toString()) ?? 'خطا (${res.statusCode})';
+  } catch (e) {
+    return 'خطای شبکه: $e';
+  }
+}
+
+class IdentifyResult {
+  final bool matched;
+  final String? name;
+  final double score;
+  IdentifyResult(this.matched, this.name, this.score);
+}
+
+/// Identify a member from a face embedding and optionally auto-punch.
+Future<IdentifyResult?> identifyFace({
+  required GuardConfig cfg,
+  required List<double> embedding,
+  String? kind, // in|out for auto-punch
+}) async {
+  final uri = Uri.parse('${cfg.baseUrl}/api/${cfg.slug}/attendance/face/identify');
+  try {
+    final res = await http.post(uri,
+        headers: {
+          'Authorization': 'Bearer ${cfg.token}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'embedding': embedding,
+          if (kind != null) 'kind': kind,
+          if (kind != null) 'auto_punch': true,
+        }));
+    if (res.statusCode != 200) return null;
+    final b = jsonDecode(res.body);
+    return IdentifyResult(
+      b['matched'] == true,
+      b['member']?['name']?.toString(),
+      (b['score'] is num) ? (b['score'] as num).toDouble() : 0,
+    );
+  } catch (_) {
+    return null;
+  }
+}

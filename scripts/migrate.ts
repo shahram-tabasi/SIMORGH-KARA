@@ -295,6 +295,14 @@ async function main() {
           last_seen timestamptz,
           created_at timestamptz NOT NULL DEFAULT now()
         );
+        CREATE TABLE IF NOT EXISTS "${schema_name}".face_embeddings (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          member_id uuid NOT NULL REFERENCES "${schema_name}".members(id) ON DELETE CASCADE,
+          vec jsonb NOT NULL,
+          dim int NOT NULL,
+          created_at timestamptz NOT NULL DEFAULT now()
+        );
+        CREATE INDEX IF NOT EXISTS idx_face_member ON "${schema_name}".face_embeddings(member_id);
       `);
       // Seed a default schedule if the company has none yet.
       await sql.unsafe(`

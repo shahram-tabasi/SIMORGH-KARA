@@ -254,6 +254,18 @@ CREATE TABLE IF NOT EXISTS attendance_devices (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Enrolled face embeddings (vectors) for automatic recognition. The embedding
+-- is computed on-device (TFLite); the server only stores it (L2-normalized)
+-- and does cheap cosine matching. Multiple samples per member are allowed.
+CREATE TABLE IF NOT EXISTS face_embeddings (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  member_id  uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  vec        jsonb NOT NULL,         -- array of floats, L2-normalized
+  dim        int NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_face_member ON face_embeddings(member_id);
+
 -- Attendance policy / company rules (stage 3): single settings row.
 CREATE TABLE IF NOT EXISTS attendance_policy (
   id                     int PRIMARY KEY DEFAULT 1 CHECK (id = 1),

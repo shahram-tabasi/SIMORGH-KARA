@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
+import 'face_embedder.dart';
 
 void main() => runApp(const GuardApp());
 
@@ -37,6 +38,52 @@ class _GateScreenState extends State<GateScreen> {
   bool _busy = false;
 
   final _faceDetector = FaceDetector(options: FaceDetectorOptions());
+  final _embedder = FaceEmbedder();
+
+  /// حالت تشخیص خودکار: عکس → بردار چهره (روی دستگاه) → identify + ثبت تردد.
+  Future<void> _autoRecognize(String kind) async {
+    if (_cfg == null) return;
+    setState(() { _busy = true; _status = 'در حال تشخیص چهره…'; });
+    try {
+      final shot = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 70, maxWidth: 720);
+      if (shot == null) { setState(() => _status = 'تصویری گرفته نشد'); return; }
+      final emb = await _embedder.embedFile(shot.path);
+      if (emb == null) {
+        setState(() => _status = 'مدل چهره بارگذاری نشد (assets/mobilefacenet.tflite)');
+        return;
+      }
+      final r = await identifyFace(cfg: _cfg!, embedding: emb, kind: kind);
+      setState(() {
+        if (r == null) {
+          _status = 'خطای ارتباط با سرور';
+        } else if (r.matched) {
+          _status = '✓ ${r.name} — ${kind == "in" ? "ورود" : "خروج"} (شباهت ${r.score.toStringAsFixed(2)})';
+        } else {
+          _status = 'چهره ناشناس (شباهت ${r.score.toStringAsFixed(2)})';
+        }
+      });
+    } finally {
+      setState(() => _busy = false);
+    }
+  }
+
+  /// ثبت چهرهٔ اولیه برای فرد (نیازمند ایمیل در فیلد بالا).
+  Future<void> _enrollFace() async {
+    if (_cfg == null) return;
+    final email = _email.text.trim();
+    if (email.isEmpty) { setState(() => _status = 'ایمیل فرد را وارد کنید'); return; }
+    setState(() { _busy = true; _status = 'ثبت چهره…'; });
+    try {
+      final shot = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 70, maxWidth: 720);
+      if (shot == null) { setState(() => _status = 'تصویری گرفته نشد'); return; }
+      final emb = await _embedder.embedFile(shot.path);
+      if (emb == null) { setState(() => _status = 'مدل چهره بارگذاری نشد'); return; }
+      final err = await enrollFace(cfg: _cfg!, email: email, embedding: emb);
+      setState(() => _status = err == null ? '✓ چهرهٔ $email ثبت شد' : 'خطا: $err');
+    } finally {
+      setState(() => _busy = false);
+    }
+  }
 
   @override
   void initState() {
@@ -135,10 +182,22 @@ class _GateScreenState extends State<GateScreen> {
               ),
             ),
             const SizedBox(height: 20),
+            const Text('تشخیص خودکار (بدون نیاز به ایمیل):', style: TextStyle(fontSize: 13, color: Colors.black54)),
+            const SizedBox(height: 8),
             Row(children: [
-              Expanded(child: _btn('ورود + چهره', Colors.green, () => _register('in'))),
+              Expanded(child: _btn('ورود (چهره)', Colors.green, () => _autoRecognize('in'))),
               const SizedBox(width: 12),
-              Expanded(child: _btn('خروج + چهره', Colors.red, () => _register('out'))),
+              Expanded(child: _btn('خروج (چهره)', Colors.red, () => _autoRecognize('out'))),
+            ]),
+            const Divider(height: 28),
+            const Text('ثبت دستی / ثبت چهرهٔ اولیه (با ایمیل بالا):', style: TextStyle(fontSize: 13, color: Colors.black54)),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: _btn('ورود', Colors.green.shade300, () => _register('in'))),
+              const SizedBox(width: 8),
+              Expanded(child: _btn('خروج', Colors.red.shade300, () => _register('out'))),
+              const SizedBox(width: 8),
+              Expanded(child: _btn('ثبت چهره', Colors.indigo, _enrollFace)),
             ]),
             const SizedBox(height: 20),
             Text(_status, style: const TextStyle(fontSize: 16)),
