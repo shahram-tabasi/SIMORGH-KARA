@@ -41,6 +41,7 @@ export default async function TenantLayout({
       items: [
         { href: `${base}/kartabl`, label: "کارتابل من", icon: "📥" },
         { href: `${base}/tasks`, label: "میز کار", icon: "🗒️" },
+        { href: `${base}/tasks/calendar`, label: "تقویم کارها", icon: "🗓️" },
       ],
     },
     {
@@ -81,6 +82,7 @@ export default async function TenantLayout({
       subtitle="سامانه مدیریت شرکت"
       userName={ctx.member.fullName}
       groups={groups}
+      slug={params.slug}
     >
       {children}
       <ReminderWatcher slug={params.slug} />

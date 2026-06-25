@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SideNav, type NavGroup, type NavItem } from "./SideNav";
+import { NotificationBell } from "./NotificationBell";
 
 export type { NavItem, NavGroup };
 
@@ -8,12 +9,14 @@ export function Shell({
   subtitle,
   groups,
   userName,
+  slug,
   children,
 }: {
   brand: string;
   subtitle?: string;
   groups: NavGroup[];
   userName: string;
+  slug?: string;
   children: React.ReactNode;
 }) {
   const initials = brand.trim().slice(0, 2);
@@ -21,16 +24,17 @@ export function Shell({
   return (
     <div className="flex min-h-screen bg-slate-100">
       <aside className="flex w-52 shrink-0 flex-col border-l border-slate-200 bg-white">
-        <div className="flex items-center gap-2.5 border-b border-slate-200 px-3 py-3.5">
+        <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-3.5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-bold text-white">
             {initials}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold text-slate-800">{brand}</div>
             {subtitle && (
               <div className="truncate text-[11px] text-slate-400">{subtitle}</div>
             )}
           </div>
+          {slug && <NotificationBell slug={slug} />}
         </div>
 
         <SideNav groups={groups} />
