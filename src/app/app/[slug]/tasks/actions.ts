@@ -13,7 +13,31 @@ export interface TaskState {
 function rev(slug: string) {
   revalidatePath(`/app/${slug}/tasks`);
   revalidatePath(`/app/${slug}/tasks/calendar`);
+  revalidatePath(`/app/${slug}/calendar`);
   revalidatePath(`/app/${slug}`);
+}
+
+/**
+ * Advance the status of my own assignment (open → in_progress → done → open).
+ * Called from the calendar by double-clicking a task. No-op if I'm not an
+ * assignee of the task.
+ */
+export async function cycleTaskStatusAction(slug: string, taskId: string) {
+  const ctx = await requireTenant(slug);
+  const order = ["open", "in_progress", "done"];
+  await withTenant(ctx.company.schema, async (tx) => {
+    const [a] = await tx<{ status: string }[]>`
+      SELECT status FROM work_task_assignees
+      WHERE task_id = ${taskId} AND member_id = ${ctx.member.memberId}
+    `;
+    if (!a) return;
+    const next = order[(order.indexOf(a.status) + 1) % order.length];
+    await tx`
+      UPDATE work_task_assignees SET status = ${next}, updated_at = now()
+      WHERE task_id = ${taskId} AND member_id = ${ctx.member.memberId}
+    `;
+  });
+  rev(slug);
 }
 
 function jdate(fd: FormData, p: string): string | null {

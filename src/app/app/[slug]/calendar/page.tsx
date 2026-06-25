@@ -3,19 +3,18 @@ import { requireTenant } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { ensureYearHolidays } from "@/lib/holiday-sync";
 import { PageHeader } from "@/components/Shell";
+import { CalendarGrid, type GridDay, type GridTask } from "./CalendarGrid";
 import {
   JALALI_MONTHS,
-  WEEKDAYS,
   jalaliMonthLength,
   toGregorian,
-  toJalali,
   iranianWeekday,
   isoDate,
   toFaDigits,
   todayJalali,
 } from "@/lib/jalali";
 
-async function loadCalendarData(schema: string) {
+async function loadCalendarData(schema: string, memberId: string, firstIso: string, lastIso: string) {
   return withTenant(schema, async (tx) => {
     const [sched] = await tx<{ work_days: number[]; start_time: string; end_time: string; name: string }[]>`
       SELECT name, work_days, start_time, end_time FROM work_schedules
@@ -27,7 +26,19 @@ async function loadCalendarData(schema: string) {
     const overrides = await tx<{ override_date: string; is_working: boolean; note: string | null }[]>`
       SELECT override_date::text, is_working, note FROM schedule_overrides
     `;
-    return { sched, holidays, overrides };
+    const tasks = await tx<
+      { id: string; title: string; code: string | null; priority: string; due_date: string; my_status: string | null; sent: boolean }[]
+    >`
+      SELECT t.id, t.title, t.code, t.priority, t.due_date::text,
+             mine.status AS my_status, (t.created_by = ${memberId}) AS sent
+      FROM work_tasks t
+      LEFT JOIN work_task_assignees mine
+        ON mine.task_id = t.id AND mine.member_id = ${memberId}
+      WHERE t.due_date BETWEEN ${firstIso} AND ${lastIso}
+        AND (t.created_by = ${memberId} OR mine.member_id = ${memberId})
+      ORDER BY t.due_date::text
+    `;
+    return { sched, holidays, overrides, tasks };
   });
 }
 
@@ -44,55 +55,97 @@ export default async function CalendarPage({
   const jy = Number(searchParams.y) || today.jy;
   const jm = Number(searchParams.m) || today.jm;
 
+  const monthLen = jalaliMonthLength(jy, jm);
+  const firstIso = isoDate(toGregorian(jy, jm, 1));
+  const lastIso = isoDate(toGregorian(jy, jm, monthLen));
+
   // Auto-seed this year's official holidays on first view of a (future) year.
   await ensureYearHolidays(ctx.company.schema, jy);
-  const { sched, holidays, overrides } = await loadCalendarData(ctx.company.schema);
+  const { sched, holidays, overrides, tasks } = await loadCalendarData(
+    ctx.company.schema,
+    ctx.member.memberId,
+    firstIso,
+    lastIso
+  );
 
   const workDays = new Set(sched?.work_days ?? [0, 1, 2, 3, 4]);
-  const holidayMap = new Map(
-    holidays.map((h) => [h.holiday_date.slice(0, 10), h])
-  );
-  const overrideMap = new Map(
-    overrides.map((o) => [o.override_date.slice(0, 10), o])
-  );
+  const holidayMap = new Map(holidays.map((h) => [h.holiday_date.slice(0, 10), h]));
+  const overrideMap = new Map(overrides.map((o) => [o.override_date.slice(0, 10), o]));
 
-  /** Effective day type, honouring HR overrides. */
-  function dayKind(iso: string, weekday: number) {
-    const hol = holidayMap.get(iso);
-    const ov = overrideMap.get(iso);
-    const officialOff = hol?.is_off ?? false; // religious/national day off
-    let working: boolean;
-    if (officialOff) working = false;
-    else if (ov) working = ov.is_working;
-    else working = workDays.has(weekday) && weekday !== 6; // Friday off
-    return { hol, ov, officialOff, working };
+  // Tasks grouped by their due-date ISO.
+  const tasksByDay = new Map<string, GridTask[]>();
+  for (const t of tasks) {
+    const iso = t.due_date.slice(0, 10);
+    const gt: GridTask = {
+      id: t.id,
+      title: t.title,
+      code: t.code,
+      priority: (["normal", "urgent", "forced"].includes(t.priority) ? t.priority : "normal") as GridTask["priority"],
+      status: (t.my_status ?? "open") as GridTask["status"],
+      canEdit: t.my_status != null, // only my own assignment is editable
+      sent: t.sent,
+    };
+    const l = tasksByDay.get(iso);
+    if (l) l.push(gt);
+    else tasksByDay.set(iso, [gt]);
   }
 
-  const monthLen = jalaliMonthLength(jy, jm);
   const firstWeekday = iranianWeekday(toGregorian(jy, jm, 1)); // 0=Sat
 
-  // Build cells: leading blanks + days.
-  const cells: ({ jd: number; iso: string; weekday: number } | null)[] = [];
+  let workCount = 0;
+  let holidayCount = 0;
+  let occasionCount = 0;
+
+  const cells: (GridDay | null)[] = [];
   for (let i = 0; i < firstWeekday; i++) cells.push(null);
   for (let d = 1; d <= monthLen; d++) {
     const g = toGregorian(jy, jm, d);
-    cells.push({ jd: d, iso: isoDate(g), weekday: iranianWeekday(g) });
+    const iso = isoDate(g);
+    const weekday = iranianWeekday(g);
+    const hol = holidayMap.get(iso);
+    const ov = overrideMap.get(iso);
+    const officialOff = hol?.is_off ?? false;
+    const working = officialOff ? false : ov ? ov.is_working : workDays.has(weekday) && weekday !== 6;
+    const isFriday = weekday === 6;
+    const occasion = !!hol && !hol.is_off;
+    const isOff = officialOff || (!working && isFriday);
+    const isRest = !working && !isOff;
+    const isToday = jy === today.jy && jm === today.jm && d === today.jd;
+
+    if (working) workCount++;
+    if (hol?.is_off) holidayCount++;
+    if (occasion) occasionCount++;
+
+    const tone = isOff
+      ? "bg-red-50 text-red-600 border-red-100"
+      : isToday
+        ? "bg-green-100 text-green-800 border-green-300"
+        : occasion
+          ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+          : working
+            ? "bg-green-50 text-green-700 border-green-100"
+            : "bg-slate-50 text-slate-400 border-slate-100";
+
+    cells.push({
+      jd: d,
+      iso,
+      tone,
+      ring: isToday,
+      hol: hol?.title,
+      note: ov?.note ?? undefined,
+      occasion,
+      ov: !!ov,
+      ovWork: !!ov?.is_working,
+      friHoliday: !hol && isFriday && !working,
+      rest: isRest && !isFriday,
+      today: isToday,
+      tasks: tasksByDay.get(iso) ?? [],
+    });
   }
 
   const prev = jm === 1 ? { y: jy - 1, m: 12 } : { y: jy, m: jm - 1 };
   const next = jm === 12 ? { y: jy + 1, m: 1 } : { y: jy, m: jm + 1 };
   const base = `/app/${params.slug}/calendar`;
-
-  let workCount = 0;
-  let holidayCount = 0;
-  let occasionCount = 0;
-  for (const c of cells) {
-    if (!c) continue;
-    const { hol, working } = dayKind(c.iso, c.weekday);
-    if (working) workCount++;
-    if (hol?.is_off) holidayCount++;
-    if (hol && !hol.is_off) occasionCount++;
-  }
 
   return (
     <>
@@ -118,75 +171,7 @@ export default async function CalendarPage({
           </Link>
         </div>
 
-        <div className="grid grid-cols-7 gap-1.5">
-          {WEEKDAYS.map((w) => (
-            <div
-              key={w}
-              className="pb-2 text-center text-xs font-medium text-slate-400"
-            >
-              {w}
-            </div>
-          ))}
-
-          {cells.map((c, idx) => {
-            if (!c) return <div key={`b${idx}`} />;
-            const { hol, ov, officialOff, working } = dayKind(c.iso, c.weekday);
-            const isFriday = c.weekday === 6;
-            const occasion = hol && !hol.is_off; // مناسبت غیرتعطیل
-            const isOff = officialOff || (!working && isFriday); // red day
-            const isRest = !working && !isOff; // استراحت (shift rest / off)
-            const isToday =
-              jy === today.jy && jm === today.jm && c.jd === today.jd;
-
-            // holiday = red; today = green; occasion = yellow; rest = استراحت
-            const tone = isOff
-              ? "bg-red-50 text-red-600 border-red-100"
-              : isToday
-                ? "bg-green-100 text-green-800 border-green-300"
-                : occasion
-                  ? "bg-yellow-100 text-yellow-800 border-yellow-300"
-                  : working
-                    ? "bg-green-50 text-green-700 border-green-100"
-                    : "bg-slate-50 text-slate-400 border-slate-100";
-
-            return (
-              <div
-                key={c.iso}
-                className={`min-h-[68px] rounded-lg border p-2 ${tone} ${
-                  isToday ? "ring-2 ring-green-500" : ""
-                }`}
-                title={ov?.note ?? hol?.title}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold">{toFaDigits(c.jd)}</span>
-                  {occasion && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
-                  )}
-                  {ov && (
-                    <span className="rounded bg-sky-100 px-1 text-[8px] text-sky-700">دستی</span>
-                  )}
-                </div>
-                {isToday && (
-                  <div className="mt-0.5 text-[9px] font-medium text-green-700">امروز</div>
-                )}
-                {hol && (
-                  <div className="mt-1 line-clamp-2 text-[10px] leading-tight">
-                    {hol.title}
-                  </div>
-                )}
-                {!hol && isFriday && !working && (
-                  <div className="mt-1 text-[10px] text-red-400">تعطیل</div>
-                )}
-                {isRest && !isFriday && (
-                  <div className="mt-1 text-[10px] text-slate-400">استراحت</div>
-                )}
-                {working && ov?.is_working && (
-                  <div className="mt-1 text-[10px] text-sky-600">روز کاری</div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <CalendarGrid slug={params.slug} cells={cells} />
 
         <div className="mt-4 flex flex-wrap gap-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
           <span className="flex items-center gap-1.5">
@@ -205,7 +190,7 @@ export default async function CalendarPage({
             <span className="inline-block h-3 w-3 rounded bg-green-300" /> امروز
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded bg-slate-100" /> استراحت
+            <span className="inline-block h-2 w-2 rounded-full bg-amber-500" /> کار (روی روز نگه دارید)
           </span>
         </div>
       </div>
