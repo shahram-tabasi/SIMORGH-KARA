@@ -1,0 +1,11 @@
+{
+  "baseUrl": "https://app.simorgh.ir",
+  "slug": "aahangari-demo",
+  "deviceToken": "<توکن دستگاه از نوع terminal>",
+  "listenPort": 8088,
+  "comment": "نگاشت کد پرسنلی دستگاه به ایمیل کاربر سیمرغ",
+  "codeToEmail": {
+    "1001": "ali@co.ir",
+    "1002": "maryam@co.ir"
+  }
+}
