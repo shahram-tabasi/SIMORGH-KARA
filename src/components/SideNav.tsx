@@ -44,7 +44,7 @@ export function SideNav({ groups }: { groups: NavGroup[] }) {
                   className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
                     active
                       ? "bg-brand-600 font-medium text-white shadow-sm"
-                      : "text-slate-600 hover:bg-brand-50 hover:text-brand-700"
+                      : "text-slate-600 hover:bg-brand-50 hover:text-brand-700 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-amber-300"
                   }`}
                 >
                   <span className="text-base">{item.icon}</span>
