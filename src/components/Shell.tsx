@@ -19,15 +19,15 @@ export function Shell({
   slug?: string;
   children: React.ReactNode;
 }) {
-  const initials = brand.trim().slice(0, 2);
-
   return (
     <div className="flex min-h-screen bg-slate-100">
       <aside className="flex w-52 shrink-0 flex-col border-l border-slate-200 bg-white">
         <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-3.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-bold text-white">
-            {initials}
-          </div>
+          <img
+            src="/logo.png"
+            alt=""
+            className="h-9 w-9 shrink-0 rounded-xl object-cover ring-1 ring-slate-200"
+          />
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-bold text-slate-800">{brand}</div>
             {subtitle && (
