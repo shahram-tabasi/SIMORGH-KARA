@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "سیمرغ لجر — سامانه یکپارچه مدیریت",
+  title: "سیمرغ‌کارا — سامانه هوشمند حضور و غیاب و مدیریت سازمان",
   description:
-    "پلتفرم SaaS چندمستأجری: مدیریت شرکت‌ها، سطوح دسترسی، کارتابل و دفتر کل",
+    "پلتفرم SaaS چندمستأجری حضور و غیاب، منابع انسانی، کارتابل و میز کار",
+  icons: { icon: "/logo.png" },
 };
 
 export default function RootLayout({

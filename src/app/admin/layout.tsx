@@ -10,7 +10,7 @@ export default async function AdminLayout({
 
   return (
     <Shell
-      brand="سیمرغ لجر"
+      brand="سیمرغ‌کارا"
       subtitle="پنل مدیریت پلتفرم"
       userName={session.name}
       groups={[
