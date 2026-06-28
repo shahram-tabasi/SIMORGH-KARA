@@ -15,8 +15,10 @@ import type { MonthSheet, SheetDay, DayStamp } from "./data";
 
 function Timeline({ stamps }: { stamps: DayStamp[] }) {
   if (stamps.length === 0) return <span className="text-slate-300">—</span>;
+  // RTL order: first punch (ورود) sits on the right, then خروج to its left,
+  // so the sequence reads right-to-left as ورود → خروج.
   return (
-    <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5" dir="ltr">
+    <span className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5" dir="rtl">
       {stamps.map((s, i) => (
         <span
           key={i}
@@ -24,6 +26,7 @@ function Timeline({ stamps }: { stamps: DayStamp[] }) {
             s.kind === "in" ? "text-emerald-600" : s.kind === "out" ? "text-rose-500" : "text-blue-600"
           }`}
           title={s.kind === "leave" ? "مرز مرخصی ساعتی" : s.kind === "in" ? "ورود" : "خروج"}
+          dir="ltr"
         >
           {s.display}
         </span>
@@ -156,8 +159,8 @@ export function SheetTable({
         <table className="w-full text-[11px] leading-tight">
           <thead>
             <tr className="bg-brand-700 text-right text-[10px] text-white">
-              <Th>روز</Th><Th>تاریخ</Th><Th>شیفت</Th><Th>ترددها</Th>
-              <Th>کارکرد</Th><Th>تأخیر</Th><Th>کسرکار</Th><Th>اضافه‌کار</Th><Th>وضعیت</Th>
+              <Th>روز</Th><Th>تاریخ</Th><Th center>شیفت</Th><Th center>ترددها</Th>
+              <Th center>کارکرد</Th><Th center>تأخیر</Th><Th center>کسرکار</Th><Th center>اضافه‌کار</Th><Th center>وضعیت</Th>
             </tr>
           </thead>
           <tbody>
@@ -185,24 +188,30 @@ export function SheetTable({
                   className={`border-t border-slate-100 ${rowTone} ${interactive ? "cursor-pointer hover:bg-brand-50 dark:hover:bg-brand-500/15" : ""}`}
                 >
                   <td className="whitespace-nowrap px-2 py-[3px] font-medium text-slate-600">
-                    {interactive && <span className={`mr-0.5 inline-block h-2.5 w-2.5 rounded-sm border ${selected ? "border-brand-500 bg-brand-500" : "border-slate-300"}`} />}
-                    {WEEKDAYS[d.weekday]}
-                    {isToday && <span className="mr-1 rounded bg-brand-600 px-1 text-[9px] text-white">امروز</span>}
+                    <span className="flex items-center gap-1.5">
+                      {interactive && <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-sm border ${selected ? "border-brand-500 bg-brand-500" : "border-slate-300"}`} />}
+                      <span>{WEEKDAYS[d.weekday]}</span>
+                      {isToday && (
+                        <span className="rounded-full bg-brand-500/15 px-1.5 py-[1px] text-[8px] font-medium text-brand-600 ring-1 ring-inset ring-brand-500/30 dark:text-brand-300">
+                          امروز
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className="whitespace-nowrap px-2 py-[3px] text-slate-500">{toFaDigits(d.jd)} {JALALI_MONTHS[jm - 1]}</td>
-                  <td className="px-2 py-[3px] text-[10px] text-slate-400" dir="ltr">{d.isWorkingDay ? shift : "—"}</td>
-                  <td className="px-2 py-[3px]">
+                  <td className="px-2 py-[3px] text-center text-[10px] text-slate-400" dir="ltr">{d.isWorkingDay ? shift : "—"}</td>
+                  <td className="px-2 py-[3px] text-center">
                     <Timeline stamps={d.stamps} />
                     {d.hourlyLeave && <span className="mr-1 rounded bg-blue-50 px-1 text-[9px] text-blue-600">م. ساعتی</span>}
                   </td>
-                  <td className="px-2 py-[3px] font-bold text-brand-700">{formatDuration(d.result.worked)}</td>
-                  <td className="px-2 py-[3px] text-amber-600">{d.result.lateMinutes > 0 ? formatDuration(d.result.lateMinutes) : "—"}</td>
-                  <td className="px-2 py-[3px] text-rose-600">{d.deficitMinutes > 0 ? formatDuration(d.deficitMinutes) : "—"}</td>
-                  <td className="px-2 py-[3px] text-indigo-600">
+                  <td className="px-2 py-[3px] text-center font-bold text-brand-700">{formatDuration(d.result.worked)}</td>
+                  <td className="px-2 py-[3px] text-center text-amber-600">{d.result.lateMinutes > 0 ? formatDuration(d.result.lateMinutes) : "—"}</td>
+                  <td className="px-2 py-[3px] text-center text-rose-600">{d.deficitMinutes > 0 ? formatDuration(d.deficitMinutes) : "—"}</td>
+                  <td className="px-2 py-[3px] text-center text-indigo-600">
                     {d.overtimeMinutes > 0 ? formatDuration(d.overtimeMinutes) : "—"}
                     {d.holidayWork && <span className="mr-1 text-[8px] text-indigo-400">×۱.۴</span>}
                   </td>
-                  <td className="px-2 py-[3px]">
+                  <td className="px-2 py-[3px] text-center">
                     <span className={`inline-block rounded px-1.5 py-[1px] text-[10px] font-medium ${s.cls}`}>{s.text}</span>
                     {d.holidayWork && d.holidayTitle && <span className="mr-1 text-[9px] text-rose-500">{d.holidayTitle}</span>}
                   </td>
@@ -214,11 +223,11 @@ export function SheetTable({
             <tr className="border-t-2 border-brand-200 bg-brand-50 text-[11px] font-bold text-slate-700">
               <td className="px-2 py-1" colSpan={3}>جمع ماه</td>
               <td className="px-2 py-1"></td>
-              <td className="px-2 py-1 text-brand-700">{formatDuration(t.workedMinutes)}</td>
-              <td className="px-2 py-1 text-amber-600">{formatDuration(t.lateMinutes)}</td>
-              <td className="px-2 py-1 text-rose-600">{formatDuration(t.deficitMinutes)}</td>
-              <td className="px-2 py-1 text-indigo-600">{formatDuration(t.overtimeMinutes)}</td>
-              <td className="px-2 py-1 text-emerald-600">{toFaDigits(t.presentDays)} حاضر</td>
+              <td className="px-2 py-1 text-center text-brand-700">{formatDuration(t.workedMinutes)}</td>
+              <td className="px-2 py-1 text-center text-amber-600">{formatDuration(t.lateMinutes)}</td>
+              <td className="px-2 py-1 text-center text-rose-600">{formatDuration(t.deficitMinutes)}</td>
+              <td className="px-2 py-1 text-center text-indigo-600">{formatDuration(t.overtimeMinutes)}</td>
+              <td className="px-2 py-1 text-center text-emerald-600">{toFaDigits(t.presentDays)} حاضر</td>
             </tr>
           </tfoot>
         </table>
@@ -260,8 +269,8 @@ export function SheetTable({
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-2 py-1 font-medium">{children}</th>;
+function Th({ children, center }: { children: React.ReactNode; center?: boolean }) {
+  return <th className={`px-2 py-1 font-medium ${center ? "text-center" : ""}`}>{children}</th>;
 }
 function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (

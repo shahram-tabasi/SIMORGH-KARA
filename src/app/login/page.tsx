@@ -39,10 +39,10 @@ export default function LoginPage() {
       <div className="absolute inset-0 bg-[#0a0712]/40" />
       <div className="absolute inset-0 bg-gradient-to-r from-[#0a0712]/90 via-[#0a0712]/10 to-[#0a0712]/65" />
 
-      {/* top brand mark */}
+      {/* top brand mark — small logo first, then the Persian name */}
       <div className="absolute right-6 top-6 z-20 flex items-center gap-2 text-sm text-white/75">
-        <span>سیمرغ‌کارا</span>
         <img src="/logo-clean.png" alt="" className="h-9 w-9 object-contain" />
+        <span>سیمرغ‌کارا</span>
       </div>
 
       <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col items-center justify-center gap-12 px-6 py-16 lg:flex-row lg:justify-between">
