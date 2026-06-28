@@ -23,6 +23,10 @@ const statusLabel: Record<string, string> = {
 export default async function HoldingHome() {
   const { holding } = await requireHolding();
 
+  const [{ max_companies }] = await sql<{ max_companies: number }[]>`
+    SELECT max_companies FROM platform.holdings WHERE id = ${holding.id}
+  `;
+
   const sections = await sql<Section[]>`
     SELECT c.id, c.name, c.slug, c.status, c.max_users,
            (SELECT full_name FROM platform.user_accounts ua
@@ -35,22 +39,33 @@ export default async function HoldingHome() {
     WHERE c.holding_id = ${holding.id}
     ORDER BY c.created_at
   `;
+  const atLimit = sections.length >= max_companies;
 
   return (
     <>
       <PageHeader
-        title={`بخش‌های ${holding.name}`}
-        description="هر بخش یک شرکت مستقل با مدیر و کارکنان خودش است"
+        title={`شرکت‌های ${holding.name}`}
+        description="هر شرکت یک سازمان مستقل با مدیر خودش است؛ شرکت از معاونت‌ها و بخش‌ها تشکیل می‌شود"
       />
-      <div className="mb-4">
-        <Link href="/holding/companies/new" className="btn-primary">
-          ＋ افزودن بخش جدید
-        </Link>
+      <div className="mb-4 flex items-center gap-3">
+        {atLimit ? (
+          <span className="btn-primary pointer-events-none opacity-50">＋ افزودن شرکت جدید</span>
+        ) : (
+          <Link href="/holding/companies/new" className="btn-primary">
+            ＋ افزودن شرکت جدید
+          </Link>
+        )}
+        <span className={`badge ${atLimit ? "bg-amber-100 text-amber-700" : "bg-brand-50 text-brand-700"}`}>
+          {sections.length} از {max_companies} شرکت
+        </span>
+        {atLimit && (
+          <span className="text-xs text-amber-600">سقف پر شده — برای افزایش با مدیر سامانه هماهنگ کنید.</span>
+        )}
       </div>
 
       {sections.length === 0 ? (
         <div className="card text-sm text-slate-400">
-          هنوز بخشی ثبت نشده است. با «افزودن بخش جدید» شروع کنید.
+          هنوز شرکتی ثبت نشده است. با «افزودن شرکت جدید» شروع کنید.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -65,7 +80,7 @@ export default async function HoldingHome() {
                 </span>
               </div>
               <div className="mt-2 text-xs text-slate-500">
-                مدیر بخش: {s.manager_name ?? "—"}
+                مدیر شرکت: {s.manager_name ?? "—"}
                 <span className="mr-1 text-slate-400" dir="ltr">
                   ({s.manager_email ?? "—"})
                 </span>
@@ -78,7 +93,7 @@ export default async function HoldingHome() {
                   href={`/app/${s.slug}`}
                   className="text-xs text-brand-600 hover:underline"
                 >
-                  ورود به پنل بخش ←
+                  ورود به پنل شرکت ←
                 </Link>
               </div>
             </div>

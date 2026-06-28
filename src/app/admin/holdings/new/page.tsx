@@ -23,7 +23,7 @@ export default function NewHoldingPage() {
     <>
       <PageHeader
         title="افزودن هولدینگ جدید"
-        description="یک هولدینگ و حساب «مدیر هولدینگ» ساخته می‌شود؛ مدیر هولدینگ می‌تواند شرکت‌های بخش‌ها را بسازد و مدیر هر بخش را تعیین کند"
+        description="یک هولدینگ و حساب «مدیر هولدینگ» ساخته می‌شود؛ مدیر هولدینگ تا سقف تعیین‌شده می‌تواند شرکت بسازد و مدیر هر شرکت را تعیین کند"
       />
 
       <form action={action} className="card max-w-2xl space-y-5">
@@ -33,9 +33,15 @@ export default function NewHoldingPage() {
           </div>
         )}
 
-        <div>
-          <label className="label">نام هولدینگ</label>
-          <input name="name" required className="input" placeholder="مثلاً هولدینگ صنعتی نمونه" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="sm:col-span-2">
+            <label className="label">نام هولدینگ</label>
+            <input name="name" required className="input" placeholder="مثلاً هولدینگ صنعتی نمونه" />
+          </div>
+          <div>
+            <label className="label">سقف تعداد شرکت</label>
+            <input name="maxCompanies" type="number" min={1} defaultValue={1} dir="ltr" className="input" />
+          </div>
         </div>
 
         <div className="border-t border-slate-100 pt-5">

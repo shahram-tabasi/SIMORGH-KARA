@@ -26,6 +26,8 @@ async function main() {
       );
       ALTER TABLE platform.companies
         ADD COLUMN IF NOT EXISTS holding_id uuid REFERENCES platform.holdings(id) ON DELETE SET NULL;
+      ALTER TABLE platform.holdings
+        ADD COLUMN IF NOT EXISTS max_companies int NOT NULL DEFAULT 1;
       ALTER TABLE platform.user_accounts
         ADD COLUMN IF NOT EXISTS is_holding_admin boolean NOT NULL DEFAULT false;
       ALTER TABLE platform.user_accounts

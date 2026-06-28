@@ -131,8 +131,13 @@ async function main() {
       }
       const [hrRole] = await tx<{ id: string }[]>`
         INSERT INTO roles (name, description) VALUES ('کارگزینی', 'تأیید مرخصی در مرحله کارگزینی') RETURNING id`;
-      // کارگزینی: تأیید مرحلهٔ کارگزینی + مدیریت تقویم/شیفت + حضور و دستگاه‌ها
-      for (const p of ['leave.approve.hr', 'calendar.view', 'calendar.manage', 'attendance.manage'])
+      // مدیر منابع انسانی/کارگزینی: تأیید مرحلهٔ کارگزینی + تقویم/شیفت + حضور و
+      // دستگاه‌ها + مدیریت اعضا و نقش‌ها (دادن/کم‌وزیادکردن دسترسی افراد)
+      for (const p of [
+        'leave.approve.hr', 'calendar.view', 'calendar.manage', 'attendance.manage',
+        'members.view', 'members.manage', 'roles.view', 'roles.manage',
+        'groups.view', 'groups.manage',
+      ])
         await tx`INSERT INTO role_permissions (role_id, permission_key) VALUES (${hrRole.id}, ${p})`;
 
       // Default schedule + policy + leave types

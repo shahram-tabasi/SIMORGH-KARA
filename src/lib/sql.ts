@@ -11,10 +11,12 @@ CREATE EXTENSION IF NOT EXISTS citext;          -- case-insensitive email
 
 -- Holdings = a group of companies (sections) owned by one organisation.
 CREATE TABLE IF NOT EXISTS platform.holdings (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name        text NOT NULL,
-  slug        text NOT NULL UNIQUE,
-  created_at  timestamptz NOT NULL DEFAULT now()
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name          text NOT NULL,
+  slug          text NOT NULL UNIQUE,
+  -- how many companies the holding admin may create (set by the platform admin)
+  max_companies int NOT NULL DEFAULT 1,
+  created_at    timestamptz NOT NULL DEFAULT now()
 );
 
 -- Companies = tenants. Each has its own dedicated schema. A company may

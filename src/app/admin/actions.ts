@@ -11,10 +11,20 @@ import { slugify, shortId } from "@/lib/utils";
 
 const newHoldingSchema = z.object({
   name: z.string().min(2, "نام هولدینگ حداقل ۲ کاراکتر باشد."),
+  maxCompanies: z.coerce.number().int().min(1).max(1000).default(1),
   adminName: z.string().min(2, "نام مدیر هولدینگ را وارد کنید."),
   adminEmail: z.string().email("ایمیل مدیر هولدینگ نامعتبر است."),
   adminPassword: z.string().min(6, "رمز عبور حداقل ۶ کاراکتر باشد."),
 });
+
+/** Platform admin sets/raises how many companies a holding may create. */
+export async function setHoldingMaxCompaniesAction(formData: FormData) {
+  await requirePlatformAdmin();
+  const id = String(formData.get("id"));
+  const max = Math.max(1, Math.min(1000, Number(formData.get("maxCompanies")) || 1));
+  await sql`UPDATE platform.holdings SET max_companies = ${max} WHERE id = ${id}`;
+  revalidatePath("/admin/holdings");
+}
 
 /** Create a holding plus its holding-administrator account. */
 export async function createHoldingAction(
@@ -24,6 +34,7 @@ export async function createHoldingAction(
   await requirePlatformAdmin();
   const parsed = newHoldingSchema.safeParse({
     name: formData.get("name"),
+    maxCompanies: formData.get("maxCompanies") || 1,
     adminName: formData.get("adminName"),
     adminEmail: formData.get("adminEmail"),
     adminPassword: formData.get("adminPassword"),
@@ -38,8 +49,8 @@ export async function createHoldingAction(
   const slug = `${slugify(parsed.data.name)}-${shortId(4)}`;
   try {
     const [holding] = await sql<{ id: string }[]>`
-      INSERT INTO platform.holdings (name, slug)
-      VALUES (${parsed.data.name}, ${slug}) RETURNING id
+      INSERT INTO platform.holdings (name, slug, max_companies)
+      VALUES (${parsed.data.name}, ${slug}, ${parsed.data.maxCompanies}) RETURNING id
     `;
     const passwordHash = await hashPassword(parsed.data.adminPassword);
     await sql`

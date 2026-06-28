@@ -8,7 +8,7 @@ function Submit() {
   const { pending } = useFormStatus();
   return (
     <button className="btn-primary" disabled={pending}>
-      {pending ? "در حال ساخت…" : "ساخت بخش و مدیر آن"}
+      {pending ? "در حال ساخت…" : "ساخت شرکت و مدیر آن"}
     </button>
   );
 }
@@ -22,8 +22,8 @@ export default function NewSectionPage() {
   return (
     <>
       <PageHeader
-        title="افزودن بخش جدید"
-        description="یک بخش (شرکت مستقل با اسکیمای جدا) و مدیر آن ساخته می‌شود؛ مدیر بخش، گردش‌کار مرخصی و کارکنان خود را اداره می‌کند"
+        title="افزودن شرکت جدید"
+        description="یک شرکت مستقل (با اسکیمای جدا) و مدیر آن ساخته می‌شود؛ مدیر شرکت، گردش‌کار مرخصی و کارکنان خود را اداره می‌کند"
       />
 
       <form action={action} className="card max-w-2xl space-y-5">
@@ -35,8 +35,8 @@ export default function NewSectionPage() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className="label">نام بخش</label>
-            <input name="name" required className="input" placeholder="مثلاً آهنگری، شمش‌کشی، انبار" />
+            <label className="label">نام شرکت</label>
+            <input name="name" required className="input" placeholder="مثلاً شرکت فولاد البرز" />
           </div>
           <div>
             <label className="label">حداکثر تعداد کاربر</label>
@@ -45,14 +45,14 @@ export default function NewSectionPage() {
         </div>
 
         <div className="border-t border-slate-100 pt-5">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">مدیر بخش</h3>
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">مدیر شرکت</h3>
           <p className="mb-3 text-xs text-slate-400">
-            این فرد مدیر کامل بخش است؛ کارکنان را اضافه می‌کند، مرخصی‌ها را در
+            این فرد مدیر کامل شرکت است؛ کارکنان را اضافه می‌کند، مرخصی‌ها را در
             کارتابل خود تأیید می‌کند و نقش «کارگزینی» را به فرد مناسب می‌دهد.
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="label">نام و نام خانوادگی مدیر بخش</label>
+              <label className="label">نام و نام خانوادگی مدیر شرکت</label>
               <input name="adminName" required className="input" />
             </div>
             <div>

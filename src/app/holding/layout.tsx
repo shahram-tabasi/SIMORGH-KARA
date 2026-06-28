@@ -16,8 +16,8 @@ export default async function HoldingLayout({
       groups={[
         {
           items: [
-            { href: "/holding", label: "بخش‌ها (شرکت‌ها)", icon: "🏭" },
-            { href: "/holding/companies/new", label: "افزودن بخش", icon: "＋" },
+            { href: "/holding", label: "شرکت‌ها", icon: "🏭" },
+            { href: "/holding/companies/new", label: "افزودن شرکت", icon: "＋" },
           ],
         },
       ]}
