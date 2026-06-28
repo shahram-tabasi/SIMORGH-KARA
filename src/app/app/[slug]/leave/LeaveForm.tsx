@@ -7,10 +7,118 @@ import { submitLeaveAction, type LeaveState } from "./actions";
 
 export interface LeaveTypeOption {
   id: string;
+  code: string;
   name: string;
   unit: "day" | "hour";
   requires_attachment: boolean;
   description: string | null;
+}
+
+const MISSION_SUBTYPES = [
+  "برون‌شهری روزانه",
+  "برون‌شهری چندروزه",
+  "درون‌شهری",
+  "خارج از کشور",
+];
+const TRANSPORTS = [
+  "خودرو شخصی",
+  "خودرو سازمانی",
+  "هواپیما",
+  "قطار",
+  "اتوبوس",
+  "سایر",
+];
+
+/** Detailed mission fields — only shown when the selected type is a mission. */
+function MissionFields() {
+  return (
+    <div className="space-y-3 rounded-lg border border-purple-200 bg-purple-50/60 p-3 dark:border-purple-500/30 dark:bg-purple-500/[0.06]">
+      <div className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+        🧳 جزئیات مأموریت
+      </div>
+
+      <div>
+        <label className="label">نوع مأموریت</label>
+        <select name="m_subtype" className="input" defaultValue={MISSION_SUBTYPES[0]}>
+          {MISSION_SUBTYPES.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="label">شهر مبدأ *</label>
+          <input name="m_origin" className="input" placeholder="مثلاً تهران" />
+        </div>
+        <div>
+          <label className="label">شهر مقصد *</label>
+          <input name="m_destination" className="input" placeholder="مثلاً اصفهان" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="label">وسیله رفت</label>
+          <select name="m_transport_go" className="input" defaultValue={TRANSPORTS[0]}>
+            {TRANSPORTS.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label">وسیله برگشت</label>
+          <select name="m_transport_back" className="input" defaultValue={TRANSPORTS[0]}>
+            {TRANSPORTS.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="label">ساعت شروع</label>
+          <input name="m_start_time" type="time" className="input" dir="ltr" />
+        </div>
+        <div>
+          <label className="label">ساعت خاتمه</label>
+          <input name="m_end_time" type="time" className="input" dir="ltr" />
+        </div>
+      </div>
+
+      <div>
+        <label className="label">موضوع مأموریت</label>
+        <input name="m_subject" className="input" placeholder="موضوع و هدف مأموریت" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="label">نام پروژه</label>
+          <input name="m_project" className="input" placeholder="نام پروژه" />
+        </div>
+        <div>
+          <label className="label">شمارهٔ شناسایی (OE)</label>
+          <input name="m_oe" className="input" dir="ltr" placeholder="OE" />
+        </div>
+      </div>
+
+      <div>
+        <label className="label">محل مراجعه</label>
+        <input name="m_visit_place" className="input" placeholder="نام شرکت / محل مراجعه" />
+      </div>
+
+      <div>
+        <label className="label">پرسنل جایگزین</label>
+        <input name="m_substitute" className="input" placeholder="نام همکار جایگزین (اختیاری)" />
+      </div>
+
+      <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+        <input name="m_client_request" type="checkbox" className="h-4 w-4 rounded border-slate-300" />
+        درخواست از طرف مشتری
+      </label>
+    </div>
+  );
 }
 
 function Submit() {
@@ -89,6 +197,7 @@ export function LeaveForm({
 
   const selected = types.find((t) => t.id === typeId);
   const hourly = selected?.unit === "hour";
+  const isMission = selected?.code === "mission";
 
   if (types.length === 0) {
     return (
@@ -152,6 +261,8 @@ export function LeaveForm({
           <DateGroup prefix="t" year={year} def={prefill?.to} />
         </div>
       )}
+
+      {isMission && <MissionFields />}
 
       {selected?.requires_attachment && (
         <div>

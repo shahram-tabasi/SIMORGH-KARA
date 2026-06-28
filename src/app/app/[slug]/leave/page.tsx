@@ -63,7 +63,50 @@ interface Req {
   from_time: string | null;
   to_time: string | null;
   reason: string | null;
+  details: string | null;
   status: string;
+}
+
+const MISSION_LABELS: Record<string, string> = {
+  subtype: "نوع",
+  origin: "مبدأ",
+  destination: "مقصد",
+  transport_go: "وسیله رفت",
+  transport_back: "وسیله برگشت",
+  start_time: "از ساعت",
+  end_time: "تا ساعت",
+  subject: "موضوع",
+  project: "پروژه",
+  oe: "OE",
+  visit_place: "محل مراجعه",
+  substitute: "جایگزین",
+};
+
+function MissionDetails({ raw }: { raw: string | null }) {
+  if (!raw) return null;
+  let d: Record<string, unknown>;
+  try {
+    d = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const rows = Object.entries(MISSION_LABELS)
+    .filter(([k]) => d[k])
+    .map(([k, label]) => ({ label, value: String(d[k]) }));
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 border-t border-slate-100 pt-1.5 text-[11px] text-slate-500">
+      {rows.map((r) => (
+        <span key={r.label}>
+          <span className="text-slate-400">{r.label}:</span>{" "}
+          <span className="font-medium">{toFaDigits(r.value)}</span>
+        </span>
+      ))}
+      {d.client_request ? (
+        <span className="text-purple-600">• درخواست مشتری</span>
+      ) : null}
+    </div>
+  );
 }
 
 export default async function LeavePage({
@@ -77,7 +120,8 @@ export default async function LeavePage({
   const { requests, types } = await withTenant(ctx.company.schema, async (tx) => {
     const requests = await tx<Req[]>`
       SELECT lr.id, lr.kind, lt.name AS type_name, lr.from_date::text,
-             lr.to_date::text, lr.from_time, lr.to_time, lr.reason, lr.status
+             lr.to_date::text, lr.from_time, lr.to_time, lr.reason,
+             lr.details::text AS details, lr.status
       FROM leave_requests lr
       LEFT JOIN leave_types lt ON lt.id = lr.type_id
       WHERE lr.member_id = ${ctx.member.memberId}
@@ -179,6 +223,7 @@ export default async function LeavePage({
                     )}
                     {r.reason && <span className="mr-2">— {r.reason}</span>}
                   </div>
+                  {r.kind === "mission" && <MissionDetails raw={r.details} />}
                 </li>
               ))}
             </ul>

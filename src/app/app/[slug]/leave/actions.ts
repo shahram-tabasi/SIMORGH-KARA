@@ -268,14 +268,45 @@ export async function submitLeaveAction(
           ? "hourly"
           : "leave";
 
+    // Collect the rich mission detail fields (only meaningful for missions).
+    let details: Record<string, string | boolean> | null = null;
+    let missionSummary = reason;
+    if (type.code === "mission") {
+      const g = (k: string) => String(formData.get(k) || "").trim();
+      const d: Record<string, string | boolean> = {
+        subtype: g("m_subtype"),
+        origin: g("m_origin"),
+        destination: g("m_destination"),
+        transport_go: g("m_transport_go"),
+        transport_back: g("m_transport_back"),
+        start_time: g("m_start_time"),
+        end_time: g("m_end_time"),
+        subject: g("m_subject"),
+        project: g("m_project"),
+        oe: g("m_oe"),
+        visit_place: g("m_visit_place"),
+        substitute: g("m_substitute"),
+        client_request: formData.get("m_client_request") === "on",
+      };
+      // Drop empty strings so the stored object stays tidy.
+      details = Object.fromEntries(
+        Object.entries(d).filter(([, v]) => v !== "" && v !== false)
+      );
+      if (!d.origin || !d.destination)
+        return { error: "شهر مبدأ و مقصد مأموریت را وارد کنید." };
+      const route = `${d.origin} → ${d.destination}`;
+      missionSummary = [route, d.subject, reason].filter(Boolean).join(" · ");
+    }
+
     const totalSteps = Math.max(1, Math.min(3, type.approval_levels || 1));
     const [req] = await tx<{ id: string }[]>`
       INSERT INTO leave_requests
         (member_id, type_id, kind, from_date, to_date, from_time, to_time,
-         reason, attachment_url, effective_days, total_steps, current_step)
+         reason, attachment_url, details, effective_days, total_steps, current_step)
       VALUES
         (${ctx.member.memberId}, ${typeId}, ${kind}, ${fromIso}, ${toIso},
-         ${fromTime}, ${toTime}, ${reason}, ${attachment}, ${effectiveDays},
+         ${fromTime}, ${toTime}, ${reason}, ${attachment},
+         ${details ? tx.json(details) : null}, ${effectiveDays},
          ${totalSteps}, 1)
       RETURNING id
     `;
@@ -293,7 +324,7 @@ export async function submitLeaveAction(
       stepPerm(1),
       ctx.member.memberId,
       ctx.member.fullName,
-      reason || "درخواست مرخصی جدید"
+      missionSummary || "درخواست مرخصی جدید"
     );
     return { ok: true as const };
   });

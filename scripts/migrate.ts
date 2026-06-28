@@ -184,6 +184,7 @@ async function main() {
         ALTER TABLE "${schema_name}".leave_requests
           ADD COLUMN IF NOT EXISTS type_id uuid REFERENCES "${schema_name}".leave_types(id),
           ADD COLUMN IF NOT EXISTS attachment_url text,
+          ADD COLUMN IF NOT EXISTS details jsonb,
           ADD COLUMN IF NOT EXISTS effective_days numeric(6,2),
           ADD COLUMN IF NOT EXISTS current_step int NOT NULL DEFAULT 1,
           ADD COLUMN IF NOT EXISTS total_steps int NOT NULL DEFAULT 1;

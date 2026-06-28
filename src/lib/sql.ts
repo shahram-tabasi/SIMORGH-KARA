@@ -341,6 +341,7 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   to_time       text,
   reason        text,
   attachment_url text,                           -- medical certificate, etc.
+  details       jsonb,                           -- mission detail fields (origin/dest/transport/project…)
   effective_days numeric(6,2),                   -- computed billable days
   status        text NOT NULL DEFAULT 'pending'
                   CHECK (status IN ('pending','approved','rejected')),

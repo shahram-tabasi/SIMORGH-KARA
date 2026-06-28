@@ -166,23 +166,23 @@ export function SheetTable({
               const s = dayStatus(d);
               const selected = sel.has(d.iso);
               const rowTone = selected
-                ? "bg-brand-100"
+                ? "bg-brand-100 dark:bg-brand-500/25"
                 : isToday
-                  ? "bg-brand-50"
+                  ? "bg-brand-50 dark:bg-brand-500/10"
                   : d.holidayTitle
-                    ? "bg-rose-50"
+                    ? "bg-rose-50 dark:bg-rose-500/10"
                     : d.result.status === "holiday"
-                      ? "bg-rose-50/40"
+                      ? "bg-rose-50/40 dark:bg-rose-500/[0.06]"
                       : !d.isWorkingDay
-                        ? "bg-sky-50/40"
+                        ? "bg-sky-50/40 dark:bg-sky-500/[0.06]"
                         : i % 2
-                          ? "bg-white"
-                          : "bg-slate-50/50";
+                          ? "bg-white dark:bg-white/[0.02]"
+                          : "bg-slate-50/50 dark:bg-transparent";
               return (
                 <tr
                   key={d.iso}
                   onClick={interactive ? () => toggle(d.iso) : undefined}
-                  className={`border-t border-slate-100 ${rowTone} ${interactive ? "cursor-pointer hover:bg-brand-50" : ""}`}
+                  className={`border-t border-slate-100 ${rowTone} ${interactive ? "cursor-pointer hover:bg-brand-50 dark:hover:bg-brand-500/15" : ""}`}
                 >
                   <td className="whitespace-nowrap px-2 py-[3px] font-medium text-slate-600">
                     {interactive && <span className={`mr-0.5 inline-block h-2.5 w-2.5 rounded-sm border ${selected ? "border-brand-500 bg-brand-500" : "border-slate-300"}`} />}
