@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>سیمرغ‌کارا — راهنمای جامع کاربری</title>
+<link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0a0712; --panel:#14101e; --panel2:#1b1530;
+    --gold:#f5b942; --gold2:#fcd34d; --brand:#6366f1; --brand2:#a5b4fc;
+    --fg:#e9e6f2; --muted:#a39db5; --line:rgba(255,255,255,.09);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:Vazirmatn,Tahoma,sans-serif; background:var(--bg); color:var(--fg);
+    line-height:1.9; font-size:15px;
+  }
+  a{color:var(--brand2);text-decoration:none}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 22px}
+
+  /* ---------- cover ---------- */
+  .cover{
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;position:relative;overflow:hidden;
+    background:
+      radial-gradient(1200px 600px at 70% -10%, rgba(245,185,66,.16), transparent 60%),
+      radial-gradient(900px 500px at 10% 110%, rgba(99,102,241,.22), transparent 55%),
+      linear-gradient(180deg,#0a0712,#0d0a18);
+  }
+  .cover img.logo{width:160px;height:160px;object-fit:contain;filter:drop-shadow(0 0 40px rgba(245,185,66,.45))}
+  .cover h1{font-size:64px;margin:18px 0 6px;font-weight:800;
+    background:linear-gradient(180deg,#fff,#d9d2ec);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .cover .sub{font-size:24px;color:var(--gold2);font-weight:700;margin-top:4px}
+  .cover .tag{margin-top:26px;color:var(--muted);max-width:560px;font-size:16px}
+  .cover .meta{margin-top:40px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+  .pill{border:1px solid var(--line);background:rgba(255,255,255,.04);border-radius:999px;
+    padding:8px 18px;font-size:13px;color:var(--muted)}
+  .pill b{color:var(--gold2)}
+  .rule{height:2px;width:120px;margin:30px auto 0;
+    background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+
+  /* ---------- toc ---------- */
+  section.block{padding:64px 0;border-top:1px solid var(--line)}
+  .eyebrow{color:var(--gold2);font-weight:700;font-size:13px;letter-spacing:.5px}
+  h2.title{font-size:34px;margin:6px 0 10px;font-weight:800}
+  .lead{color:var(--muted);max-width:760px;font-size:16px}
+
+  .toc{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:30px}
+  .toc a{display:flex;align-items:center;gap:14px;background:var(--panel);
+    border:1px solid var(--line);border-radius:14px;padding:14px 16px;transition:.15s;color:var(--fg)}
+  .toc a:hover{border-color:rgba(245,185,66,.4);transform:translateY(-2px)}
+  .toc .n{flex:0 0 auto;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+    font-weight:800;color:#0a0712;background:linear-gradient(180deg,var(--gold2),var(--gold))}
+  .toc .t{font-weight:700}
+  .toc .d{display:block;font-size:12px;color:var(--muted);font-weight:400}
+
+  /* ---------- chapter ---------- */
+  .chapter{padding:56px 0;border-top:1px solid var(--line)}
+  .chead{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+  .chead .num{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-weight:800;
+    font-size:20px;color:#0a0712;background:linear-gradient(180deg,var(--gold2),var(--gold));
+    box-shadow:0 8px 24px rgba(245,185,66,.25)}
+  .chead h3{font-size:26px;margin:0;font-weight:800}
+  .chead .ico{font-size:24px}
+  .shot{margin:20px 0;border:1px solid var(--line);border-radius:16px;overflow:hidden;
+    background:var(--panel);box-shadow:0 18px 50px rgba(0,0,0,.5)}
+  .shot img{display:block;width:100%}
+  .shot .cap{padding:10px 16px;font-size:12px;color:var(--muted);border-top:1px solid var(--line)}
+  .grid2{display:grid;grid-template-columns:1.1fr .9fr;gap:26px;align-items:start}
+  @media(max-width:820px){.grid2{grid-template-columns:1fr}.toc{grid-template-columns:1fr}.cover h1{font-size:44px}}
+  ol.steps{margin:0;padding:0;list-style:none;counter-reset:s}
+  ol.steps li{counter-increment:s;position:relative;padding:10px 42px 10px 0;border-bottom:1px dashed var(--line)}
+  ol.steps li:last-child{border-bottom:0}
+  ol.steps li::before{content:counter(s);position:absolute;right:0;top:9px;width:26px;height:26px;border-radius:8px;
+    display:grid;place-items:center;font-size:13px;font-weight:700;color:var(--brand2);
+    background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3)}
+  .note{margin-top:18px;background:linear-gradient(180deg,rgba(245,185,66,.10),rgba(245,185,66,.04));
+    border:1px solid rgba(245,185,66,.28);border-radius:14px;padding:14px 16px;font-size:14px}
+  .note b{color:var(--gold2)}
+  .tags{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
+  .tags span{font-size:12px;color:var(--muted);background:rgba(255,255,255,.04);
+    border:1px solid var(--line);border-radius:8px;padding:3px 10px}
+
+  footer{padding:50px 0 70px;border-top:1px solid var(--line);text-align:center;color:var(--muted)}
+  footer .big{font-size:20px;color:var(--gold2);font-weight:800;margin-bottom:6px}
+
+  /* ---------- print ---------- */
+  @media print{
+    body{background:#fff;color:#111;font-size:12px}
+    .cover{min-height:auto;padding:40px 0;background:#fff;page-break-after:always}
+    .cover h1{color:#1a1430;-webkit-text-fill-color:#1a1430}
+    .cover .sub,.eyebrow,.note b,.toc .n,footer .big{color:#9a6b00}
+    section.block,.chapter{border-color:#e5e5e5}
+    .chapter{page-break-inside:avoid}
+    .shot{box-shadow:none;border-color:#ddd}
+    .toc a,.shot,.note{background:#fafafa}
+    a{color:#3730a3}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<div class="cover">
+  <img class="logo" src="assets/logo.png" alt="سیمرغ‌کارا" />
+  <h1>سیمرغ‌کارا</h1>
+  <div class="sub">راهنمای جامع کاربری</div>
+  <p class="tag">سامانهٔ یکپارچهٔ حضور و غیاب، منابع انسانی، کارتابل و میز کار، مرخصی و مأموریت و حسابداری — برای سازمان‌های چندشرکتی</p>
+  <div class="rule"></div>
+  <div class="meta">
+    <span class="pill">نسخهٔ <b>تیر ۱۴۰۵</b></span>
+    <span class="pill">پلتفرم <b>چندمستأجری (Multi-tenant)</b></span>
+    <span class="pill">رابط کاربری <b>فارسی · راست‌چین · دارک</b></span>
+  </div>
+</div>
+
+<!-- ============ INTRO + TOC ============ -->
+<section class="block">
+  <div class="wrap">
+    <div class="eyebrow">معرفی</div>
+    <h2 class="title">سیمرغ‌کارا چیست؟</h2>
+    <p class="lead">
+      سیمرغ‌کارا یک سامانهٔ ابری برای مدیریت کامل سرمایهٔ انسانی سازمان شماست. از ثبت ورود و خروج با
+      دستگاه و تشخیص چهره گرفته تا گردش‌کار مرخصی، کارتابل سازمانی، میز کار تیمی، تقویم کاری و دفتر کل
+      حسابداری — همه در یک محیط یکپارچه و حرفه‌ای. هر شرکت دادهٔ کاملاً مجزا، آدرس ورود اختصاصی و سطوح
+      دسترسی مستقل خود را دارد.
+    </p>
+    <div class="tags">
+      <span>حضور و غیاب هوشمند</span><span>تشخیص چهره</span><span>گردش‌کار مرخصی چندمرحله‌ای</span>
+      <span>کارتابل و میز کار</span><span>تقویم و تعطیلات رسمی</span><span>سطوح دسترسی پیشرفته</span>
+      <span>ساختار هولدینگ/شرکت</span><span>دو تم روشن و تاریک</span>
+    </div>
+
+    <div class="eyebrow" style="margin-top:46px">فهرست مطالب</div>
+    <h2 class="title">در این راهنما چه می‌آموزید</h2>
+    <div class="toc">
+      <a href="#c1"><span class="n">۱</span><span class="t">ورود به سامانه<span class="d">آدرس اختصاصی شرکت و ورود با نام کاربری</span></span></a>
+      <a href="#c2"><span class="n">۲</span><span class="t">داشبورد مدیریتی<span class="d">نمای کلی حضور، مرخصی و کارها</span></span></a>
+      <a href="#c3"><span class="n">۳</span><span class="t">حضور و غیاب<span class="d">کارنامهٔ ماهانه و ثبت تردد</span></span></a>
+      <a href="#c4"><span class="n">۴</span><span class="t">تقویم کاری<span class="d">تعطیلات، مناسبت‌ها و کارها</span></span></a>
+      <a href="#c5"><span class="n">۵</span><span class="t">مرخصی و مأموریت<span class="d">ثبت درخواست و فرم کامل مأموریت</span></span></a>
+      <a href="#c6"><span class="n">۶</span><span class="t">کارتابل و میز کار<span class="d">کارهای من و وظایف تیمی</span></span></a>
+      <a href="#c7"><span class="n">۷</span><span class="t">اعضا و دسترسی‌ها<span class="d">تعریف افراد و تخصیص نقش</span></span></a>
+      <a href="#c8"><span class="n">۸</span><span class="t">نقش‌ها و مجوزها<span class="d">سطوح دسترسی دقیق</span></span></a>
+      <a href="#c9"><span class="n">۹</span><span class="t">زیرگروه‌ها و ساعت کاری گروهی<span class="d">ساختار سازمانی و شیفت گروه</span></span></a>
+      <a href="#c10"><span class="n">۱۰</span><span class="t">پروفایل من<span class="d">تصویر و تغییر رمز عبور</span></span></a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CHAPTERS ============ -->
+<div class="wrap">
+
+  <!-- 1 -->
+  <div class="chapter" id="c1">
+    <div class="chead"><div class="num">۱</div><span class="ico">🔐</span><h3>ورود به سامانه</h3></div>
+    <p class="lead">هر شرکت آدرس ورود اختصاصی خود را دارد؛ کارکنان فقط با «نام کاربری» و رمز عبور وارد می‌شوند و نیازی به وارد کردن ایمیل کامل نیست.</p>
+    <div class="shot"><img src="assets/02-company-login.jpg" alt="ورود اختصاصی شرکت" /><div class="cap">صفحهٔ ورود اختصاصی شرکت — نمایش نام و آدرس سازمان</div></div>
+    <div class="grid2">
+      <ol class="steps">
+        <li>آدرس اختصاصی شرکت خود را در مرورگر باز کنید (مثل <code dir="ltr">/c/&lt;نام‌شرکت&gt;</code>).</li>
+        <li>نام کاربری سازمانی و رمز عبور خود را وارد کنید.</li>
+        <li>برای اطمینان از درستی رمز، روی آیکن چشم بزنید تا رمز نمایش داده شود.</li>
+        <li>روی «ورود به سامانه» کلیک کنید تا به داشبورد منتقل شوید.</li>
+      </ol>
+      <div class="note"><b>نکته:</b> مدیران پلتفرم و هولدینگ از صفحهٔ ورود اصلی با ایمیل وارد می‌شوند؛ کارکنان شرکت از آدرس اختصاصی شرکت با نام کاربری.</div>
+    </div>
+  </div>
+
+  <!-- 2 -->
+  <div class="chapter" id="c2">
+    <div class="chead"><div class="num">۲</div><span class="ico">▣</span><h3>داشبورد مدیریتی</h3></div>
+    <p class="lead">با ورود، نمای کلی وضعیت شما نمایش داده می‌شود: کارکرد ماه، ماندهٔ مرخصی، درخواست‌های در جریان و کارهای نیازمند توجه.</p>
+    <div class="shot"><img src="assets/03-dashboard.jpg" alt="داشبورد" /><div class="cap">داشبورد — خلاصهٔ حضور، مرخصی و کارتابل در یک نگاه</div></div>
+    <div class="grid2">
+      <ol class="steps">
+        <li>کارت‌های بالا خلاصهٔ کارکرد ماه، ماندهٔ مرخصی و آخرین تردد را نشان می‌دهند.</li>
+        <li>بخش «کارکرد من» جزئیات حضور، تأخیر، اضافه‌کار و کسرکار شماست.</li>
+        <li>بخش «نیازمند توجه» میان‌بری به درخواست‌های منتظر تأیید و کارهای باز است.</li>
+      </ol>
+      <div class="note"><b>نکته:</b> از دکمهٔ ☀/☾ در پایین نوار کناری می‌توانید بین تم روشن و تاریک جابه‌جا شوید؛ تم تاریک پیش‌فرض است.</div>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="chapter" id="c3">
+    <div class="chead"><div class="num">۳</div><span class="ico">🕒</span><h3>حضور و غیاب</h3></div>
+    <p class="lead">کارنامهٔ ماهانهٔ تردد شما با محاسبهٔ خودکار کارکرد، تأخیر، کسرکار و اضافه‌کار (با ضریب ۱.۴ برای کار در تعطیلات).</p>
+    <div class="shot"><img src="assets/04-attendance.jpg" alt="حضور و غیاب" /><div class="cap">کارنامهٔ ماهانه — ترددها به‌ترتیب ورود ← خروج و وضعیت هر روز</div></div>
+    <div class="grid2">
+      <ol class="steps">
+        <li>ستون «ترددها» ورود و خروج هر روز را به‌ترتیب راست‌به‌چپ نشان می‌دهد.</li>
+        <li>برای ثبت دستی، روی روز(های) موردنظر کلیک کنید تا انتخاب شوند.</li>
+        <li>سپس راست‌کلیک کنید: «ثبت مرخصی»، «ثبت مأموریت» یا «ثبت تردد».</li>
+        <li>سطر «جمع ماه» در پایین، مجموع کارکرد و آمار ماه را نشان می‌دهد.</li>
+      </ol>
+      <div class="note"><b>نکته:</b> سقف تعداد تردد در ماه/هفته را فقط کارگزینی تعیین می‌کند. تشخیص چهره و دستگاه‌های انگشتی نیز از همین بخش مدیریت می‌شوند.</div>
+    </div>
+  </div>
+
+  <!-- 4 -->
+  <div class="chapter" id="c4">
+    <div class="chead"><div class="num">۴</div><span class="ico">📅</span><h3>تقویم کاری</h3></div>
+    <p class="lead">تقویم تعاملی با رنگ‌بندی روشن: امروز سبز، تعطیل رسمی قرمز، مناسبت زرد و روزهای کاری. کارهای میز کار و کارتابل نیز روی همان تقویم دیده می‌شوند.</p>
+    <div class="shot"><img src="assets/05-calendar.jpg" alt="تقویم کاری" /><div class="cap">تقویم کاری — تعطیلات رسمی، مناسبت‌ها و کارها در یک نما</div></div>
+    <div class="grid2">
+      <ol class="steps">
+        <li>نشانگر ماوس را روی هر روز نگه دارید تا کارها و مناسبت آن روز را ببینید.</li>
+        <li>روی یک کار دوبار کلیک کنید تا وضعیتش تغییر کند.</li>
+        <li>تعطیلات رسمی به‌صورت خودکار از منبع آنلاین و محاسبهٔ قمری دقیق به‌روزرسانی می‌شوند.</li>
+      </ol>
+      <div class="note"><b>نکته:</b> ساعت کاری پیش‌فرض، شیفت‌ها و تعطیلات اختصاصی شرکت از بخش «ساعت کاری و تعطیلات» قابل تنظیم است.</div>
+    </div>
+  </div>
+
+  <!-- 5 -->
+  <div class="chapter" id="c5">
+    <div class="chead"><div class="num">۵</div><span class="ico">🏖️</span><h3>مرخصی و مأموریت</h3></div>
+    <p class="lead">ثبت انواع مرخصی (روزانه و ساعتی) و مأموریت با فرم کامل، به‌همراه گردش‌کار تأیید چندمرحله‌ای و نمایش ماندهٔ استحقاقی.</p>
+    <div class="shot"><img src="assets/06-leave.jpg" alt="مرخصی و مأموریت" /><div class="cap">فرم درخواست — با انتخاب «مأموریت»، جزئیات کامل مأموریت باز می‌شود</div></div>
+    <div class="grid2">
+      <ol class="steps">
+        <li>نوع مرخصی را انتخاب کنید؛ راهنمای هر نوع زیر آن نمایش داده می‌شود.</li>
+        <li>برای مأموریت: شهر مبدأ/مقصد، وسیلهٔ رفت و برگشت، موضوع، پروژه و محل مراجعه را تکمیل کنید.</li>
+        <li>پس از ثبت، درخواست به کارتابل تأییدکننده (مدیر و سپس کارگزینی) ارسال می‌شود.</li>
+        <li>وضعیت درخواست‌های خود را در ستون «درخواست‌های من» دنبال کنید.</li>
+      </ol>
+      <div class="note"><b>نکته:</b> ماندهٔ مرخصی به‌صورت خودکار محاسبه و تعطیلات میانی کسر نمی‌شوند. حداکثر ۳ روز مرخصی منفی مجاز است.</div>
+    </div>
+  </div>
+
+  <!-- 6 -->
+  <div class="chapter" id="c6">
+    <div class="chead"><div class="num">۶</div><span class="ico">📥</span><h3>کارتابل و میز کار</h3></div>
+    <p class="lead">کارتابل من، صندوق ورودی کارهای ارجاع‌شده به شماست؛ میز کار، فضای تعریف و پیگیری وظایف تیمی با سطوح دسترسی است.</p>
+    <div class="shot"><img src="assets/07-kartabl.jpg" alt="کارتابل من" /><div class="cap">کارتابل من — کارها و درخواست‌های نیازمند اقدام</div></div>
+    <div class="shot"><img src="assets/08-tasks.jpg" alt="میز کار" /><div class="cap">میز کار — تعریف وظایف، ارجاع و پیگیری وضعیت تیم</div></div>
+    <div class="grid2">
+      <ol class="steps">
+        <li>کارهای ارجاع‌شده در «کارتابل من» جمع می‌شوند و قابل تغییر وضعیت‌اند.</li>
+        <li>در «میز کار» وظیفهٔ جدید بسازید و به اعضا یا زیرگروه‌ها ارجاع/انتقال دهید.</li>
+        <li>می‌توانید «پیام صرف» (بدون وظیفه) نیز به زیرگروه ارسال کنید.</li>
+      </ol>
+      <div class="note"><b>نکته:</b> عضو زیرگروه می‌تواند کار را فقط «انتقال» دهد؛ ارجاع و تخصیص در اختیار سطح دسترسی بالاتر است.</div>
+    </div>
+  </div>
+
+  <!-- 7 -->
+  <div class="chapter" id="c7">
+    <div class="chead"><div class="num">۷</div><span class="ico">👥</span><h3>اعضا و دسترسی‌ها</h3></div>
+    <p class="lead">تعریف کارکنان، تخصیص نقش و گروه، تنظیم اطلاعات استخدامی و ساعت کاری شخصی هر فرد.</p>
+    <div class="shot"><img src="assets/09-members.jpg" alt="اعضا و دسترسی‌ها" /><div class="cap">اعضا — تخصیص نقش‌ها، گروه‌ها و ساعت کاری به هر فرد</div></div>
+    <div class="grid2">
+      <ol class="steps">
+        <li>عضو جدید را اضافه و به یک یا چند نقش و زیرگروه متصل کنید.</li>
+        <li>ساعت کاری شخصی، تاریخ استخدام و محل خدمت هر فرد را تنظیم کنید.</li>
+        <li>منابع انسانی می‌تواند دسترسی‌های هر فرد را در محدودهٔ زیرگروه‌های خود ببیند و تنظیم کند.</li>
+      </ol>
+      <div class="note"><b>نکته:</b> اگر برای فردی ساعت کاری شخصی تعیین نشود، ساعت کاری «گروه» او اعمال می‌شود (فصل ۹).</div>
+    </div>
+  </div>
+
+  <!-- 8 -->
+  <div class="chapter" id="c8">
+    <div class="chead"><div class="num">۸</div><span class="ico">🔑</span><h3>نقش‌ها و مجوزها</h3></div>
+    <p class="lead">سطح دسترسی بر پایهٔ نقش‌هاست؛ هر نقش مجموعه‌ای از مجوزهای دقیق دارد و به افراد تخصیص می‌یابد.</p>
+    <div class="shot"><img src="assets/10-roles.jpg" alt="نقش‌ها و مجوزها" /><div class="cap">نقش‌ها — تعریف نقش و انتخاب مجوزهای دقیق</div></div>
+    <div class="grid2">
+      <ol class="steps">
+        <li>نقش جدید بسازید (مثل «کارگزینی») و مجوزهای لازم را برایش فعال کنید.</li>
+        <li>مجوزها شامل مدیریت اعضا، تأیید مرخصی، مدیریت حضور، تقویم و… هستند.</li>
+        <li>سپس نقش را از بخش «اعضا» به افراد موردنظر تخصیص دهید.</li>
+      </ol>
+      <div class="note"><b>نکته:</b> نقش «مدیر سامانه» همهٔ دسترسی‌ها را دارد و همیشه حداقل یک مدیر کامل در سامانه حفظ می‌شود.</div>
+    </div>
+  </div>
+
+  <!-- 9 -->
+  <div class="chapter" id="c9">
+    <div class="chead"><div class="num">۹</div><span class="ico">🗂</span><h3>زیرگروه‌ها و ساعت کاری گروهی</h3></div>
+    <p class="lead">ساختار سازمانی شرکت به‌صورت درختی تعریف می‌شود و هر زیرگروه می‌تواند «ساعت کاری اختصاصی» داشته باشد که اعضای آن به‌صورت خودکار آن را به ارث می‌برند.</p>
+    <div class="shot"><img src="assets/11-groups.jpg" alt="زیرگروه‌ها" /><div class="cap">زیرگروه‌ها — انتخاب ساعت کاری برای هر گروه</div></div>
+    <div class="grid2">
+      <ol class="steps">
+        <li>زیرگروه جدید بسازید و در صورت نیاز آن را زیرمجموعهٔ گروهی دیگر قرار دهید.</li>
+        <li>از منوی «ساعت کاری» روبه‌روی هر گروه، یک شیفت (مثل «شیفت عصر») انتخاب کنید.</li>
+        <li>هر فردی که به این گروه اضافه شود، همان ساعت کاری گروه برایش اعمال می‌شود.</li>
+      </ol>
+      <div class="note"><b>اولویت ساعت کاری:</b> ابتدا برنامهٔ <b>شخصی</b> فرد، سپس برنامهٔ <b>گروه</b>، و در نهایت برنامهٔ <b>پیش‌فرض شرکت</b>.</div>
+    </div>
+  </div>
+
+  <!-- 10 -->
+  <div class="chapter" id="c10">
+    <div class="chead"><div class="num">۱۰</div><span class="ico">👤</span><h3>پروفایل من</h3></div>
+    <p class="lead">هر کاربر می‌تواند تصویر پروفایل خود را بگذارد و رمز عبور خود را تغییر دهد.</p>
+    <div class="shot"><img src="assets/12-profile.jpg" alt="پروفایل من" /><div class="cap">پروفایل من — آواتار و تغییر رمز عبور</div></div>
+    <div class="grid2">
+      <ol class="steps">
+        <li>«انتخاب تصویر» را بزنید؛ تصویر به‌صورت مربع ۲۵۶ پیکسل ذخیره می‌شود، سپس «ذخیره تصویر».</li>
+        <li>برای تغییر رمز: رمز فعلی، رمز جدید و تکرار آن را وارد کنید.</li>
+        <li>برای اطمینان، گزینهٔ «نمایش رمزها» را فعال کنید تا مقادیر واردشده دیده شوند.</li>
+      </ol>
+      <div class="note"><b>نکته:</b> آواتار شما در نوار کناری و کنار نامتان نمایش داده می‌شود.</div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="big">سیمرغ‌کارا</div>
+    سامانهٔ هوشمند حضور و غیاب و مدیریت سازمان · راهنمای جامع کاربری
+    <div style="margin-top:8px;font-size:12px;opacity:.7">برای چاپ یا تهیهٔ PDF از همین صفحه از گزینهٔ Print مرورگر استفاده کنید (Ctrl/Cmd + P).</div>
+  </div>
+</footer>
+
+</body>
+</html>
