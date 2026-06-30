@@ -32,6 +32,15 @@ async function main() {
         ADD COLUMN IF NOT EXISTS is_holding_admin boolean NOT NULL DEFAULT false;
       ALTER TABLE platform.user_accounts
         ADD COLUMN IF NOT EXISTS holding_id uuid REFERENCES platform.holdings(id) ON DELETE CASCADE;
+      -- Per-company login domain + company-scoped username
+      ALTER TABLE platform.companies
+        ADD COLUMN IF NOT EXISTS domain text;
+      ALTER TABLE platform.user_accounts
+        ADD COLUMN IF NOT EXISTS username citext;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_companies_domain
+        ON platform.companies (domain) WHERE domain IS NOT NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_user_username_company
+        ON platform.user_accounts (company_id, username) WHERE username IS NOT NULL;
     `);
 
     const tenants = await sql<{ schema_name: string }[]>`
@@ -58,6 +67,10 @@ async function main() {
       // HR / Calendar module (stage 1)
       await sql.unsafe(`
         ALTER TABLE "${schema_name}".members
+          ADD COLUMN IF NOT EXISTS schedule_id uuid;
+        ALTER TABLE "${schema_name}".members
+          ADD COLUMN IF NOT EXISTS avatar_url text;
+        ALTER TABLE "${schema_name}".groups
           ADD COLUMN IF NOT EXISTS schedule_id uuid;
 
         CREATE TABLE IF NOT EXISTS "${schema_name}".work_schedules (

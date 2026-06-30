@@ -77,13 +77,25 @@ export async function loadMonthSheet(
   const todayIso = isoDate(new Date());
 
   return withTenant(schema, async (tx) => {
-    // member's schedule, falling back to the company default
+    // Effective schedule, in priority order:
+    //   1) the member's own schedule, then
+    //   2) the schedule of a group they belong to (group-wide work hours), then
+    //   3) the company default schedule.
     const [sched] = await tx<
       { name: string; work_days: number[]; start_time: string; end_time: string }[]
     >`
       SELECT ws.name, ws.work_days, ws.start_time, ws.end_time
       FROM work_schedules ws
       WHERE ws.id = (SELECT schedule_id FROM members WHERE id = ${memberId})
+      UNION ALL
+      SELECT ws.name, ws.work_days, ws.start_time, ws.end_time
+      FROM work_schedules ws
+      WHERE ws.id = (
+        SELECT g.schedule_id FROM member_groups mg
+        JOIN groups g ON g.id = mg.group_id
+        WHERE mg.member_id = ${memberId} AND g.schedule_id IS NOT NULL
+        LIMIT 1
+      )
       UNION ALL
       SELECT ws.name, ws.work_days, ws.start_time, ws.end_time
       FROM work_schedules ws WHERE ws.is_default = true

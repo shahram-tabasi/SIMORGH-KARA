@@ -154,6 +154,32 @@ export async function setMemberScheduleAction(formData: FormData) {
   rev(slug, "/members");
 }
 
+/**
+ * Assign (or clear) a *group's* work schedule. Every member of the group
+ * inherits these hours unless they have a personal schedule of their own.
+ */
+export async function setGroupScheduleAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "groups.manage");
+  const groupId = String(formData.get("groupId"));
+  const scheduleId = String(formData.get("scheduleId") || "");
+
+  await withTenant(ctx.company.schema, async (tx) => {
+    if (scheduleId) {
+      const [s] = await tx<{ id: string }[]>`
+        SELECT id FROM work_schedules WHERE id = ${scheduleId}
+      `;
+      if (!s) return;
+      await tx`UPDATE groups SET schedule_id = ${scheduleId} WHERE id = ${groupId}`;
+    } else {
+      await tx`UPDATE groups SET schedule_id = NULL WHERE id = ${groupId}`;
+    }
+  });
+  rev(slug, "/groups");
+  revalidatePath(`/app/${slug}/attendance`);
+}
+
 /** Set a member's employment profile (hire date, site, daily working minutes). */
 export async function setMemberEmploymentAction(formData: FormData) {
   const slug = String(formData.get("slug"));

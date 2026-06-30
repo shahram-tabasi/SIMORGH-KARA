@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS platform.companies (
   name         text NOT NULL,
   slug         text NOT NULL UNIQUE,
   schema_name  text NOT NULL UNIQUE,
+  domain       text UNIQUE,                  -- per-company login domain/subdomain
   holding_id   uuid REFERENCES platform.holdings(id) ON DELETE SET NULL,
   status       text NOT NULL DEFAULT 'active'
                  CHECK (status IN ('active','suspended','pending')),
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS platform.companies (
 CREATE TABLE IF NOT EXISTS platform.user_accounts (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email              citext NOT NULL UNIQUE,
+  username           citext,                  -- company-scoped login name (unique per company)
   password_hash      text NOT NULL,
   full_name          text NOT NULL,
   is_platform_admin  boolean NOT NULL DEFAULT false,
@@ -74,6 +76,7 @@ CREATE TABLE IF NOT EXISTS members (
   status      text NOT NULL DEFAULT 'active'
                 CHECK (status IN ('active','disabled')),
   schedule_id uuid,                          -- work_schedules.id (HR module)
+  avatar_url  text,                          -- profile photo (data URL or link)
   created_at  timestamptz NOT NULL DEFAULT now(),
   UNIQUE (account_id)
 );
@@ -102,10 +105,11 @@ CREATE TABLE IF NOT EXISTS member_roles (
 
 -- Sub-groups / departments — self-referencing tree.
 CREATE TABLE IF NOT EXISTS groups (
-  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name       text NOT NULL,
-  parent_id  uuid REFERENCES groups(id) ON DELETE CASCADE,
-  created_at timestamptz NOT NULL DEFAULT now()
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        text NOT NULL,
+  parent_id   uuid REFERENCES groups(id) ON DELETE CASCADE,
+  schedule_id uuid,                          -- group-wide work schedule (members inherit it)
+  created_at  timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS member_groups (

@@ -1,4 +1,5 @@
 import { requireTenant } from "@/lib/session";
+import { withTenant } from "@/lib/db";
 import { Shell, type NavGroup, type NavItem } from "@/components/Shell";
 import { ReminderWatcher } from "@/components/ReminderWatcher";
 
@@ -11,6 +12,12 @@ export default async function TenantLayout({
 }) {
   const ctx = await requireTenant(params.slug);
   const base = `/app/${params.slug}`;
+  const avatarUrl = await withTenant(ctx.company.schema, async (tx) => {
+    const [m] = await tx<{ avatar_url: string | null }[]>`
+      SELECT avatar_url FROM members WHERE id = ${ctx.member.memberId}
+    `;
+    return m?.avatar_url ?? null;
+  });
   const can = (k: string) => ctx.member.permissions.has(k);
   const push = (cond: boolean, item: NavItem) => (cond ? [item] : []);
 
@@ -75,6 +82,10 @@ export default async function TenantLayout({
         ...push(can("ledger.view") || can("ledger.manage"), { href: `${base}/ledger`, label: "دفتر کل", icon: "📒" }),
       ],
     },
+    {
+      title: "حساب کاربری",
+      items: [{ href: `${base}/profile`, label: "پروفایل من", icon: "👤" }],
+    },
   ].filter((g) => g.items.length > 0);
 
   return (
@@ -84,6 +95,8 @@ export default async function TenantLayout({
       userName={ctx.member.fullName}
       groups={groups}
       slug={params.slug}
+      avatarUrl={avatarUrl}
+      profileHref={`${base}/profile`}
     >
       {children}
       <ReminderWatcher slug={params.slug} />

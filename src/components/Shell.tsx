@@ -11,6 +11,8 @@ export function Shell({
   groups,
   userName,
   slug,
+  avatarUrl,
+  profileHref,
   children,
 }: {
   brand: string;
@@ -18,6 +20,8 @@ export function Shell({
   groups: NavGroup[];
   userName: string;
   slug?: string;
+  avatarUrl?: string | null;
+  profileHref?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -42,10 +46,20 @@ export function Shell({
 
         <div className="border-t border-slate-200 p-3 dark:border-white/10">
           <div className="mb-2 flex items-center gap-2 px-1">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-500 dark:bg-white/10 dark:text-slate-300">
-              {userName.trim().slice(0, 1)}
-            </div>
-            <div className="truncate text-xs text-slate-600 dark:text-slate-300">{userName}</div>
+            <Link
+              href={profileHref ?? "#"}
+              className={`flex items-center gap-2 ${profileHref ? "transition hover:opacity-80" : "pointer-events-none"}`}
+            >
+              <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-xs text-slate-500 dark:bg-white/10 dark:text-slate-300">
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  userName.trim().slice(0, 1)
+                )}
+              </span>
+              <span className="truncate text-xs text-slate-600 dark:text-slate-300">{userName}</span>
+            </Link>
             <div className="ms-auto">
               <ThemeToggle />
             </div>

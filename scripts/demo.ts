@@ -18,9 +18,9 @@ import { officialOccasionsFor } from "../src/lib/iran-events";
 const CREDS = {
   superadmin: { email: process.env.SUPERADMIN_EMAIL ?? "admin@simorgh.local", password: process.env.SUPERADMIN_PASSWORD ?? "ChangeMe123!" },
   holding: { email: "holding@demo.local", password: "demo1234", name: "مدیر هولدینگ نمونه" },
-  manager: { email: "manager@demo.local", password: "demo1234", name: "رضا آهنگرزاده" },
-  hr: { email: "hr@demo.local", password: "demo1234", name: "مریم کارگزین" },
-  employee: { email: "employee@demo.local", password: "demo1234", name: "علی آهنگر" },
+  manager: { email: "manager@demo.local", password: "demo1234", name: "رضا آهنگرزاده", username: "reza" },
+  hr: { email: "hr@demo.local", password: "demo1234", name: "مریم کارگزین", username: "maryam" },
+  employee: { email: "employee@demo.local", password: "demo1234", name: "علی آهنگر", username: "ali" },
 };
 
 async function main() {
@@ -91,23 +91,23 @@ async function main() {
     }
 
     const [company] = await sql<{ id: string }[]>`
-      INSERT INTO platform.companies (name, slug, schema_name, holding_id, max_users)
-      VALUES ('بخش آهنگری', ${slug}, ${schema}, ${holding.id}, 50) RETURNING id
+      INSERT INTO platform.companies (name, slug, schema_name, domain, holding_id, max_users)
+      VALUES ('بخش آهنگری', ${slug}, ${schema}, 'ahangari.simorghkara.ir', ${holding.id}, 50) RETURNING id
     `;
 
     console.log("→ provisioning tenant schema:", schema);
     await sql.unsafe(tenantDDL(schema));
 
-    // Section accounts
+    // Section accounts (each with a company-scoped username for /c/<slug> login)
     const mgr = await sql<{ id: string }[]>`
-      INSERT INTO platform.user_accounts (email, password_hash, full_name, company_id)
-      VALUES (${CREDS.manager.email}, ${await hash(CREDS.manager.password)}, ${CREDS.manager.name}, ${company.id}) RETURNING id`;
+      INSERT INTO platform.user_accounts (email, username, password_hash, full_name, company_id)
+      VALUES (${CREDS.manager.email}, ${CREDS.manager.username}, ${await hash(CREDS.manager.password)}, ${CREDS.manager.name}, ${company.id}) RETURNING id`;
     const hr = await sql<{ id: string }[]>`
-      INSERT INTO platform.user_accounts (email, password_hash, full_name, company_id)
-      VALUES (${CREDS.hr.email}, ${await hash(CREDS.hr.password)}, ${CREDS.hr.name}, ${company.id}) RETURNING id`;
+      INSERT INTO platform.user_accounts (email, username, password_hash, full_name, company_id)
+      VALUES (${CREDS.hr.email}, ${CREDS.hr.username}, ${await hash(CREDS.hr.password)}, ${CREDS.hr.name}, ${company.id}) RETURNING id`;
     const emp = await sql<{ id: string }[]>`
-      INSERT INTO platform.user_accounts (email, password_hash, full_name, company_id)
-      VALUES (${CREDS.employee.email}, ${await hash(CREDS.employee.password)}, ${CREDS.employee.name}, ${company.id}) RETURNING id`;
+      INSERT INTO platform.user_accounts (email, username, password_hash, full_name, company_id)
+      VALUES (${CREDS.employee.email}, ${CREDS.employee.username}, ${await hash(CREDS.employee.password)}, ${CREDS.employee.name}, ${company.id}) RETURNING id`;
 
     const today = todayJalali();
     const iso = (d: number) => isoDate(toGregorian(today.jy, today.jm, d));
