@@ -237,6 +237,68 @@ export async function toggleMemberGroupAction(formData: FormData) {
   rev(slug, "/members");
 }
 
+/** Add a member to a group (managed inline from the groups page). */
+export async function addGroupMemberAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "groups.manage");
+  const groupId = String(formData.get("groupId"));
+  const memberId = String(formData.get("memberId"));
+  if (!memberId) return;
+  await withTenant(ctx.company.schema, async (tx) => {
+    await tx`
+      INSERT INTO member_groups (member_id, group_id) VALUES (${memberId}, ${groupId})
+      ON CONFLICT DO NOTHING
+    `;
+  });
+  rev(slug, "/groups");
+  rev(slug, "/members");
+}
+
+/** Remove a member from a group; if they were the manager, clear that too. */
+export async function removeGroupMemberAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "groups.manage");
+  const groupId = String(formData.get("groupId"));
+  const memberId = String(formData.get("memberId"));
+  await withTenant(ctx.company.schema, async (tx) => {
+    await tx`
+      DELETE FROM member_groups WHERE member_id = ${memberId} AND group_id = ${groupId}
+    `;
+    await tx`
+      UPDATE groups SET manager_id = NULL
+      WHERE id = ${groupId} AND manager_id = ${memberId}
+    `;
+  });
+  rev(slug, "/groups");
+  rev(slug, "/members");
+}
+
+/** Set (or clear) a group's manager. The manager is also made a member. */
+export async function setGroupManagerAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "groups.manage");
+  const groupId = String(formData.get("groupId"));
+  const memberId = String(formData.get("memberId") || "");
+  await withTenant(ctx.company.schema, async (tx) => {
+    if (memberId) {
+      // Guard against a stale/foreign member id.
+      const [m] = await tx<{ id: string }[]>`SELECT id FROM members WHERE id = ${memberId}`;
+      if (!m) return;
+      await tx`
+        INSERT INTO member_groups (member_id, group_id) VALUES (${memberId}, ${groupId})
+        ON CONFLICT DO NOTHING
+      `;
+      await tx`UPDATE groups SET manager_id = ${memberId} WHERE id = ${groupId}`;
+    } else {
+      await tx`UPDATE groups SET manager_id = NULL WHERE id = ${groupId}`;
+    }
+  });
+  rev(slug, "/groups");
+}
+
 /* -------------------------------- roles --------------------------------- */
 
 export async function createRoleAction(

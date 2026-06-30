@@ -72,6 +72,9 @@ async function main() {
           ADD COLUMN IF NOT EXISTS avatar_url text;
         ALTER TABLE "${schema_name}".groups
           ADD COLUMN IF NOT EXISTS schedule_id uuid;
+        ALTER TABLE "${schema_name}".groups
+          ADD COLUMN IF NOT EXISTS manager_id uuid
+          REFERENCES "${schema_name}".members(id) ON DELETE SET NULL;
 
         CREATE TABLE IF NOT EXISTS "${schema_name}".work_schedules (
           id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

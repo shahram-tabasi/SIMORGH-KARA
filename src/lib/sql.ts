@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS groups (
   name        text NOT NULL,
   parent_id   uuid REFERENCES groups(id) ON DELETE CASCADE,
   schedule_id uuid,                          -- group-wide work schedule (members inherit it)
+  manager_id  uuid REFERENCES members(id) ON DELETE SET NULL,  -- the group's manager (مدیر بخش)
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
