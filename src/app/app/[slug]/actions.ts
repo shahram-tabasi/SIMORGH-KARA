@@ -180,6 +180,50 @@ export async function setGroupScheduleAction(formData: FormData) {
   revalidatePath(`/app/${slug}/attendance`);
 }
 
+export interface UsernameState {
+  error?: string;
+  ok?: string;
+}
+
+/** HR/manager sets a member's company-scoped login username (for /c/<slug>). */
+export async function setMemberUsernameAction(
+  _prev: UsernameState,
+  formData: FormData
+): Promise<UsernameState> {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "members.manage");
+  const memberId = String(formData.get("memberId"));
+  const username = String(formData.get("username") || "").trim();
+
+  if (username && !/^[a-zA-Z0-9._-]{3,32}$/.test(username))
+    return { error: "نام کاربری ۳ تا ۳۲ نویسهٔ انگلیسی، عدد یا . _ - باشد." };
+
+  const accountId = await withTenant(ctx.company.schema, async (tx) => {
+    const [m] = await tx<{ account_id: string }[]>`
+      SELECT account_id FROM members WHERE id = ${memberId}
+    `;
+    return m?.account_id ?? null;
+  });
+  if (!accountId) return { error: "عضو یافت نشد." };
+
+  if (username) {
+    const [dup] = await sql<{ id: string }[]>`
+      SELECT id FROM platform.user_accounts
+      WHERE company_id = ${ctx.company.id} AND username = ${username}
+        AND id <> ${accountId}
+    `;
+    if (dup) return { error: "این نام کاربری قبلاً استفاده شده است." };
+  }
+
+  await sql`
+    UPDATE platform.user_accounts SET username = ${username || null}
+    WHERE id = ${accountId}
+  `;
+  revalidatePath(`/app/${slug}/members`);
+  return { ok: username ? "نام کاربری ذخیره شد." : "نام کاربری حذف شد." };
+}
+
 /** Set a member's employment profile (hire date, site, daily working minutes). */
 export async function setMemberEmploymentAction(formData: FormData) {
   const slug = String(formData.get("slug"));

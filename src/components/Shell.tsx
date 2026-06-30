@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SideNav, type NavGroup, type NavItem } from "./SideNav";
 import { NotificationBell } from "./NotificationBell";
 import { ThemeToggle } from "./ThemeToggle";
+import { logoutAction } from "@/app/logout/actions";
 
 export type { NavItem, NavGroup };
 
@@ -64,13 +65,15 @@ export function Shell({
               <ThemeToggle />
             </div>
           </div>
-          <Link
-            href="/logout"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
-          >
-            <span>↩</span>
-            <span>خروج</span>
-          </Link>
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+            >
+              <span>↩</span>
+              <span>خروج</span>
+            </button>
+          </form>
         </div>
       </aside>
 

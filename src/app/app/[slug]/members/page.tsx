@@ -5,6 +5,7 @@ import { ToggleForm } from "@/components/ToggleForm";
 import { MemberForm } from "./MemberForm";
 import { ScheduleSelect } from "./ScheduleSelect";
 import { EmploymentForm } from "./EmploymentForm";
+import { UsernameField } from "./UsernameField";
 import { toggleMemberRoleAction, toggleMemberGroupAction } from "../actions";
 import { toJalali } from "@/lib/jalali";
 
@@ -14,13 +15,14 @@ interface MemberRow {
   title: string | null;
   status: string;
   email: string;
+  username: string | null;
   schedule_id: string | null;
 }
 
 async function loadData(schema: string) {
   return withTenant(schema, async (tx) => {
     const members = await tx<MemberRow[]>`
-      SELECT m.id, m.full_name, m.title, m.status, m.schedule_id, ua.email
+      SELECT m.id, m.full_name, m.title, m.status, m.schedule_id, ua.email, ua.username
       FROM members m
       JOIN platform.user_accounts ua ON ua.id = m.account_id
       ORDER BY m.created_at
@@ -163,6 +165,19 @@ export default async function MembersPage({
                     )
                   )}
                 </div>
+              </div>
+            )}
+
+            {canManage && (
+              <div className="mt-4">
+                <div className="mb-1.5 text-xs font-medium text-slate-500">
+                  نام کاربری ورود (برای آدرس اختصاصی شرکت)
+                </div>
+                <UsernameField
+                  slug={params.slug}
+                  memberId={m.id}
+                  current={m.username}
+                />
               </div>
             )}
 
