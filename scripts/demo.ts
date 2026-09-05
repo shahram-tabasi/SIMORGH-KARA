@@ -8,6 +8,8 @@ import postgres from "postgres";
 import bcrypt from "bcryptjs";
 import { PLATFORM_DDL, tenantDDL } from "../src/lib/sql";
 import { DEFAULT_ROLES, ALL_PERMISSIONS } from "../src/lib/rbac";
+import { DEFAULT_ACCOUNTS } from "../src/lib/coa";
+import { ALL_MODULES } from "../src/lib/modules";
 import { DEFAULT_LEAVE_TYPES } from "../src/lib/leave-types";
 import { schemaNameFromSlug } from "../src/lib/utils";
 import { todayJalali, toGregorian, isoDate, jalaliMonthLength } from "../src/lib/jalali";
@@ -48,8 +50,10 @@ async function main() {
 
     // Holding + holding admin
     const [holding] = await sql<{ id: string }[]>`
-      INSERT INTO platform.holdings (name, slug) VALUES ('هولدینگ صنعتی نمونه', 'holding-demo')
-      ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id
+      INSERT INTO platform.holdings (name, slug, modules)
+      VALUES ('هولدینگ صنعتی نمونه', 'holding-demo', ${ALL_MODULES})
+      ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, modules = EXCLUDED.modules
+      RETURNING id
     `;
     await sql`
       INSERT INTO platform.user_accounts (email, password_hash, full_name, is_holding_admin, holding_id)
@@ -91,8 +95,10 @@ async function main() {
     }
 
     const [company] = await sql<{ id: string }[]>`
-      INSERT INTO platform.companies (name, slug, schema_name, domain, holding_id, max_users)
-      VALUES ('بخش آهنگری', ${slug}, ${schema}, 'ahangari.simorghkara.ir', ${holding.id}, 50) RETURNING id
+      INSERT INTO platform.companies (name, slug, schema_name, domain, holding_id, max_users, modules)
+      VALUES ('بخش آهنگری', ${slug}, ${schema}, 'ahangari.simorghkara.ir', ${holding.id}, 50,
+              ${ALL_MODULES})
+      RETURNING id
     `;
 
     console.log("→ provisioning tenant schema:", schema);
@@ -186,7 +192,7 @@ async function main() {
       const mgrId = await addMember(mgr[0].id, CREDS.manager.name, "مدیر بخش", "مدیر سامانه");
       await tx`INSERT INTO member_roles (member_id, role_id)
                SELECT ${mgrId}, id FROM roles WHERE name='کارگزینی' ON CONFLICT DO NOTHING`; // manager can also act as HR for the demo
-      await addMember(hr[0].id, CREDS.hr.name, "مسئول کارگزینی", "کارگزینی");
+      const hrId = await addMember(hr[0].id, CREDS.hr.name, "مسئول کارگزینی", "کارگزینی");
       const empId = await addMember(emp[0].id, CREDS.employee.name, "آهنگر", "کاربر");
 
       // Sample attendance for the employee (a normal day + a late day)
@@ -233,6 +239,112 @@ async function main() {
         INSERT INTO work_tasks (title, code, body, priority, due_date, created_by)
         VALUES ('بازرسی ایمنی کوره', 'SAFE-9', 'بازرسی فوری ایمنی', 'forced', ${iso(d2)}, ${mgrId}) RETURNING id`;
       await tx`INSERT INTO work_task_assignees (task_id, member_id) VALUES (${wt2.id}, ${empId})`;
+
+      /* ───────────────── مالی: سال مالی، کدینگ و یک سند قطعی ──────────── */
+      const fyStart = isoDate(toGregorian(today.jy, 1, 1));
+      const fyEnd = isoDate(toGregorian(today.jy, 12, jalaliMonthLength(today.jy, 12)));
+      await tx`
+        INSERT INTO fiscal_years (title, start_date, end_date, is_active)
+        VALUES (${`سال مالی ${today.jy}`}, ${fyStart}, ${fyEnd}, true)`;
+      const accountByCode = new Map<string, string>();
+      for (const g of DEFAULT_ACCOUNTS) {
+        const [parent] = await tx<{ id: string }[]>`
+          INSERT INTO ledger_accounts (code, name, type, level, is_group)
+          VALUES (${g.code}, ${g.name}, ${g.type}, 1, true) RETURNING id`;
+        accountByCode.set(g.code, parent.id);
+        for (const c of g.children) {
+          const [child] = await tx<{ id: string }[]>`
+            INSERT INTO ledger_accounts (code, name, type, level, is_group, parent_id)
+            VALUES (${c.code}, ${c.name}, ${g.type}, 2, false, ${parent.id}) RETURNING id`;
+          accountByCode.set(c.code, child.id);
+        }
+      }
+      await tx`
+        INSERT INTO parties (code, name, kind, phone)
+        VALUES ('S-101', 'فولاد گستر پارس', 'supplier', '02133445566'),
+               ('C-201', 'صنایع ماشین‌سازی آریا', 'customer', '02144556677')`;
+      await tx`INSERT INTO cost_centers (code, name) VALUES ('CC-10', 'کارگاه آهنگری')`;
+      // سند افتتاحیه: آوردهٔ نقدی سرمایه
+      const [opening] = await tx<{ id: string }[]>`
+        INSERT INTO ledger_entries (number, entry_date, description, created_by, status, posted_by, posted_at)
+        VALUES (1, ${iso(1)}, 'سند افتتاحیه — آوردهٔ نقدی سرمایه', ${mgrId}, 'posted', ${mgrId}, now())
+        RETURNING id`;
+      await tx`
+        INSERT INTO ledger_lines (entry_id, account_id, debit, credit, description, sort_order)
+        VALUES (${opening.id}, ${accountByCode.get('102') ?? null}, 500000000, 0, 'واریز به حساب بانکی', 0),
+               (${opening.id}, ${accountByCode.get('401') ?? null}, 0, 500000000, 'سرمایهٔ اولیه', 1)`;
+
+      /* ─────────── انبار: انبار، کالا و یک رسید ورود تأییدشده ─────────── */
+      const [wh] = await tx<{ id: string }[]>`
+        INSERT INTO warehouses (code, name, location, manager_id)
+        VALUES ('W1', 'انبار مرکزی', 'ضلع شمالی سالن', ${empId}) RETURNING id`;
+      const [cat] = await tx<{ id: string }[]>`
+        INSERT INTO item_categories (name) VALUES ('مواد اولیه') RETURNING id`;
+      await tx`INSERT INTO item_categories (name) VALUES ('ایمنی و HSE'), ('قطعات یدکی')`;
+      const [steel] = await tx<{ id: string }[]>`
+        INSERT INTO items (code, name, category_id, unit, min_stock, last_price, account_id)
+        VALUES ('IT-1001', 'شمش فولادی ST37', ${cat.id}, 'کیلوگرم', 500, 480000,
+                ${accountByCode.get('104') ?? null}) RETURNING id`;
+      const [glove] = await tx<{ id: string }[]>`
+        INSERT INTO items (code, name, unit, min_stock, last_price)
+        VALUES ('IT-2001', 'دستکش نسوز', 'جفت', 20, 950000) RETURNING id`;
+      const [rcpt] = await tx<{ id: string }[]>`
+        INSERT INTO stock_docs (number, kind, doc_date, warehouse_id, note, status,
+                                created_by, approved_by, approved_at)
+        VALUES (1, 'receipt', ${iso(d1)}, ${wh.id}, 'خرید مواد اولیهٔ ابتدای ماه',
+                'approved', ${mgrId}, ${mgrId}, now()) RETURNING id`;
+      await tx`
+        INSERT INTO stock_doc_lines (doc_id, item_id, qty, unit_price, sort_order)
+        VALUES (${rcpt.id}, ${steel.id}, 1200, 480000, 0),
+               (${rcpt.id}, ${glove.id}, 15, 950000, 1)`;
+      // یک درخواست کالای در انتظار تأیید تا گردش‌کار انبار دیده شود
+      const [stockReq] = await tx<{ id: string }[]>`
+        INSERT INTO stock_requests (number, requester_id, warehouse_id, needed_date, note)
+        VALUES (1, ${empId}, ${wh.id}, ${iso(lv1)}, 'برای سفارش کارگاه') RETURNING id`;
+      await tx`
+        INSERT INTO stock_request_lines (request_id, item_id, qty)
+        VALUES (${stockReq.id}, ${steel.id}, 300)`;
+
+      /* ─────────── HRC: نقشه، ناحیه، ساعت هوشمند، تیم و قرائت ─────────── */
+      await tx`INSERT INTO hrc_map (id, title) VALUES (1, 'نقشهٔ سایت آهنگری') ON CONFLICT DO NOTHING`;
+      await tx`INSERT INTO hrc_thresholds (id) VALUES (1) ON CONFLICT DO NOTHING`;
+      const [zone] = await tx<{ id: string }[]>`
+        INSERT INTO hrc_zones (name, kind, color, coord_mode, polygon, alert_on_enter, note)
+        VALUES ('سالن کوره', 'hazard', '#ef4444', 'plan',
+                ${tx.json([[20, 20], [60, 20], [60, 55], [20, 55]] as never)}, true,
+                'دمای بالا — ورود با تجهیزات کامل') RETURNING id`;
+      await tx`
+        INSERT INTO hrc_zones (name, kind, color, coord_mode, polygon)
+        VALUES ('محوطهٔ امن / نقطهٔ تجمع', 'muster', '#22c55e', 'plan',
+                ${tx.json([[68, 62], [92, 62], [92, 88], [68, 88]] as never)})`;
+      const [team] = await tx<{ id: string }[]>`
+        INSERT INTO hrc_teams (name, kind, phone, radio_channel, base_location)
+        VALUES ('تیم امداد شیفت روز', 'medical', '09120000000', 'CH-3', 'درمانگاه سایت')
+        RETURNING id`;
+      await tx`INSERT INTO hrc_team_members (team_id, member_id, team_role)
+               VALUES (${team.id}, ${hrId}, 'سرپرست تیم')`;
+      const [watch] = await tx<{ id: string }[]>`
+        INSERT INTO hrc_devices (serial, token, model, kind, member_id, battery, last_seen)
+        VALUES ('SK-W-1001', 'hrc_demo_token_ali', 'SimorghWatch S1', 'watch', ${empId}, 76, now())
+        RETURNING id`;
+      // یک قرائت سالم و یک قرائت هشداردار داخل سالن کوره
+      await tx`
+        INSERT INTO hrc_readings (member_id, device_id, recorded_at, heart_rate, spo2,
+                                  body_temp, steps, battery, motion, x, y, source, zone_id)
+        VALUES (${empId}, ${watch.id}, now() - interval '25 minutes', 74, 98, 36.6, 3120, 80,
+                'walking', 35, 40, 'beacon', ${zone.id})`;
+      const [hot] = await tx<{ id: string }[]>`
+        INSERT INTO hrc_readings (member_id, device_id, recorded_at, heart_rate, spo2,
+                                  body_temp, steps, battery, motion, x, y, source, zone_id)
+        VALUES (${empId}, ${watch.id}, now() - interval '3 minutes', 148, 94, 38.9, 4980, 76,
+                'still', 42, 46, 'beacon', ${zone.id})
+        RETURNING id`;
+      await tx`
+        INSERT INTO hrc_alerts (member_id, device_id, reading_id, kind, severity, message, zone_id)
+        VALUES (${empId}, ${watch.id}, ${hot.id}, 'temp_high', 'critical',
+                'دمای بدن ۳۸.۹ بالاتر از حد مجاز (۳۸.۵) است.', ${zone.id}),
+               (${empId}, ${watch.id}, ${hot.id}, 'heart_high', 'warn',
+                'ضربان قلب ۱۴۸ بالاتر از حد مجاز (۱۴۰) است.', ${zone.id})`;
     });
 
     console.log("✔ Demo ready.");
@@ -248,7 +360,9 @@ function printCreds() {
   console.log("مدیر هولدینگ     : ", CREDS.holding.email, "/ demo1234  → /holding");
   console.log("مدیر بخش آهنگری  : ", CREDS.manager.email, "/ demo1234  → /app/aahangari-demo (کارتابل = درخواست مرخصی منتظر تأیید)");
   console.log("مسئول کارگزینی   : ", CREDS.hr.email, "/ demo1234");
-  console.log("کارمند (آهنگر)   : ", CREDS.employee.email, "/ demo1234  → مرخصی، حضور، دستیار");
+  console.log("کارمند (آهنگر)   : ", CREDS.employee.email, "/ demo1234  → مرخصی، حضور، دستیار، ساعت هوشمند HRC");
+  console.log("پنل‌های فعال دمو : سازمان، منابع انسانی، مالی، انبار، HRC، API");
+  console.log("توکن ساعت دمو    :  hrc_demo_token_ali  →  POST /api/aahangari-demo/hrc/ingest");
   console.log("───────────────────────────────────────────────────");
 }
 
