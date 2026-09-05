@@ -7,6 +7,7 @@ import { MemberForm } from "./MemberForm";
 import { ScheduleSelect } from "./ScheduleSelect";
 import { EmploymentForm } from "./EmploymentForm";
 import { UsernameField } from "./UsernameField";
+import { AccountFields } from "./AccountFields";
 import { toggleMemberRoleAction, toggleMemberGroupAction } from "../actions";
 import { toJalali } from "@/lib/jalali";
 
@@ -204,6 +205,20 @@ export default async function MembersPage({
                   slug={params.slug}
                   memberId={m.id}
                   current={m.username}
+                />
+              </div>
+            )}
+
+            {canManage && (
+              <div className="mt-4">
+                <div className="mb-1.5 text-xs font-medium text-slate-500">
+                  ایمیل ورود و رمز عبور
+                </div>
+                <AccountFields
+                  slug={params.slug}
+                  memberId={m.id}
+                  email={m.email}
+                  isSelf={isSelf}
                 />
               </div>
             )}

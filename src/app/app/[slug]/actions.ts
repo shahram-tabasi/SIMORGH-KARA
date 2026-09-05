@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { sql, withTenant } from "@/lib/db";
 import { requireTenant, ensurePermission } from "@/lib/session";
-import { hashPassword } from "@/lib/password";
+import { hashPassword, generatePassword } from "@/lib/password";
 import { isPermissionKey, PERMISSION_MODULE } from "@/lib/rbac";
 import { hasModule } from "@/lib/modules";
 import { toGregorian } from "@/lib/jalali";
@@ -723,4 +723,112 @@ export async function clearMemberPermissionsAction(formData: FormData) {
   });
   rev(slug, `/members/${memberId}/access`);
   rev(slug, "/members");
+}
+
+/* ---------------- ایمیل ورود و بازنشانی رمز عبور اعضا ---------------- */
+
+export interface MemberAccountState {
+  error?: string;
+  ok?: string;
+  /** Set only after a reset — shown to the manager once. */
+  password?: string;
+}
+
+/**
+ * Resolve a member's platform account, asserting it really belongs to this
+ * company and is not a platform admin. Everything below goes through this, so
+ * a crafted memberId can never reach another tenant's account.
+ */
+async function memberAccountId(
+  ctx: Awaited<ReturnType<typeof requireTenant>>,
+  memberId: string
+): Promise<string | null> {
+  const accountId = await withTenant(ctx.company.schema, async (tx) => {
+    const [m] = await tx<{ account_id: string }[]>`
+      SELECT account_id FROM members WHERE id = ${memberId}
+    `;
+    return m?.account_id ?? null;
+  });
+  if (!accountId) return null;
+
+  const [account] = await sql<{ id: string }[]>`
+    SELECT id FROM platform.user_accounts
+    WHERE id = ${accountId} AND company_id = ${ctx.company.id}
+      AND NOT is_platform_admin
+  `;
+  return account?.id ?? null;
+}
+
+/** Manager corrects a member's login e-mail (the address they sign in with). */
+export async function setMemberEmailAction(
+  _prev: MemberAccountState,
+  formData: FormData
+): Promise<MemberAccountState> {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "members.manage");
+
+  const memberId = String(formData.get("memberId"));
+  const email = String(formData.get("email") || "").trim();
+
+  const parsed = z.string().email().safeParse(email);
+  if (!parsed.success) return { error: "ایمیل نامعتبر است." };
+
+  const accountId = await memberAccountId(ctx, memberId);
+  if (!accountId) return { error: "این حساب قابل ویرایش نیست." };
+
+  const [dup] = await sql<{ id: string }[]>`
+    SELECT id FROM platform.user_accounts
+    WHERE email = ${email} AND id <> ${accountId}
+  `;
+  if (dup) return { error: "این ایمیل قبلاً ثبت شده است." };
+
+  try {
+    await sql`
+      UPDATE platform.user_accounts SET email = ${email} WHERE id = ${accountId}
+    `;
+  } catch {
+    return { error: "ثبت ایمیل ممکن نشد؛ احتمالاً تکراری است." };
+  }
+
+  rev(slug, "/members");
+  return { ok: "ایمیل ذخیره شد." };
+}
+
+/**
+ * Manager resets a member's password: either one they type, or a generated one
+ * when the field is empty. Returned once so it can be handed over; only the
+ * bcrypt hash is stored. Nobody resets their own password here — that goes
+ * through «پروفایل من», which asks for the current password first.
+ */
+export async function resetMemberPasswordAction(
+  _prev: MemberAccountState,
+  formData: FormData
+): Promise<MemberAccountState> {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "members.manage");
+
+  const memberId = String(formData.get("memberId"));
+  if (memberId === ctx.member.memberId) {
+    return { error: "رمز خودتان را از «پروفایل من» تغییر دهید." };
+  }
+
+  const accountId = await memberAccountId(ctx, memberId);
+  if (!accountId) return { error: "این حساب قابل بازنشانی نیست." };
+
+  const typed = String(formData.get("newPassword") || "").trim();
+  if (typed && typed.length < 8) {
+    return { error: "رمز جدید حداقل ۸ نویسه باشد." };
+  }
+  const password = typed || generatePassword();
+
+  await sql`
+    UPDATE platform.user_accounts
+    SET password_hash = ${await hashPassword(password)}
+    WHERE id = ${accountId}
+  `;
+
+  rev(slug, "/members");
+  return { ok: "رمز عبور بازنشانی شد.", password };
 }
