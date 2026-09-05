@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { GeoView } from "./GeoView";
 
 interface Point {
   memberId: string;
@@ -28,6 +29,7 @@ interface Zone {
   color: string;
   coordMode: string;
   points: ({ x: number; y: number } | null)[];
+  latlngs: [number, number][];
 }
 
 interface Feed {
@@ -94,6 +96,36 @@ export function LiveMap({ slug }: { slug: string }) {
   }
   if (!feed) {
     return <div className="card text-sm text-slate-400">در حال دریافت موقعیت‌ها…</div>;
+  }
+
+  // A georeferenced site gets the real map; a plain floor plan keeps the
+  // image + overlay view below.
+  if (feed.map.north != null && feed.map.south != null) {
+    return (
+      <div className="card">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-700">{feed.map.title}</h3>
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+            {Object.entries({
+              ok: "سالم",
+              warn: "نیازمند توجه",
+              critical: "بحرانی",
+              offline: "بدون ارتباط",
+            }).map(([k, label]) => (
+              <span key={k} className="flex items-center gap-1">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: LEVEL_COLOR[k] }}
+                />
+                {label}
+              </span>
+            ))}
+            <span>به‌روزرسانی هر ۱۵ ثانیه</span>
+          </div>
+        </div>
+        <GeoView map={feed.map} zones={feed.zones} points={feed.points} />
+      </div>
+    );
   }
 
   const positioned = feed.points.filter((p) => p.x !== null && p.y !== null);

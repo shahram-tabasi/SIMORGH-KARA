@@ -3,6 +3,7 @@ import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { loadThresholds, loadMap } from "../data";
 import { saveThresholdsAction, saveMapAction } from "../actions";
+import { SitePicker } from "./SitePicker";
 
 export default async function HrcSettingsPage({
   params,
@@ -102,47 +103,25 @@ export default async function HrcSettingsPage({
 
       {canMap && (
         <form action={saveMapAction} className="card space-y-4">
-          <h3 className="text-sm font-semibold text-slate-700">نقشهٔ شرکت</h3>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-700">
+              موقعیت و نقشهٔ شرکت
+            </h3>
+            <p className="mt-1 text-xs text-slate-400">
+              روی نقشه کلیک کنید (یا دکمهٔ «موقعیت فعلی من» را بزنید) تا مرکز
+              محوطهٔ شرکت مشخص شود؛ مختصات خودکار برداشته می‌شود و لازم نیست
+              چیزی تایپ کنید.
+            </p>
+          </div>
           <input type="hidden" name="slug" value={params.slug} />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className="label">عنوان نقشه</label>
-              <input name="title" defaultValue={map.title} className="input" />
-            </div>
-            <div>
-              <label className="label">نشانی تصویر نقشه</label>
-              <input
-                name="imageUrl"
-                defaultValue={map.image_url ?? ""}
-                dir="ltr"
-                className="input text-left"
-                placeholder="/map.png یا data:image/png;base64,…"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div>
-              <label className="label">شمال (عرض بالا)</label>
-              <input name="north" type="number" step="0.000001" defaultValue={map.north ?? ""} dir="ltr" className="input text-left" />
-            </div>
-            <div>
-              <label className="label">جنوب (عرض پایین)</label>
-              <input name="south" type="number" step="0.000001" defaultValue={map.south ?? ""} dir="ltr" className="input text-left" />
-            </div>
-            <div>
-              <label className="label">غرب (طول چپ)</label>
-              <input name="west" type="number" step="0.000001" defaultValue={map.west ?? ""} dir="ltr" className="input text-left" />
-            </div>
-            <div>
-              <label className="label">شرق (طول راست)</label>
-              <input name="east" type="number" step="0.000001" defaultValue={map.east ?? ""} dir="ltr" className="input text-left" />
-            </div>
-          </div>
-          <p className="text-[11px] text-slate-400">
-            با تعیین مختصات چهار گوشهٔ تصویر، موقعیت GPS هر نفر به‌صورت خودکار روی
-            نقشه تصویر می‌شود. اگر سایت GPS ندارد، دستگاه‌ها می‌توانند مستقیماً
-            مختصات x/y (درصدی از تصویر) بفرستند.
-          </p>
+          <SitePicker
+            title={map.title}
+            imageUrl={map.image_url}
+            north={map.north}
+            south={map.south}
+            east={map.east}
+            west={map.west}
+          />
           <div className="flex justify-end">
             <button className="btn-primary">ذخیرهٔ نقشه</button>
           </div>

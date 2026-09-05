@@ -2,8 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import { useFormState, useFormStatus } from "react-dom";
+import { useState } from "react";
 import { ZONE_KINDS } from "@/lib/hrc";
 import { createZoneAction, type HrcState } from "../actions";
+import { ZoneDrawer, type ExistingZone } from "./ZoneDrawer";
 
 function Submit() {
   const { pending } = useFormStatus();
@@ -14,8 +16,17 @@ function Submit() {
   );
 }
 
-export function ZoneForm({ slug }: { slug: string }) {
+export function ZoneForm({
+  slug,
+  bounds,
+  existing,
+}: {
+  slug: string;
+  bounds: { north: number | null; south: number | null; east: number | null; west: number | null };
+  existing: ExistingZone[];
+}) {
   const [state, action] = useFormState<HrcState, FormData>(createZoneAction, {});
+  const [color, setColor] = useState("#38bdf8");
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (state.ok) ref.current?.reset();
@@ -47,28 +58,17 @@ export function ZoneForm({ slug }: { slug: string }) {
         </div>
         <div>
           <label className="label">رنگ</label>
-          <input name="color" type="color" defaultValue="#38bdf8" className="input h-10 p-1" />
-        </div>
-        <div>
-          <label className="label">مختصات</label>
-          <select name="coordMode" className="input" defaultValue="geo">
-            <option value="geo">جغرافیایی (lat, lng)</option>
-            <option value="plan">نسبت به تصویر نقشه (٪)</option>
-          </select>
+          <input
+            name="color"
+            type="color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            className="input h-10 p-1"
+          />
         </div>
         <div className="sm:col-span-4">
-          <label className="label">چندضلعی ناحیه (JSON)</label>
-          <textarea
-            name="polygon"
-            rows={3}
-            dir="ltr"
-            className="input text-left font-mono text-xs"
-            placeholder='[[35.7219,51.3347],[35.7225,51.3360],[35.7210,51.3365]]'
-          />
-          <p className="mt-1 text-[11px] text-slate-400">
-            هر نقطه در حالت جغرافیایی [عرض، طول] و در حالت نقشه [x٪، y٪] از گوشهٔ
-            بالا-چپ تصویر است. حداقل سه نقطه لازم است.
-          </p>
+          <label className="label">محدودهٔ ناحیه روی نقشه</label>
+          <ZoneDrawer bounds={bounds} existing={existing} color={color} />
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" name="alertOnEnter" className="h-4 w-4" />

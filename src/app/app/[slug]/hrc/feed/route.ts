@@ -76,6 +76,8 @@ export async function GET(
       kind: z.kind,
       color: z.color,
       coordMode: z.coord_mode,
+      // raw lat/lng for the real map; the x/y below is for the plan view
+      latlngs: z.coord_mode === "geo" && Array.isArray(z.polygon) ? z.polygon : [],
       // Zones drawn in geo mode are projected onto the image the same way.
       points: (Array.isArray(z.polygon) ? z.polygon : []).map((pt) => {
         const [a, b] = pt as [number, number];

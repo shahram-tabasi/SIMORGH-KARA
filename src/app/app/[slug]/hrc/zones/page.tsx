@@ -1,7 +1,7 @@
 import { requireTenant, guardPanel } from "@/lib/session";
 import { PageHeader } from "@/components/Shell";
 import { ZONE_KINDS } from "@/lib/hrc";
-import { loadZones } from "../data";
+import { loadZones, loadMap } from "../data";
 import { ZoneForm } from "./ZoneForm";
 import { deleteZoneAction } from "../actions";
 
@@ -13,6 +13,7 @@ export default async function ZonesPage({
   const ctx = await requireTenant(params.slug);
   guardPanel(ctx, "hrc", "hrc.map.manage");
   const zones = await loadZones(ctx.company.schema);
+  const map = await loadMap(ctx.company.schema);
 
   return (
     <>
@@ -22,7 +23,22 @@ export default async function ZonesPage({
       />
 
       <div className="mb-6">
-        <ZoneForm slug={params.slug} />
+        <ZoneForm
+          slug={params.slug}
+          bounds={{
+            north: map.north,
+            south: map.south,
+            east: map.east,
+            west: map.west,
+          }}
+          existing={zones.map((z) => ({
+            id: z.id,
+            name: z.name,
+            color: z.color,
+            coord_mode: z.coord_mode,
+            polygon: z.polygon,
+          }))}
+        />
       </div>
 
       <div className="space-y-3">
