@@ -387,6 +387,9 @@ The spec shows human-readable employee IDs (`EMP-1028`). There is no such column
 `members.employee_code text` (nullable, unique per tenant), auto-generated on demand.
 It touches a shared table — flagged for approval rather than assumed.
 
+**Resolved in Phase 2**: added exactly as recommended — nullable, with a partial
+unique index, and no existing code reads it. Nothing breaks if it stays empty.
+
 ---
 
 ## 5. API plan
@@ -609,7 +612,7 @@ the APKs; that is a Phase 8 task, not an assumption.
 | Phase | Contents | Verifiable here |
 |---|---|---|
 | **1** | This analysis | ✔ done |
-| **2** | Schema + migrations: all tables in §4, backfill from v1, retention/audit scaffolding, seed default rules | ✔ against real PostgreSQL, idempotency re-run |
+| **2** | Schema + migrations: all tables in §4, backfill from v1, retention/audit scaffolding, seed default rules | ✔ done — see `docs/HRC_SCHEMA_V2.md` |
 | **3** | Backend API: device identity & enrolment, ingest pipeline, risk engine, incident lifecycle, RBAC keys, privacy policy gate, audit log, OpenAPI docs | ✔ HTTP tests against a running server |
 | **4** | Real-time: NOTIFY publisher, SSE stream, permission-filtered subscriptions, dashboard live wiring | ✔ two-client SSE test with real events |
 | **5** | Android: Gradle project, shared `core/*`, phone MVP, Wear OS MVP, offline queue, phone↔watch link | ⚠ core compiles/tests here; APKs need SDK/CI |

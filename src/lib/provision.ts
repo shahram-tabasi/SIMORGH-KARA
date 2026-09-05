@@ -1,6 +1,7 @@
 import "server-only";
 import { sql, withTenant, assertSafeSchema } from "./db";
 import { tenantDDL } from "./sql";
+import { HRC_V2_SEED } from "./sql-hrc";
 import { DEFAULT_ROLES } from "./rbac";
 import { DEFAULT_LEAVE_TYPES } from "./leave-types";
 import { fetchOfficialHolidays } from "./online-holidays";
@@ -201,6 +202,9 @@ export async function provisionCompany(
       INSERT INTO hrc_teams (name, kind, base_location)
       VALUES ('تیم امداد و نجات', 'medical', 'درمانگاه شرکت')
     `;
+    // سیاست حریم خصوصی و قوانین پیش‌فرض ریسک (HRC نسخهٔ ۲) — همان چیزی که
+    // شرکت‌های قدیمی هم موقع مهاجرت می‌گیرند.
+    await tx.unsafe(HRC_V2_SEED);
 
     // Seed the configurable leave-type catalogue from labour-law defaults.
     for (const t of DEFAULT_LEAVE_TYPES) {

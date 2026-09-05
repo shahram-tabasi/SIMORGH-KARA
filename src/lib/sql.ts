@@ -6,8 +6,12 @@
  * The optional panels (مالی، انبار، HRC، API) live in `sql-erp.ts` and are
  * appended to every tenant schema; whether a company may *use* a panel is a
  * control-plane decision (`platform.companies.modules`), not a schema one.
+ *
+ * `sql-hrc.ts` adds the HRC v2 safety-platform tables on top of the v1 ones, so
+ * a freshly provisioned schema is identical to a migrated one.
  */
 import { ERP_DDL } from "./sql-erp";
+import { HRC_V2_DDL } from "./sql-hrc";
 
 export const PLATFORM_DDL = /* sql */ `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -412,5 +416,7 @@ CREATE TABLE IF NOT EXISTS ledger_lines (
 );
 
 ${ERP_DDL}
+
+${HRC_V2_DDL}
 `;
 }

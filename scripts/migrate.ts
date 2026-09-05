@@ -5,6 +5,7 @@
 import postgres from "postgres";
 import { ALL_PERMISSIONS, DEFAULT_ROLES } from "../src/lib/rbac";
 import { ERP_DDL } from "../src/lib/sql-erp";
+import { HRC_V2_DDL, HRC_V2_BACKFILL } from "../src/lib/sql-hrc";
 import { DEFAULT_ACCOUNTS } from "../src/lib/coa";
 import { DEFAULT_LEAVE_TYPES } from "../src/lib/leave-types";
 import { officialHolidaysFor } from "../src/lib/iran-holidays";
@@ -355,6 +356,21 @@ async function main() {
       await sql.begin(async (tx) => {
         await tx.unsafe(
           `SET LOCAL search_path TO "${schema_name}", platform, public;\n${ERP_DDL}`
+        );
+      });
+
+      // HRC v2 — the device-agnostic safety platform. Purely additive: the v1
+      // tables keep working untouched, the new ones are created and then filled
+      // from the existing rows. Both steps are idempotent, so re-running the
+      // migration neither duplicates data nor changes behaviour.
+      await sql.begin(async (tx) => {
+        await tx.unsafe(
+          `SET LOCAL search_path TO "${schema_name}", platform, public;\n${HRC_V2_DDL}`
+        );
+      });
+      await sql.begin(async (tx) => {
+        await tx.unsafe(
+          `SET LOCAL search_path TO "${schema_name}", platform, public;\n${HRC_V2_BACKFILL}`
         );
       });
 
