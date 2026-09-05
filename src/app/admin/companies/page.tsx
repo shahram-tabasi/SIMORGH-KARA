@@ -91,7 +91,13 @@ export default async function CompaniesPage() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/admin/companies/${c.id}/users`}
+                    className="btn-ghost"
+                  >
+                    👤 کاربران و رمزها
+                  </Link>
                   <form action={setCompanyStatusAction}>
                     <input type="hidden" name="id" value={c.id} />
                     <input

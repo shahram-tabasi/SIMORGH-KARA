@@ -3,6 +3,7 @@ import { requirePlatformAdmin } from "@/lib/session";
 import { sql } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { ModulePicker } from "@/components/ModulePicker";
+import { AccountEditor } from "../AccountEditor";
 import { normalizeModules } from "@/lib/modules";
 import { setHoldingMaxCompaniesAction, setHoldingModulesAction } from "../actions";
 
@@ -10,7 +11,10 @@ interface Row {
   id: string;
   name: string;
   slug: string;
+  admin_id: string | null;
   admin_email: string | null;
+  admin_name: string | null;
+  admin_status: string | null;
   company_count: number;
   max_companies: number;
   modules: string[] | null;
@@ -20,10 +24,17 @@ export default async function HoldingsPage() {
   await requirePlatformAdmin();
   const holdings = await sql<Row[]>`
     SELECT h.id, h.name, h.slug, h.max_companies, h.modules,
-           (SELECT email FROM platform.user_accounts ua
-            WHERE ua.holding_id = h.id AND ua.is_holding_admin LIMIT 1) AS admin_email,
+           adm.id AS admin_id, adm.email AS admin_email,
+           adm.full_name AS admin_name, adm.status AS admin_status,
            (SELECT count(*)::int FROM platform.companies c WHERE c.holding_id = h.id) AS company_count
-    FROM platform.holdings h ORDER BY h.created_at DESC
+    FROM platform.holdings h
+    LEFT JOIN LATERAL (
+      SELECT ua.id, ua.email, ua.full_name, ua.status
+      FROM platform.user_accounts ua
+      WHERE ua.holding_id = h.id AND ua.is_holding_admin
+      ORDER BY ua.created_at LIMIT 1
+    ) adm ON true
+    ORDER BY h.created_at DESC
   `;
 
   return (
@@ -88,6 +99,28 @@ export default async function HoldingsPage() {
                   <button className="btn-ghost">ذخیره پنل‌های مجاز</button>
                 </div>
               </form>
+
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <div className="mb-2 text-xs font-medium text-slate-500">
+                  حساب مدیر هولدینگ — اصلاح ایمیل و بازنشانی رمز
+                </div>
+                {h.admin_id ? (
+                  <AccountEditor
+                    account={{
+                      id: h.admin_id,
+                      full_name: h.admin_name ?? "",
+                      email: h.admin_email ?? "",
+                      username: null,
+                      status: h.admin_status ?? "active",
+                      scoped: false,
+                    }}
+                  />
+                ) : (
+                  <div className="text-xs text-slate-400">
+                    برای این هولدینگ حساب مدیری ثبت نشده است.
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -29,6 +29,10 @@ export default async function AdminLayout({
             { href: "/admin/holdings/new", label: "افزودن هولدینگ", icon: "＋" },
           ],
         },
+        {
+          title: "حساب کاربری",
+          items: [{ href: "/admin/account", label: "حساب من", icon: "👤" }],
+        },
       ]}
     >
       {children}
