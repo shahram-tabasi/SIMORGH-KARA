@@ -155,6 +155,34 @@ export function ensurePermission(
   }
 }
 
+/**
+ * Page-level guard. A missing panel or permission is a normal situation (the
+ * company never bought that panel, or this person was not given the key), so it
+ * sends the user back to their dashboard with an explanation instead of
+ * throwing an error page. Server *actions* keep using ensureModule /
+ * ensurePermission, which throw.
+ */
+export function guardPanel(
+  ctx: TenantContext,
+  module: ModuleKey,
+  ...keys: PermissionKey[]
+): void {
+  const ok =
+    moduleEnabled(ctx.company.modules, module) &&
+    (keys.length === 0 || keys.some((k) => ctx.member.permissions.has(k)));
+  if (!ok) redirect(`/app/${ctx.company.slug}?denied=${module}`);
+}
+
+/** Allow the page when the member holds *any* of the listed keys. */
+export function ensureAnyPermission(
+  ctx: TenantContext,
+  keys: PermissionKey[]
+): void {
+  if (!keys.some((k) => ctx.member.permissions.has(k))) {
+    throw new Error("شما مجوز انجام این عملیات را ندارید.");
+  }
+}
+
 /** True when the company has the panel switched on. */
 export function hasModule(ctx: TenantContext, key: ModuleKey): boolean {
   return moduleEnabled(ctx.company.modules, key);

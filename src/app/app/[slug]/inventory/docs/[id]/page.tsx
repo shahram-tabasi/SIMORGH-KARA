@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireTenant, ensureModule, ensurePermission } from "@/lib/session";
+import { requireTenant, guardPanel } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { DOC_KINDS, DOC_STATUS, formatQty, isOutgoing } from "@/lib/inventory";
@@ -75,12 +75,13 @@ async function load(schema: string, id: string) {
 
 export default async function StockDocPage({
   params,
+  searchParams,
 }: {
   params: { slug: string; id: string };
+  searchParams: { error?: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensureModule(ctx, "inventory");
-  ensurePermission(ctx, "inventory.view");
+  guardPanel(ctx, "inventory", "inventory.view");
   const { doc, lines } = await load(ctx.company.schema, params.id);
   if (!doc) notFound();
 
@@ -161,6 +162,12 @@ export default async function StockDocPage({
           )}
         </div>
       </div>
+
+      {searchParams.error && (
+        <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          ⛔ {searchParams.error}
+        </div>
+      )}
 
       {doc.status === "draft" && shortage.length > 0 && (
         <div className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">

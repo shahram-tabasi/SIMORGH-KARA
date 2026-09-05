@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireTenant, ensureModule, ensurePermission } from "@/lib/session";
+import { requireTenant, guardPanel } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { DOC_KINDS, formatQty } from "@/lib/inventory";
@@ -53,8 +53,7 @@ export default async function InventoryReportsPage({
   searchParams: { item?: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensureModule(ctx, "inventory");
-  ensurePermission(ctx, "inventory.reports.view");
+  guardPanel(ctx, "inventory", "inventory.reports.view");
   const itemId = searchParams.item ?? null;
   const { items, kardex, item } = await load(ctx.company.schema, itemId);
   const base = `/app/${params.slug}/inventory/reports`;

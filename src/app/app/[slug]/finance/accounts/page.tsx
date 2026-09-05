@@ -1,4 +1,4 @@
-import { requireTenant, ensureModule, ensurePermission } from "@/lib/session";
+import { requireTenant, guardPanel } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { ACCOUNT_TYPES, formatAmount, isDebitNature } from "@/lib/finance";
@@ -41,8 +41,7 @@ export default async function AccountsPage({
   params: { slug: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensureModule(ctx, "finance");
-  ensurePermission(ctx, "ledger.view");
+  guardPanel(ctx, "finance", "ledger.view");
   const canManage = ctx.member.permissions.has("finance.accounts.manage");
   const accounts = await load(ctx.company.schema);
 

@@ -43,7 +43,10 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     const samples: { member_id: string; vec: number[] }[] = [];
     for (const r of rows) {
       try {
-        const v = JSON.parse(r.vec);
+        // Older rows were stored double-encoded (a JSON string holding the
+        // array), so unwrap one extra level when that is what comes back.
+        let v = JSON.parse(r.vec);
+        if (typeof v === "string") v = JSON.parse(v);
         if (Array.isArray(v) && v.length === probe.length) samples.push({ member_id: r.member_id, vec: v });
       } catch {
         /* skip malformed */

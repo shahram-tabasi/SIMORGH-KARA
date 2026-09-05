@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireTenant, ensureModule, ensurePermission } from "@/lib/session";
+import { requireTenant, guardPanel } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { DOC_KINDS, DOC_STATUS, formatQty } from "@/lib/inventory";
@@ -52,8 +52,7 @@ export default async function StockDocsPage({
   searchParams: { status?: string; kind?: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensureModule(ctx, "inventory");
-  ensurePermission(ctx, "inventory.view");
+  guardPanel(ctx, "inventory", "inventory.view");
   const status = searchParams.status ?? "all";
   const kind = searchParams.kind ?? "all";
   const docs = await load(ctx.company.schema, status, kind);

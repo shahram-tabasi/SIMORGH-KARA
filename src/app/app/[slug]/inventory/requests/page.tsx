@@ -1,4 +1,4 @@
-import { requireTenant, ensureModule, ensurePermission } from "@/lib/session";
+import { requireTenant, guardPanel } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { REQUEST_STATUS, formatQty } from "@/lib/inventory";
@@ -64,8 +64,7 @@ export default async function RequestsPage({
   params: { slug: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensureModule(ctx, "inventory");
-  ensurePermission(ctx, "inventory.view");
+  guardPanel(ctx, "inventory", "inventory.view");
   const canRequest = ctx.member.permissions.has("inventory.request");
   const canApprove = ctx.member.permissions.has("inventory.request.approve");
   const canIssue = ctx.member.permissions.has("inventory.issue");

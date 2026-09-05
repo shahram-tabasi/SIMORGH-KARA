@@ -342,7 +342,13 @@ export async function approveStockDocAction(formData: FormData): Promise<void> {
 
   rev(slug, "/docs");
   revalidatePath(`/app/${slug}/inventory/docs/${id}`);
-  if (error) throw new Error(error);
+  // A shortage is ordinary business feedback, not a crash: send the keeper back
+  // to the document with the reason shown inline.
+  if (error) {
+    redirect(
+      `/app/${slug}/inventory/docs/${id}?error=${encodeURIComponent(error)}`
+    );
+  }
 }
 
 export async function voidStockDocAction(formData: FormData) {

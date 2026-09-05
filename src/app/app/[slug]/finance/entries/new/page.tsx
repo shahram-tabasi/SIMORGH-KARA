@@ -1,4 +1,4 @@
-import { requireTenant, ensureModule, ensurePermission } from "@/lib/session";
+import { requireTenant, guardPanel } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { EntryForm } from "../EntryForm";
@@ -26,8 +26,7 @@ export default async function NewEntryPage({
   params: { slug: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensureModule(ctx, "finance");
-  ensurePermission(ctx, "ledger.manage");
+  guardPanel(ctx, "finance", "ledger.manage");
   const { accounts, parties, costCenters } = await load(ctx.company.schema);
 
   return (

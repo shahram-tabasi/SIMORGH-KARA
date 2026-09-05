@@ -1,4 +1,4 @@
-import { requireTenant, ensureModule, ensurePermission } from "@/lib/session";
+import { requireTenant, guardPanel } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { FiscalYearForm } from "./FiscalYearForm";
@@ -32,8 +32,7 @@ export default async function PeriodsPage({
   params: { slug: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensureModule(ctx, "finance");
-  ensurePermission(ctx, "finance.periods.manage");
+  guardPanel(ctx, "finance", "finance.periods.manage");
   const years = await load(ctx.company.schema);
 
   return (

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireTenant, ensureModule, ensurePermission } from "@/lib/session";
+import { requireTenant, guardPanel } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { formatAmount, ACCOUNT_TYPES, isDebitNature } from "@/lib/finance";
@@ -71,8 +71,7 @@ export default async function FinanceHome({
   params: { slug: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensureModule(ctx, "finance");
-  ensurePermission(ctx, "ledger.view");
+  guardPanel(ctx, "finance", "ledger.view");
   const { totals, counts, recent, fy } = await load(ctx.company.schema);
   const base = `/app/${params.slug}/finance`;
 

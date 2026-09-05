@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireTenant, ensureModule, ensurePermission } from "@/lib/session";
+import { requireTenant, guardPanel } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { formatAmount, ENTRY_STATUS } from "@/lib/finance";
@@ -63,8 +63,7 @@ export default async function EntryPage({
   params: { slug: string; id: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensureModule(ctx, "finance");
-  ensurePermission(ctx, "ledger.view");
+  guardPanel(ctx, "finance", "ledger.view");
   const { entry, lines } = await load(ctx.company.schema, params.id);
   if (!entry) notFound();
 

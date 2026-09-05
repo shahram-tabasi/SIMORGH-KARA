@@ -1,4 +1,4 @@
-import { requireTenant, ensureModule, ensurePermission } from "@/lib/session";
+import { requireTenant, guardPanel } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { DOC_PERMISSION, DOC_KINDS } from "@/lib/inventory";
@@ -34,8 +34,7 @@ export default async function NewStockDocPage({
   params: { slug: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensureModule(ctx, "inventory");
-  ensurePermission(ctx, "inventory.view");
+  guardPanel(ctx, "inventory", "inventory.view");
 
   // Only offer the document kinds this person actually holds the key for.
   const kinds = (Object.keys(DOC_KINDS) as (keyof typeof DOC_KINDS)[]).filter((k) =>

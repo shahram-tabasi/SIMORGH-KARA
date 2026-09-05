@@ -1,4 +1,4 @@
-import { requireTenant, ensureModule, ensurePermission } from "@/lib/session";
+import { requireTenant, guardPanel } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { PARTY_KINDS, formatAmount } from "@/lib/finance";
@@ -42,8 +42,7 @@ export default async function PartiesPage({
   params: { slug: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensureModule(ctx, "finance");
-  ensurePermission(ctx, "ledger.view");
+  guardPanel(ctx, "finance", "ledger.view");
   const canParties = ctx.member.permissions.has("finance.parties.manage");
   const canCc = ctx.member.permissions.has("finance.costcenters.manage");
   const { parties, costCenters, accounts } = await load(ctx.company.schema);

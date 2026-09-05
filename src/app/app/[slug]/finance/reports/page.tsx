@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireTenant, ensureModule, ensurePermission } from "@/lib/session";
+import { requireTenant, guardPanel } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { formatAmount, isDebitNature, ACCOUNT_TYPES } from "@/lib/finance";
@@ -65,8 +65,7 @@ export default async function FinanceReportsPage({
   searchParams: { account?: string };
 }) {
   const ctx = await requireTenant(params.slug);
-  ensureModule(ctx, "finance");
-  ensurePermission(ctx, "finance.reports.view");
+  guardPanel(ctx, "finance", "finance.reports.view");
   const accountId = searchParams.account ?? null;
   const { trial, detail, account } = await load(ctx.company.schema, accountId);
   const base = `/app/${params.slug}/finance/reports`;
