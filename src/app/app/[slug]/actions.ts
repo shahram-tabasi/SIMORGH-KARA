@@ -5,7 +5,8 @@ import { z } from "zod";
 import { sql, withTenant } from "@/lib/db";
 import { requireTenant, ensurePermission } from "@/lib/session";
 import { hashPassword } from "@/lib/password";
-import { isPermissionKey } from "@/lib/rbac";
+import { isPermissionKey, PERMISSION_MODULE } from "@/lib/rbac";
+import { hasModule } from "@/lib/modules";
 import { toGregorian } from "@/lib/jalali";
 
 /** Build a reminder Date from Jalali y/m/d + "HH:MM", or null if incomplete. */
@@ -356,7 +357,11 @@ export async function createRoleAction(
   const name = String(formData.get("name") || "").trim();
   if (name.length < 2) return { error: "نام نقش را وارد کنید." };
   const description = String(formData.get("description") || "");
-  const perms = formData.getAll("permissions").map(String).filter(isPermissionKey);
+  const perms = formData
+    .getAll("permissions")
+    .map(String)
+    .filter(isPermissionKey)
+    .filter((k) => hasModule(ctx.company.modules, PERMISSION_MODULE[k]));
 
   try {
     await withTenant(ctx.company.schema, async (tx) => {
@@ -383,8 +388,21 @@ export async function updateRolePermissionsAction(formData: FormData) {
   const perms = formData.getAll("permissions").map(String).filter(isPermissionKey);
 
   await withTenant(ctx.company.schema, async (tx) => {
+    // Keys of panels this company does not have are not shown in the form —
+    // keep them untouched so a role does not silently lose them while a panel
+    // is switched off.
+    const existing = await tx<{ permission_key: string }[]>`
+      SELECT permission_key FROM role_permissions WHERE role_id = ${roleId}
+    `;
+    const hidden = existing
+      .map((e) => e.permission_key)
+      .filter(
+        (k) =>
+          isPermissionKey(k) && !hasModule(ctx.company.modules, PERMISSION_MODULE[k])
+      );
+
     await tx`DELETE FROM role_permissions WHERE role_id = ${roleId}`;
-    for (const p of perms) {
+    for (const p of [...new Set([...perms, ...hidden])]) {
       await tx`INSERT INTO role_permissions (role_id, permission_key) VALUES (${roleId}, ${p})`;
     }
   });
@@ -643,5 +661,66 @@ export async function createKartablAction(formData: FormData) {
   await withTenant(ctx.company.schema, async (tx) => {
     await tx`INSERT INTO kartabls (member_id, name) VALUES (${memberId}, ${name})`;
   });
+  rev(slug, "/members");
+}
+
+
+/* ------------------- دسترسی جز‌به‌جز هر عضو (overrides) ------------------- */
+
+/**
+ * Grant or deny a single permission to one person, on top of their roles.
+ *
+ * effect = "grant"   → این مجوز را فقط به همین نفر بده (بدون دادن کل نقش)
+ * effect = "deny"    → این مجوز را از همین نفر بگیر، حتی اگر نقشش آن را دارد
+ * effect = "inherit" → استثنا حذف شود و همان چیزی که نقش می‌گوید اعمال شود
+ */
+export async function setMemberPermissionAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "members.permissions.manage");
+
+  const memberId = String(formData.get("memberId"));
+  const key = String(formData.get("permissionKey"));
+  const effect = String(formData.get("effect"));
+
+  if (!isPermissionKey(key)) return;
+  // A key of a panel the company does not have must never be handed out.
+  if (!hasModule(ctx.company.modules, PERMISSION_MODULE[key])) return;
+  // Same guard as roles: nobody edits their own access level.
+  if (memberId === ctx.member.memberId) return;
+
+  await withTenant(ctx.company.schema, async (tx) => {
+    if (effect === "inherit") {
+      await tx`
+        DELETE FROM member_permissions
+        WHERE member_id = ${memberId} AND permission_key = ${key}
+      `;
+      return;
+    }
+    if (effect !== "grant" && effect !== "deny") return;
+    await tx`
+      INSERT INTO member_permissions (member_id, permission_key, effect, granted_by)
+      VALUES (${memberId}, ${key}, ${effect}, ${ctx.member.memberId})
+      ON CONFLICT (member_id, permission_key)
+      DO UPDATE SET effect = ${effect}, granted_by = ${ctx.member.memberId}
+    `;
+  });
+
+  rev(slug, `/members/${memberId}/access`);
+  rev(slug, "/members");
+}
+
+/** Drop every per-person exception, returning the member to their roles. */
+export async function clearMemberPermissionsAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "members.permissions.manage");
+  const memberId = String(formData.get("memberId"));
+  if (memberId === ctx.member.memberId) return;
+
+  await withTenant(ctx.company.schema, async (tx) => {
+    await tx`DELETE FROM member_permissions WHERE member_id = ${memberId}`;
+  });
+  rev(slug, `/members/${memberId}/access`);
   rev(slug, "/members");
 }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireTenant } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
@@ -47,7 +48,14 @@ async function loadData(schema: string) {
     const memberGroups = await tx<{ member_id: string; group_id: string }[]>`
       SELECT member_id, group_id FROM member_groups
     `;
-    return { members, roles, groups, memberRoles, memberGroups, schedules, employment };
+    // How many per-person permission exceptions each member carries.
+    const overrides = await tx<{ member_id: string; n: number }[]>`
+      SELECT member_id, count(*)::int AS n FROM member_permissions GROUP BY member_id
+    `;
+    return {
+      members, roles, groups, memberRoles, memberGroups, schedules, employment,
+      overrides,
+    };
   });
 }
 
@@ -63,8 +71,12 @@ export default async function MembersPage({
 }) {
   const ctx = await requireTenant(params.slug);
   const canManage = ctx.member.permissions.has("members.manage");
-  const { members, roles, groups, memberRoles, memberGroups, schedules, employment } =
-    await loadData(ctx.company.schema);
+  const {
+    members, roles, groups, memberRoles, memberGroups, schedules, employment,
+    overrides,
+  } = await loadData(ctx.company.schema);
+  const overrideCount = new Map(overrides.map((o) => [o.member_id, o.n]));
+  const canSeeAccess = ctx.member.permissions.has("members.view");
   const empByMember = new Map(employment.map((e) => [e.member_id, e]));
 
   const roleSet = new Set(memberRoles.map((r) => `${r.member_id}:${r.role_id}`));
@@ -133,6 +145,21 @@ export default async function MembersPage({
                         )
                     )}
               </div>
+              {canSeeAccess && (
+                <div className="mt-2 flex items-center gap-2">
+                  <Link
+                    href={`/app/${params.slug}/members/${m.id}/access`}
+                    className="text-xs text-brand-600 hover:underline"
+                  >
+                    ⚙ دسترسی جز‌به‌جز این نفر
+                  </Link>
+                  {(overrideCount.get(m.id) ?? 0) > 0 && (
+                    <span className="badge bg-amber-100 text-amber-700">
+                      {overrideCount.get(m.id)} استثنا
+                    </span>
+                  )}
+                </div>
+              )}
               {isSelf && canManage && (
                 <div className="mt-1.5 text-[11px] text-slate-400">
                   🔒 نقش‌های خودتان قابل تغییر نیست؛ برای جلوگیری از قطع تصادفی

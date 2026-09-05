@@ -1,7 +1,7 @@
 import { requireTenant } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
-import { PERMISSIONS } from "@/lib/rbac";
+import { PERMISSIONS, permissionGroups } from "@/lib/rbac";
 import { RoleForm } from "./RoleForm";
 import { updateRolePermissionsAction, deleteRoleAction } from "../actions";
 
@@ -26,17 +26,19 @@ export default async function RolesPage({
   const canManage = ctx.member.permissions.has("roles.manage");
   const { roles, perms } = await loadRoles(ctx.company.schema);
   const permSet = new Set(perms.map((p) => `${p.role_id}:${p.permission_key}`));
+  // Only the panels this company actually has are offered.
+  const groups = permissionGroups(ctx.company.modules);
 
   return (
     <>
       <PageHeader
         title="نقش‌ها و مجوزها"
-        description="تعریف سطوح دسترسی و تخصیص مجوزها به هر نقش"
+        description="تعریف سطوح دسترسی و تخصیص مجوزها به هر نقش — مجوزها بر اساس پنل‌های فعال شرکت گروه‌بندی شده‌اند"
       />
 
       {canManage && (
         <div className="mb-6">
-          <RoleForm slug={params.slug} />
+          <RoleForm slug={params.slug} modules={ctx.company.modules} />
         </div>
       )}
 
@@ -67,21 +69,30 @@ export default async function RolesPage({
             <form action={updateRolePermissionsAction} className="mt-4">
               <input type="hidden" name="slug" value={params.slug} />
               <input type="hidden" name="roleId" value={role.id} />
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {Object.entries(PERMISSIONS).map(([key, label]) => (
-                  <label
-                    key={key}
-                    className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-600"
-                  >
-                    <input
-                      type="checkbox"
-                      name="permissions"
-                      value={key}
-                      defaultChecked={permSet.has(`${role.id}:${key}`)}
-                      disabled={!canManage}
-                    />
-                    {label}
-                  </label>
+              <div className="space-y-4">
+                {groups.map((g) => (
+                  <div key={g.module}>
+                    <div className="mb-1.5 text-xs font-semibold text-slate-500">
+                      {g.icon} {g.title}
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {g.keys.map((key) => (
+                        <label
+                          key={key}
+                          className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-600"
+                        >
+                          <input
+                            type="checkbox"
+                            name="permissions"
+                            value={key}
+                            defaultChecked={permSet.has(`${role.id}:${key}`)}
+                            disabled={!canManage}
+                          />
+                          {PERMISSIONS[key]}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
               {canManage && (

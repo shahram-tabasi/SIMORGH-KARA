@@ -2,7 +2,12 @@
  * DDL for the control-plane (`platform`) schema and the per-tenant schema
  * template. Kept as plain SQL strings so they can be applied idempotently
  * during seeding and tenant provisioning.
+ *
+ * The optional panels (مالی، انبار، HRC، API) live in `sql-erp.ts` and are
+ * appended to every tenant schema; whether a company may *use* a panel is a
+ * control-plane decision (`platform.companies.modules`), not a schema one.
  */
+import { ERP_DDL } from "./sql-erp";
 
 export const PLATFORM_DDL = /* sql */ `
 CREATE SCHEMA IF NOT EXISTS platform;
@@ -16,6 +21,8 @@ CREATE TABLE IF NOT EXISTS platform.holdings (
   slug          text NOT NULL UNIQUE,
   -- how many companies the holding admin may create (set by the platform admin)
   max_companies int NOT NULL DEFAULT 1,
+  -- panels the holding is licensed to hand out to its companies
+  modules       text[] NOT NULL DEFAULT '{org,hr,finance,inventory,hrc,api}',
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
@@ -32,6 +39,8 @@ CREATE TABLE IF NOT EXISTS platform.companies (
                  CHECK (status IN ('active','suspended','pending')),
   plan         text NOT NULL DEFAULT 'standard',
   max_users    integer NOT NULL DEFAULT 10,
+  -- panels switched on for this company (سازمان همیشه فعال است)
+  modules      text[] NOT NULL DEFAULT '{org,hr}',
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 
@@ -398,5 +407,7 @@ CREATE TABLE IF NOT EXISTS ledger_lines (
   debit      numeric(18,2) NOT NULL DEFAULT 0,
   credit     numeric(18,2) NOT NULL DEFAULT 0
 );
+
+${ERP_DDL}
 `;
 }

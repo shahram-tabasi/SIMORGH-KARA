@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { sql } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
-import { setCompanyStatusAction, updateCompanyAction } from "../actions";
+import { ModulePicker } from "@/components/ModulePicker";
+import { normalizeModules } from "@/lib/modules";
+import {
+  setCompanyStatusAction,
+  updateCompanyAction,
+  setCompanyModulesAction,
+} from "../actions";
 
 interface CompanyRow {
   id: string;
@@ -11,16 +17,21 @@ interface CompanyRow {
   plan: string;
   max_users: number;
   user_count: number;
+  modules: string[] | null;
+  holding_name: string | null;
+  holding_modules: string[] | null;
   created_at: string;
 }
 
 async function getCompanies(): Promise<CompanyRow[]> {
   return sql<CompanyRow[]>`
     SELECT c.id, c.name, c.slug, c.status, c.plan, c.max_users,
-           c.created_at,
+           c.created_at, c.modules,
+           h.name AS holding_name, h.modules AS holding_modules,
            (SELECT count(*) FROM platform.user_accounts u
               WHERE u.company_id = c.id)::int AS user_count
     FROM platform.companies c
+    LEFT JOIN platform.holdings h ON h.id = c.holding_id
     ORDER BY c.created_at DESC
   `;
 }
@@ -73,6 +84,11 @@ export default async function CompaniesPage() {
                   <div className="mt-1 text-xs text-slate-400" dir="ltr">
                     /app/{c.slug} · {c.user_count}/{c.max_users} کاربر
                   </div>
+                  {c.holding_name && (
+                    <div className="mt-1 text-xs text-slate-400">
+                      هولدینگ: {c.holding_name}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -117,6 +133,24 @@ export default async function CompaniesPage() {
                   />
                 </div>
                 <button className="btn-ghost">ذخیره تغییرات</button>
+              </form>
+
+              <form
+                action={setCompanyModulesAction}
+                className="mt-4 border-t border-slate-100 pt-4"
+              >
+                <input type="hidden" name="id" value={c.id} />
+                <div className="mb-2 text-xs font-medium text-slate-500">
+                  پنل‌های فعال شرکت — هر پنل که خاموش شود، برای همهٔ کاربران آن
+                  شرکت پنهان و غیرفعال می‌شود
+                </div>
+                <ModulePicker
+                  selected={normalizeModules(c.modules)}
+                  allowed={c.holding_modules ?? undefined}
+                />
+                <div className="mt-3 flex justify-end">
+                  <button className="btn-ghost">ذخیره پنل‌ها</button>
+                </div>
               </form>
             </div>
           ))}

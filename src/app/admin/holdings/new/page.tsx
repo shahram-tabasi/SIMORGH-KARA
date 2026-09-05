@@ -2,6 +2,8 @@
 
 import { useFormState, useFormStatus } from "react-dom";
 import { PageHeader } from "@/components/Shell";
+import { ModulePicker } from "@/components/ModulePicker";
+import { ALL_MODULES } from "@/lib/modules";
 import { createHoldingAction, type CompanyFormState } from "../../actions";
 
 function Submit() {
@@ -42,6 +44,17 @@ export default function NewHoldingPage() {
             <label className="label">سقف تعداد شرکت</label>
             <input name="maxCompanies" type="number" min={1} defaultValue={1} dir="ltr" className="input" />
           </div>
+        </div>
+
+        <div className="border-t border-slate-100 pt-5">
+          <h3 className="mb-1 text-sm font-semibold text-slate-700">
+            پنل‌های مجاز هولدینگ
+          </h3>
+          <p className="mb-3 text-xs text-slate-400">
+            مدیر هولدینگ فقط می‌تواند همین پنل‌ها را برای شرکت‌هایش فعال کند —
+            مثلاً هولدینگی که «انبار» ندارد، نمی‌تواند انبار را به شرکت‌هایش بدهد.
+          </p>
+          <ModulePicker selected={ALL_MODULES} />
         </div>
 
         <div className="border-t border-slate-100 pt-5">

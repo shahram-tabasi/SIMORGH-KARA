@@ -3,7 +3,9 @@
  * Idempotent — safe to run repeatedly. Run with:  npm run db:migrate
  */
 import postgres from "postgres";
-import { ALL_PERMISSIONS } from "../src/lib/rbac";
+import { ALL_PERMISSIONS, DEFAULT_ROLES } from "../src/lib/rbac";
+import { ERP_DDL } from "../src/lib/sql-erp";
+import { DEFAULT_ACCOUNTS } from "../src/lib/coa";
 import { DEFAULT_LEAVE_TYPES } from "../src/lib/leave-types";
 import { officialHolidaysFor } from "../src/lib/iran-holidays";
 import { officialOccasionsFor } from "../src/lib/iran-events";
@@ -41,11 +43,23 @@ async function main() {
         ON platform.companies (domain) WHERE domain IS NOT NULL;
       CREATE UNIQUE INDEX IF NOT EXISTS uq_user_username_company
         ON platform.user_accounts (company_id, username) WHERE username IS NOT NULL;
+
+      -- Panel (module) entitlements. Existing companies keep the panels they
+      -- already had (سازمان + منابع انسانی + مالی); newly created ones start
+      -- from the leaner default and the admin switches panels on explicitly.
+      ALTER TABLE platform.companies
+        ADD COLUMN IF NOT EXISTS modules text[] NOT NULL DEFAULT '{org,hr,finance}';
+      ALTER TABLE platform.companies
+        ALTER COLUMN modules SET DEFAULT '{org,hr}';
+      ALTER TABLE platform.holdings
+        ADD COLUMN IF NOT EXISTS modules text[] NOT NULL
+        DEFAULT '{org,hr,finance,inventory,hrc,api}';
     `);
 
     const tenants = await sql<{ schema_name: string }[]>`
       SELECT schema_name FROM platform.companies
     `;
+    const jyNow = todayJalali().jy;
     for (const { schema_name } of tenants) {
       if (!/^tenant_[a-z0-9_]+$/.test(schema_name)) continue;
       console.log("→ migrating", schema_name);
@@ -331,6 +345,78 @@ async function main() {
         WHERE NOT EXISTS (SELECT 1 FROM "${schema_name}".work_schedules);
       `);
 
+      // Optional panels — مالی، انبار، HRC و درگاه API — plus the per-person
+      // permission overrides. One shared DDL text with the tenant template, so
+      // a migrated schema is byte-for-byte the same as a freshly provisioned one.
+      await sql.begin(async (tx) => {
+        await tx.unsafe(
+          `SET LOCAL search_path TO "${schema_name}", platform, public;\n${ERP_DDL}`
+        );
+      });
+
+      // Seed the finance / inventory / HRC defaults, but only where the company
+      // has nothing yet — never clobber a company's own data.
+      const [{ n: accountCount }] = await sql.unsafe<{ n: number }[]>(
+        `SELECT count(*)::int AS n FROM "${schema_name}".ledger_accounts`
+      );
+      if (accountCount === 0) {
+        for (const group of DEFAULT_ACCOUNTS) {
+          const [parent] = await sql.unsafe<{ id: string }[]>(
+            `INSERT INTO "${schema_name}".ledger_accounts (code, name, type, level, is_group)
+             VALUES ($1,$2,$3,1,true) RETURNING id`,
+            [group.code, group.name, group.type]
+          );
+          for (const child of group.children) {
+            await sql.unsafe(
+              `INSERT INTO "${schema_name}".ledger_accounts
+                 (code, name, type, level, is_group, parent_id)
+               VALUES ($1,$2,$3,2,false,$4)`,
+              [child.code, child.name, group.type, parent.id]
+            );
+          }
+        }
+      }
+      const fyTitle = `سال مالی ${jyNow}`;
+      const fyStart = isoDate(toGregorian(jyNow, 1, 1));
+      const fyEnd = isoDate(toGregorian(jyNow, 12, jalaliMonthLength(jyNow, 12)));
+      await sql.unsafe(
+        `INSERT INTO "${schema_name}".fiscal_years (title, start_date, end_date, is_active)
+         SELECT $1, $2, $3, true
+         WHERE NOT EXISTS (
+           SELECT 1 FROM "${schema_name}".fiscal_years WHERE title = $1)`,
+        [fyTitle, fyStart, fyEnd]
+      );
+      await sql.unsafe(`
+        INSERT INTO "${schema_name}".warehouses (code, name, location)
+        SELECT 'W1', 'انبار مرکزی', 'ستاد'
+        WHERE NOT EXISTS (SELECT 1 FROM "${schema_name}".warehouses);
+        INSERT INTO "${schema_name}".hrc_map (id) VALUES (1) ON CONFLICT DO NOTHING;
+        INSERT INTO "${schema_name}".hrc_thresholds (id) VALUES (1) ON CONFLICT DO NOTHING;
+        INSERT INTO "${schema_name}".hrc_teams (name, kind, base_location)
+        SELECT 'تیم امداد و نجات', 'medical', 'درمانگاه شرکت'
+        WHERE NOT EXISTS (SELECT 1 FROM "${schema_name}".hrc_teams);
+      `);
+
+      // Add the ready-made panel roles (مدیر مالی، انباردار، کارشناس HRC…) for
+      // companies provisioned before they existed. Existing roles are untouched.
+      for (const role of DEFAULT_ROLES) {
+        const [r] = await sql.unsafe<{ id: string }[]>(
+          `INSERT INTO "${schema_name}".roles (name, description, is_system)
+           VALUES ($1,$2,$3)
+           ON CONFLICT (name) DO NOTHING
+           RETURNING id`,
+          [role.name, role.description, role.is_system]
+        );
+        if (!r) continue; // role already existed — leave its permissions alone
+        for (const perm of role.permissions) {
+          await sql.unsafe(
+            `INSERT INTO "${schema_name}".role_permissions (role_id, permission_key)
+             VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+            [r.id, perm]
+          );
+        }
+      }
+
       // Grant any newly-added permission keys to the full-access system role
       // ("مدیر سامانه") so existing admins gain new capabilities automatically.
       const [adminRole] = await sql.unsafe(
@@ -351,7 +437,6 @@ async function main() {
       // offline computation (deterministic, network-free). This fixes legacy
       // data where religious dates were a day off (e.g. تاسوعا/عاشورا). Company
       // -added custom days (is_official = false) are preserved.
-      const jyNow = todayJalali().jy;
       for (const jy of [jyNow, jyNow + 1]) {
         const first = isoDate(toGregorian(jy, 1, 1));
         const last = isoDate(toGregorian(jy, 12, jalaliMonthLength(jy, 12)));

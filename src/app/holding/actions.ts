@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireHolding } from "@/lib/session";
 import { sql } from "@/lib/db";
 import { provisionCompany } from "@/lib/provision";
+import { intersectModules, normalizeModules } from "@/lib/modules";
 
 const schema = z.object({
   name: z.string().min(2, "نام شرکت را وارد کنید."),
@@ -48,12 +49,44 @@ export async function createHoldingCompanyAction(
     };
   }
 
+  // A holding may only switch on panels it is licensed for.
+  const modules = intersectModules(
+    formData.getAll("modules").map(String),
+    ctx.holding.modules
+  );
+
   try {
-    await provisionCompany({ ...parsed.data, holdingId: ctx.holding.id });
+    await provisionCompany({ ...parsed.data, holdingId: ctx.holding.id, modules });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "خطا در ساخت شرکت." };
   }
 
   revalidatePath("/holding");
   redirect("/holding");
+}
+
+/**
+ * Holding admin turns panels on/off for one of its own companies. The request
+ * is intersected with the holding's licence, so a holding can never grant a
+ * panel the platform did not sell it — «برای بعضی شرکت‌ها بعضی پنل‌ها تهیه نشود».
+ */
+export async function setHoldingCompanyModulesAction(formData: FormData) {
+  const ctx = await requireHolding();
+  const companyId = String(formData.get("companyId"));
+
+  const [company] = await sql<{ id: string }[]>`
+    SELECT id FROM platform.companies
+    WHERE id = ${companyId} AND holding_id = ${ctx.holding.id}
+  `;
+  if (!company) return; // not one of ours
+
+  const modules = intersectModules(
+    formData.getAll("modules").map(String),
+    ctx.holding.modules
+  );
+  await sql`
+    UPDATE platform.companies SET modules = ${normalizeModules(modules)}
+    WHERE id = ${companyId}
+  `;
+  revalidatePath("/holding");
 }

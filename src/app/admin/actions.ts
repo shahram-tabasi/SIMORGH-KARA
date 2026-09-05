@@ -8,6 +8,12 @@ import { requirePlatformAdmin } from "@/lib/session";
 import { provisionCompany } from "@/lib/provision";
 import { hashPassword } from "@/lib/password";
 import { slugify, shortId } from "@/lib/utils";
+import { normalizeModules, ALL_MODULES } from "@/lib/modules";
+
+/** Read the checked panels out of a form. */
+function modulesFromForm(formData: FormData): string[] {
+  return normalizeModules(formData.getAll("modules").map(String));
+}
 
 const newHoldingSchema = z.object({
   name: z.string().min(2, "نام هولدینگ حداقل ۲ کاراکتر باشد."),
@@ -48,9 +54,13 @@ export async function createHoldingAction(
 
   const slug = `${slugify(parsed.data.name)}-${shortId(4)}`;
   try {
+    const modules = formData.getAll("modules").length
+      ? modulesFromForm(formData)
+      : ALL_MODULES;
     const [holding] = await sql<{ id: string }[]>`
-      INSERT INTO platform.holdings (name, slug, max_companies)
-      VALUES (${parsed.data.name}, ${slug}, ${parsed.data.maxCompanies}) RETURNING id
+      INSERT INTO platform.holdings (name, slug, max_companies, modules)
+      VALUES (${parsed.data.name}, ${slug}, ${parsed.data.maxCompanies}, ${modules})
+      RETURNING id
     `;
     const passwordHash = await hashPassword(parsed.data.adminPassword);
     await sql`
@@ -98,7 +108,7 @@ export async function createCompanyAction(
   }
 
   try {
-    await provisionCompany(parsed.data);
+    await provisionCompany({ ...parsed.data, modules: modulesFromForm(formData) });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "خطا در ساخت شرکت." };
   }
@@ -128,5 +138,35 @@ export async function updateCompanyAction(formData: FormData) {
     SET plan = ${plan}, max_users = ${maxUsers}
     WHERE id = ${id}
   `;
+  revalidatePath("/admin/companies");
+}
+
+/** Platform admin switches panels (پنل‌ها) on/off for one company. */
+export async function setCompanyModulesAction(formData: FormData) {
+  await requirePlatformAdmin();
+  const id = String(formData.get("id"));
+  const modules = modulesFromForm(formData);
+  await sql`UPDATE platform.companies SET modules = ${modules} WHERE id = ${id}`;
+  revalidatePath("/admin/companies");
+}
+
+/**
+ * Platform admin sets which panels a holding is licensed to hand out. Panels
+ * removed from the licence are also pulled from the holding's companies, so a
+ * holding can never keep serving a panel it no longer owns.
+ */
+export async function setHoldingModulesAction(formData: FormData) {
+  await requirePlatformAdmin();
+  const id = String(formData.get("id"));
+  const modules = modulesFromForm(formData);
+  await sql`UPDATE platform.holdings SET modules = ${modules} WHERE id = ${id}`;
+  await sql`
+    UPDATE platform.companies
+    SET modules = ARRAY(
+      SELECT unnest(modules) INTERSECT SELECT unnest(${modules}::text[])
+    )
+    WHERE holding_id = ${id}
+  `;
+  revalidatePath("/admin/holdings");
   revalidatePath("/admin/companies");
 }

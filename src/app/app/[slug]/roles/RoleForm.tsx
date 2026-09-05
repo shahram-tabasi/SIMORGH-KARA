@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useFormState, useFormStatus } from "react-dom";
-import { PERMISSIONS } from "@/lib/rbac";
+import { PERMISSIONS, permissionGroups } from "@/lib/rbac";
 import { createRoleAction, type ActionState } from "../actions";
 
 function Submit() {
@@ -14,7 +14,14 @@ function Submit() {
   );
 }
 
-export function RoleForm({ slug }: { slug: string }) {
+export function RoleForm({
+  slug,
+  modules,
+}: {
+  slug: string;
+  /** Panels enabled for this company — permissions are grouped by them. */
+  modules: readonly string[];
+}) {
   const [state, action] = useFormState<ActionState, FormData>(
     createRoleAction,
     {}
@@ -45,15 +52,24 @@ export function RoleForm({ slug }: { slug: string }) {
       </div>
       <div>
         <label className="label">مجوزها</label>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {Object.entries(PERMISSIONS).map(([key, label]) => (
-            <label
-              key={key}
-              className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-600"
-            >
-              <input type="checkbox" name="permissions" value={key} />
-              {label}
-            </label>
+        <div className="space-y-4">
+          {permissionGroups(modules).map((g) => (
+            <div key={g.module}>
+              <div className="mb-1.5 text-xs font-semibold text-slate-500">
+                {g.icon} {g.title}
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {g.keys.map((key) => (
+                  <label
+                    key={key}
+                    className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-600"
+                  >
+                    <input type="checkbox" name="permissions" value={key} />
+                    {PERMISSIONS[key]}
+                  </label>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>

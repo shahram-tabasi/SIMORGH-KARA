@@ -5,15 +5,19 @@ import { DEFAULT_ROLES } from "./rbac";
 import { DEFAULT_LEAVE_TYPES } from "./leave-types";
 import { fetchOfficialHolidays } from "./online-holidays";
 import { officialOccasionsFor } from "./iran-events";
-import { todayJalali } from "./jalali";
+import { todayJalali, toGregorian, isoDate, jalaliMonthLength } from "./jalali";
 import { hashPassword } from "./password";
 import { slugify, shortId, schemaNameFromSlug } from "./utils";
+import { DEFAULT_ACCOUNTS } from "./coa";
+import { DEFAULT_MODULES, normalizeModules, type ModuleKey } from "./modules";
 
 export interface NewCompanyInput {
   name: string;
   plan?: string;
   maxUsers?: number;
   holdingId?: string;
+  /** Panels the company is allowed to use; defaults to سازمان + منابع انسانی. */
+  modules?: readonly string[];
   adminName: string;
   adminEmail: string;
   adminPassword: string;
@@ -58,13 +62,14 @@ export async function provisionCompany(
   }
 
   // 1) control-plane company row
+  const modules: ModuleKey[] = normalizeModules(input.modules ?? DEFAULT_MODULES);
   const [company] = await sql<{ id: string }[]>`
     INSERT INTO platform.companies
-      (name, slug, schema_name, plan, max_users, holding_id)
+      (name, slug, schema_name, plan, max_users, holding_id, modules)
     VALUES (
       ${input.name}, ${slug}, ${schema},
       ${input.plan ?? "standard"}, ${input.maxUsers ?? 10},
-      ${input.holdingId ?? null}
+      ${input.holdingId ?? null}, ${modules}
     )
     RETURNING id
   `;
@@ -158,6 +163,44 @@ export async function provisionCompany(
         `;
       }
     }
+
+    // ── مالی: سال مالی جاری + کدینگ پیش‌فرض حساب‌ها ────────────────────
+    const fyStart = isoDate(toGregorian(jyNow, 1, 1));
+    const fyEnd = isoDate(toGregorian(jyNow, 12, jalaliMonthLength(jyNow, 12)));
+    await tx`
+      INSERT INTO fiscal_years (title, start_date, end_date, is_active)
+      VALUES (${`سال مالی ${jyNow}`}, ${fyStart}, ${fyEnd}, true)
+    `;
+    for (const group of DEFAULT_ACCOUNTS) {
+      const [parent] = await tx<{ id: string }[]>`
+        INSERT INTO ledger_accounts (code, name, type, level, is_group)
+        VALUES (${group.code}, ${group.name}, ${group.type}, 1, true)
+        RETURNING id
+      `;
+      for (const child of group.children) {
+        await tx`
+          INSERT INTO ledger_accounts (code, name, type, level, is_group, parent_id)
+          VALUES (${child.code}, ${child.name}, ${group.type}, 2, false, ${parent.id})
+        `;
+      }
+    }
+
+    // ── انبار: یک انبار مرکزی و گروه‌بندی پایهٔ کالا ──────────────────────
+    await tx`
+      INSERT INTO warehouses (code, name, location)
+      VALUES ('W1', 'انبار مرکزی', 'ستاد')
+    `;
+    for (const name of ["مواد اولیه", "قطعات یدکی", "ملزومات اداری", "ایمنی و HSE"]) {
+      await tx`INSERT INTO item_categories (name) VALUES (${name})`;
+    }
+
+    // ── HRC: نقشهٔ خالی شرکت و آستانه‌های پیش‌فرض سلامت ────────────────────
+    await tx`INSERT INTO hrc_map (id) VALUES (1) ON CONFLICT DO NOTHING`;
+    await tx`INSERT INTO hrc_thresholds (id) VALUES (1) ON CONFLICT DO NOTHING`;
+    await tx`
+      INSERT INTO hrc_teams (name, kind, base_location)
+      VALUES ('تیم امداد و نجات', 'medical', 'درمانگاه شرکت')
+    `;
 
     // Seed the configurable leave-type catalogue from labour-law defaults.
     for (const t of DEFAULT_LEAVE_TYPES) {
