@@ -29,3 +29,13 @@ export function generatePassword(length = 12): string {
   }
   return out;
 }
+
+/**
+ * رمز پیش‌فرض سامانه.
+ *
+ * When an administrator creates an account or resets a password and does not
+ * type one, this is what gets set. It is deliberately memorable so it can be
+ * read out over the phone — which also means every account still carrying it is
+ * effectively unprotected until its owner changes it in «پروفایل من».
+ */
+export const DEFAULT_PASSWORD = "123456";

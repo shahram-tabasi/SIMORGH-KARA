@@ -84,7 +84,7 @@ export function AccountFields({
             type="text"
             dir="ltr"
             autoComplete="off"
-            placeholder="خالی = رمز تصادفی"
+            placeholder="خالی = رمز پیش‌فرض ۱۲۳۴۵۶"
             className={`w-60 ${inputCls}`}
           />
           <SaveBtn label="بازنشانی رمز" />

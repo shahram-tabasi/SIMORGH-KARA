@@ -109,7 +109,13 @@ export default async function HoldingHome() {
                 </div>
               </form>
 
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Link
+                  href={`/holding/companies/${s.id}/users`}
+                  className="text-xs text-brand-600 hover:underline"
+                >
+                  👤 کاربران و بازنشانی رمز
+                </Link>
                 <Link
                   href={`/app/${s.slug}`}
                   className="text-xs text-brand-600 hover:underline"

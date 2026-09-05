@@ -4,10 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { sql, withTenant } from "@/lib/db";
+import type { AccountState } from "@/components/AccountEditor";
 import { requirePlatformAdmin } from "@/lib/session";
 import { createSession } from "@/lib/auth";
 import { provisionCompany } from "@/lib/provision";
-import { hashPassword, verifyPassword, generatePassword } from "@/lib/password";
+import { hashPassword, verifyPassword, DEFAULT_PASSWORD } from "@/lib/password";
 import { slugify, shortId } from "@/lib/utils";
 import { normalizeModules, ALL_MODULES } from "@/lib/modules";
 
@@ -21,7 +22,8 @@ const newHoldingSchema = z.object({
   maxCompanies: z.coerce.number().int().min(1).max(1000).default(1),
   adminName: z.string().min(2, "نام مدیر هولدینگ را وارد کنید."),
   adminEmail: z.string().email("ایمیل مدیر هولدینگ نامعتبر است."),
-  adminPassword: z.string().min(6, "رمز عبور حداقل ۶ کاراکتر باشد."),
+  // Empty means «رمز پیش‌فرض»: the admin does not have to invent one.
+  adminPassword: z.string().default(DEFAULT_PASSWORD),
 });
 
 /** Platform admin sets/raises how many companies a holding may create. */
@@ -44,7 +46,7 @@ export async function createHoldingAction(
     maxCompanies: formData.get("maxCompanies") || 1,
     adminName: formData.get("adminName"),
     adminEmail: formData.get("adminEmail"),
-    adminPassword: formData.get("adminPassword"),
+    adminPassword: String(formData.get("adminPassword") || "").trim() || undefined,
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
@@ -83,7 +85,7 @@ const newCompanySchema = z.object({
   maxUsers: z.coerce.number().int().min(1).max(100000).default(10),
   adminName: z.string().min(2, "نام مدیر را وارد کنید."),
   adminEmail: z.string().email("ایمیل مدیر نامعتبر است."),
-  adminPassword: z.string().min(6, "رمز عبور حداقل ۶ کاراکتر باشد."),
+  adminPassword: z.string().default(DEFAULT_PASSWORD),
 });
 
 export interface CompanyFormState {
@@ -102,7 +104,7 @@ export async function createCompanyAction(
     maxUsers: formData.get("maxUsers") || 10,
     adminName: formData.get("adminName"),
     adminEmail: formData.get("adminEmail"),
-    adminPassword: formData.get("adminPassword"),
+    adminPassword: String(formData.get("adminPassword") || "").trim() || undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -174,12 +176,7 @@ export async function setHoldingModulesAction(formData: FormData) {
 
 /* ═══════════════ مدیریت حساب‌ها: ایمیل، نام کاربری و رمز عبور ═══════════════ */
 
-export interface AccountState {
-  error?: string;
-  ok?: string;
-  /** Set only after a password reset — shown to the admin once. */
-  password?: string;
-}
+export type { AccountState };
 
 const profileSchema = z.object({
   fullName: z.string().min(2, "نام و نام خانوادگی را وارد کنید."),
@@ -385,7 +382,7 @@ export async function resetManagedPasswordAction(
   if (typed && typed.length < MIN_PASSWORD) {
     return { error: `رمز جدید حداقل ${MIN_PASSWORD} نویسه باشد.` };
   }
-  const password = typed || generatePassword();
+  const password = typed || DEFAULT_PASSWORD;
 
   await sql`
     UPDATE platform.user_accounts

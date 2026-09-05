@@ -3,9 +3,15 @@ import { requirePlatformAdmin } from "@/lib/session";
 import { sql } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { ModulePicker } from "@/components/ModulePicker";
-import { AccountEditor } from "../AccountEditor";
+import { AccountEditor } from "@/components/AccountEditor";
 import { normalizeModules } from "@/lib/modules";
-import { setHoldingMaxCompaniesAction, setHoldingModulesAction } from "../actions";
+import {
+  setHoldingMaxCompaniesAction,
+  setHoldingModulesAction,
+  updateManagedAccountAction,
+  resetManagedPasswordAction,
+  setAccountStatusAction,
+} from "../actions";
 
 interface Row {
   id: string;
@@ -106,6 +112,9 @@ export default async function HoldingsPage() {
                 </div>
                 {h.admin_id ? (
                   <AccountEditor
+                    saveAction={updateManagedAccountAction}
+                    resetAction={resetManagedPasswordAction}
+                    statusAction={setAccountStatusAction}
                     account={{
                       id: h.admin_id,
                       full_name: h.admin_name ?? "",

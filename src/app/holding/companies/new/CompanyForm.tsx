@@ -54,8 +54,8 @@ export function CompanyForm({ allowed }: { allowed: readonly string[] }) {
               <input name="adminEmail" type="email" dir="ltr" required className="input text-left" />
             </div>
             <div>
-              <label className="label">رمز عبور اولیه</label>
-              <input name="adminPassword" type="text" required className="input" placeholder="حداقل ۶ کاراکتر" />
+              <label className="label">رمز عبور اولیه (اختیاری)</label>
+              <input name="adminPassword" type="text" className="input" placeholder="خالی بگذارید تا ۱۲۳۴۵۶ شود" />
             </div>
           </div>
         </div>

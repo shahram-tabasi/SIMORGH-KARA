@@ -18,6 +18,8 @@ interface CompanyRow {
   max_users: number;
   user_count: number;
   modules: string[] | null;
+  manager_name: string | null;
+  manager_email: string | null;
   holding_name: string | null;
   holding_modules: string[] | null;
   created_at: string;
@@ -28,10 +30,16 @@ async function getCompanies(): Promise<CompanyRow[]> {
     SELECT c.id, c.name, c.slug, c.status, c.plan, c.max_users,
            c.created_at, c.modules,
            h.name AS holding_name, h.modules AS holding_modules,
+           mgr.full_name AS manager_name, mgr.email AS manager_email,
            (SELECT count(*) FROM platform.user_accounts u
               WHERE u.company_id = c.id)::int AS user_count
     FROM platform.companies c
     LEFT JOIN platform.holdings h ON h.id = c.holding_id
+    LEFT JOIN LATERAL (
+      SELECT ua.full_name, ua.email FROM platform.user_accounts ua
+      WHERE ua.company_id = c.id AND NOT ua.is_platform_admin
+      ORDER BY ua.created_at LIMIT 1
+    ) mgr ON true
     ORDER BY c.created_at DESC
   `;
 }
@@ -83,6 +91,12 @@ export default async function CompaniesPage() {
                   </div>
                   <div className="mt-1 text-xs text-slate-400" dir="ltr">
                     /app/{c.slug} · {c.user_count}/{c.max_users} کاربر
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    مدیر شرکت: {c.manager_name ?? "—"}
+                    <span className="mr-1 text-slate-400" dir="ltr">
+                      {c.manager_email ?? ""}
+                    </span>
                   </div>
                   {c.holding_name && (
                     <div className="mt-1 text-xs text-slate-400">

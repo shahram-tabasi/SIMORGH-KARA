@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { sql, withTenant } from "@/lib/db";
 import { requireTenant, ensurePermission } from "@/lib/session";
-import { hashPassword, generatePassword } from "@/lib/password";
+import { hashPassword, DEFAULT_PASSWORD } from "@/lib/password";
 import { isPermissionKey, PERMISSION_MODULE } from "@/lib/rbac";
 import { hasModule } from "@/lib/modules";
 import { toGregorian } from "@/lib/jalali";
@@ -30,7 +30,8 @@ function rev(slug: string, sub = "") {
 const memberSchema = z.object({
   fullName: z.string().min(2, "نام را وارد کنید."),
   email: z.string().email("ایمیل نامعتبر است."),
-  password: z.string().min(6, "رمز عبور حداقل ۶ کاراکتر باشد."),
+  // Empty means «رمز پیش‌فرض ۱۲۳۴۵۶» — the manager need not invent one.
+  password: z.string().default(DEFAULT_PASSWORD),
   title: z.string().optional(),
 });
 
@@ -50,7 +51,7 @@ export async function createMemberAction(
   const parsed = memberSchema.safeParse({
     fullName: formData.get("fullName"),
     email: formData.get("email"),
-    password: formData.get("password"),
+    password: String(formData.get("password") || "").trim() || undefined,
     title: formData.get("title") || undefined,
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -821,7 +822,7 @@ export async function resetMemberPasswordAction(
   if (typed && typed.length < 8) {
     return { error: "رمز جدید حداقل ۸ نویسه باشد." };
   }
-  const password = typed || generatePassword();
+  const password = typed || DEFAULT_PASSWORD;
 
   await sql`
     UPDATE platform.user_accounts

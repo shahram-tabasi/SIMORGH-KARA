@@ -18,6 +18,7 @@ export default async function HoldingLayout({
           items: [
             { href: "/holding", label: "شرکت‌ها", icon: "🏭" },
             { href: "/holding/companies/new", label: "افزودن شرکت", icon: "＋" },
+            { href: "/holding/account", label: "حساب من", icon: "👤" },
           ],
         },
       ]}

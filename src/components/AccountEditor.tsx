@@ -2,12 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
-import {
-  updateManagedAccountAction,
-  resetManagedPasswordAction,
-  setAccountStatusAction,
-  type AccountState,
-} from "./actions";
+/** Shared shape of the account-management action results. */
+export interface AccountState {
+  error?: string;
+  ok?: string;
+  /** Set only after a password reset — shown to the operator once. */
+  password?: string;
+}
+
+export type AccountFormAction = (
+  prev: AccountState,
+  formData: FormData
+) => Promise<AccountState>;
 
 export interface ManagedAccount {
   id: string;
@@ -29,19 +35,26 @@ function Submit({ label, busy }: { label: string; busy: string }) {
 }
 
 /**
- * Edit one manager's login: correct the e-mail, set a username, reset the
- * password, or suspend the login. Used from the company user list and from the
- * holdings page.
+ * Edit one account's login: correct the e-mail, set a username, reset the
+ * password, or suspend the login.
+ *
+ * The actions are passed in, so the very same UI serves whoever is allowed to
+ * do it at that level — the platform admin over holdings and companies, and a
+ * holding admin over its own subsidiaries.
  */
-export function AccountEditor({ account }: { account: ManagedAccount }) {
-  const [saveState, saveAction] = useFormState<AccountState, FormData>(
-    updateManagedAccountAction,
-    {}
-  );
-  const [resetState, resetAction] = useFormState<AccountState, FormData>(
-    resetManagedPasswordAction,
-    {}
-  );
+export function AccountEditor({
+  account,
+  saveAction: save,
+  resetAction: reset,
+  statusAction,
+}: {
+  account: ManagedAccount;
+  saveAction: AccountFormAction;
+  resetAction: AccountFormAction;
+  statusAction: (formData: FormData) => void | Promise<void>;
+}) {
+  const [saveState, saveAction] = useFormState<AccountState, FormData>(save, {});
+  const [resetState, resetAction] = useFormState<AccountState, FormData>(reset, {});
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -65,7 +78,7 @@ export function AccountEditor({ account }: { account: ManagedAccount }) {
             {account.username ? ` · ${account.username}` : ""}
           </div>
         </div>
-        <form action={setAccountStatusAction}>
+        <form action={statusAction}>
           <input type="hidden" name="accountId" value={account.id} />
           <button className={disabled ? "btn-ghost" : "btn-danger"}>
             {disabled ? "فعال‌سازی ورود" : "غیرفعال‌کردن ورود"}
@@ -172,7 +185,7 @@ export function AccountEditor({ account }: { account: ManagedAccount }) {
               type="text"
               dir="ltr"
               className="input text-left"
-              placeholder="خالی بگذارید تا رمز تصادفی ساخته شود"
+              placeholder="خالی بگذارید تا رمز پیش‌فرض ۱۲۳۴۵۶ تنظیم شود"
               autoComplete="off"
             />
           </div>

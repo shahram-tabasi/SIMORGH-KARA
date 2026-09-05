@@ -52,8 +52,8 @@ export function MemberForm({ slug }: { slug: string }) {
           <input name="email" type="email" dir="ltr" required className="input text-left" />
         </div>
         <div>
-          <label className="label">رمز عبور اولیه</label>
-          <input name="password" type="text" required className="input" placeholder="حداقل ۶ کاراکتر" />
+          <label className="label">رمز عبور اولیه (اختیاری)</label>
+          <input name="password" type="text" className="input" placeholder="خالی بگذارید تا ۱۲۳۴۵۶ شود" />
         </div>
       </div>
       <div className="flex justify-end">
