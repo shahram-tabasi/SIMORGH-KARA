@@ -1,4 +1,4 @@
-import { requireTenant, hasModule } from "@/lib/session";
+import { requireTenant, hasModule, enforcePasswordChange } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { Shell, type NavGroup, type NavItem } from "@/components/Shell";
 import { ReminderWatcher } from "@/components/ReminderWatcher";
@@ -11,6 +11,7 @@ export default async function TenantLayout({
   params: { slug: string };
 }) {
   const ctx = await requireTenant(params.slug);
+  await enforcePasswordChange(ctx.session.sub);
   const base = `/app/${params.slug}`;
   const avatarUrl = await withTenant(ctx.company.schema, async (tx) => {
     const [m] = await tx<{ avatar_url: string | null }[]>`

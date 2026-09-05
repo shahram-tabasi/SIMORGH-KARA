@@ -68,9 +68,10 @@ export async function createHoldingAction(
     const passwordHash = await hashPassword(parsed.data.adminPassword);
     await sql`
       INSERT INTO platform.user_accounts
-        (email, password_hash, full_name, is_holding_admin, holding_id)
+        (email, password_hash, full_name, is_holding_admin, holding_id,
+         must_change_password)
       VALUES (${parsed.data.adminEmail}, ${passwordHash}, ${parsed.data.adminName},
-              true, ${holding.id})
+              true, ${holding.id}, true)
     `;
   } catch (e) {
     return { error: e instanceof Error ? e.message : "خطا در ساخت هولدینگ." };
@@ -257,7 +258,7 @@ export async function changeOwnPasswordAction(
 
   await sql`
     UPDATE platform.user_accounts
-    SET password_hash = ${await hashPassword(next)}
+    SET password_hash = ${await hashPassword(next)}, must_change_password = false
     WHERE id = ${session.sub}
   `;
   return { ok: "رمز عبور شما تغییر کرد." };
@@ -386,7 +387,8 @@ export async function resetManagedPasswordAction(
 
   await sql`
     UPDATE platform.user_accounts
-    SET password_hash = ${await hashPassword(password)}
+    SET password_hash = ${await hashPassword(password)},
+        must_change_password = true
     WHERE id = ${accountId}
   `;
 

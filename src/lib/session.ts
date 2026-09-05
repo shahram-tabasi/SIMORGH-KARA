@@ -9,6 +9,18 @@ import {
   type ModuleKey,
 } from "./modules";
 
+/**
+ * Redirect to the forced password-change screen while the account still carries
+ * a password somebody else chose. Called from the three panel layouts, so page
+ * navigation is gated while JSON route handlers (feeds, ICS, exports) are not.
+ */
+export async function enforcePasswordChange(accountId: string): Promise<void> {
+  const [account] = await sql<{ must_change_password: boolean }[]>`
+    SELECT must_change_password FROM platform.user_accounts WHERE id = ${accountId}
+  `;
+  if (account?.must_change_password) redirect("/change-password");
+}
+
 export interface PlatformContext {
   session: SessionData;
 }

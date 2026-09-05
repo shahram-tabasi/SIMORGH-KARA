@@ -54,6 +54,10 @@ async function main() {
       ALTER TABLE platform.holdings
         ADD COLUMN IF NOT EXISTS modules text[] NOT NULL
         DEFAULT '{org,hr,finance,inventory,hrc,api}';
+
+      -- Forced password change after creation or an admin reset.
+      ALTER TABLE platform.user_accounts
+        ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false;
     `);
 
     const tenants = await sql<{ schema_name: string }[]>`

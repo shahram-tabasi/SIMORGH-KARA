@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { sql } from "@/lib/db";
 import { verifyPassword, createSession } from "@/lib/auth";
+import { DEFAULT_PASSWORD } from "@/lib/password";
 
 export interface CompanyLoginState {
   error?: string;
@@ -39,9 +40,10 @@ export async function companyLoginAction(
       full_name: string;
       password_hash: string;
       status: string;
+      must_change_password: boolean;
     }[]
   >`
-    SELECT id, email, full_name, password_hash, status
+    SELECT id, email, full_name, password_hash, status, must_change_password
     FROM platform.user_accounts
     WHERE company_id = ${company.id}
       AND (username = ${username} OR email = ${username})
@@ -54,6 +56,14 @@ export async function companyLoginAction(
   const ok = await verifyPassword(password, account.password_hash);
   if (!ok) return { error: "نام کاربری یا رمز عبور نادرست است." };
 
+  const mustChange = account.must_change_password || password === DEFAULT_PASSWORD;
+  if (mustChange && !account.must_change_password) {
+    await sql`
+      UPDATE platform.user_accounts SET must_change_password = true
+      WHERE id = ${account.id}
+    `;
+  }
+
   await createSession({
     sub: account.id,
     email: account.email,
@@ -63,5 +73,5 @@ export async function companyLoginAction(
     schema: company.schema_name,
     slug: company.slug,
   });
-  redirect(`/app/${company.slug}`);
+  redirect(mustChange ? "/change-password" : `/app/${company.slug}`);
 }

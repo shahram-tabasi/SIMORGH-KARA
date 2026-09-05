@@ -220,7 +220,8 @@ export async function resetHoldingUserPasswordAction(
 
   await sql`
     UPDATE platform.user_accounts
-    SET password_hash = ${await hashPassword(password)}
+    SET password_hash = ${await hashPassword(password)},
+        must_change_password = true
     WHERE id = ${accountId}
   `;
 
@@ -304,7 +305,7 @@ export async function changeHoldingPasswordAction(
 
   await sql`
     UPDATE platform.user_accounts
-    SET password_hash = ${await hashPassword(next)}
+    SET password_hash = ${await hashPassword(next)}, must_change_password = false
     WHERE id = ${ctx.session.sub}
   `;
   return { ok: "رمز عبور شما تغییر کرد." };

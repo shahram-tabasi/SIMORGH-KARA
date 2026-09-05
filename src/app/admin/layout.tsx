@@ -1,4 +1,4 @@
-import { requirePlatformAdmin } from "@/lib/session";
+import { requirePlatformAdmin, enforcePasswordChange } from "@/lib/session";
 import { Shell } from "@/components/Shell";
 
 export default async function AdminLayout({
@@ -7,6 +7,7 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const { session } = await requirePlatformAdmin();
+  await enforcePasswordChange(session.sub);
 
   return (
     <Shell

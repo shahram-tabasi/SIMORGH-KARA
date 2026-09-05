@@ -1,4 +1,4 @@
-import { requireHolding } from "@/lib/session";
+import { requireHolding, enforcePasswordChange } from "@/lib/session";
 import { Shell } from "@/components/Shell";
 
 export default async function HoldingLayout({
@@ -7,6 +7,7 @@ export default async function HoldingLayout({
   children: React.ReactNode;
 }) {
   const { session, holding } = await requireHolding();
+  await enforcePasswordChange(session.sub);
 
   return (
     <Shell

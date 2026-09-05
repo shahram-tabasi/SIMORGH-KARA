@@ -75,8 +75,10 @@ export async function createMemberAction(
 
   const passwordHash = await hashPassword(parsed.data.password);
   const [account] = await sql<{ id: string }[]>`
-    INSERT INTO platform.user_accounts (email, password_hash, full_name, company_id)
-    VALUES (${parsed.data.email}, ${passwordHash}, ${parsed.data.fullName}, ${ctx.company.id})
+    INSERT INTO platform.user_accounts
+      (email, password_hash, full_name, company_id, must_change_password)
+    VALUES (${parsed.data.email}, ${passwordHash}, ${parsed.data.fullName},
+            ${ctx.company.id}, true)
     RETURNING id
   `;
 
@@ -826,7 +828,8 @@ export async function resetMemberPasswordAction(
 
   await sql`
     UPDATE platform.user_accounts
-    SET password_hash = ${await hashPassword(password)}
+    SET password_hash = ${await hashPassword(password)},
+        must_change_password = true
     WHERE id = ${accountId}
   `;
 

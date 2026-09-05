@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { sql } from "@/lib/db";
 import { verifyPassword, createSession } from "@/lib/auth";
+import { DEFAULT_PASSWORD } from "@/lib/password";
 
 const schema = z.object({
   email: z.string().email("ایمیل نامعتبر است."),
@@ -39,10 +40,12 @@ export async function loginAction(
       holding_id: string | null;
       company_id: string | null;
       status: string;
+      must_change_password: boolean;
     }[]
   >`
     SELECT id, email, full_name, password_hash, is_platform_admin,
-           is_holding_admin, holding_id, company_id, status
+           is_holding_admin, holding_id, company_id, status,
+           must_change_password
     FROM platform.user_accounts WHERE email = ${email}
   `;
 
@@ -55,6 +58,16 @@ export async function loginAction(
     return { error: "ایمیل یا رمز عبور نادرست است." };
   }
 
+  // Anyone still signing in with the shared default is flagged here too, so
+  // accounts that predate the flag are caught the first time they appear.
+  const mustChange = account.must_change_password || password === DEFAULT_PASSWORD;
+  if (mustChange && !account.must_change_password) {
+    await sql`
+      UPDATE platform.user_accounts SET must_change_password = true
+      WHERE id = ${account.id}
+    `;
+  }
+
   if (account.is_platform_admin) {
     await createSession({
       sub: account.id,
@@ -62,7 +75,7 @@ export async function loginAction(
       name: account.full_name,
       kind: "platform",
     });
-    redirect("/admin");
+    redirect(mustChange ? "/change-password" : "/admin");
   }
 
   if (account.is_holding_admin && account.holding_id) {
@@ -73,7 +86,7 @@ export async function loginAction(
       kind: "holding",
       holdingId: account.holding_id,
     });
-    redirect("/holding");
+    redirect(mustChange ? "/change-password" : "/holding");
   }
 
   if (!account.company_id) {
@@ -100,5 +113,5 @@ export async function loginAction(
     schema: company.schema_name,
     slug: company.slug,
   });
-  redirect(`/app/${company.slug}`);
+  redirect(mustChange ? "/change-password" : `/app/${company.slug}`);
 }

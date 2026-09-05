@@ -82,9 +82,9 @@ export async function provisionCompany(
   const passwordHash = await hashPassword(input.adminPassword);
   const [account] = await sql<{ id: string }[]>`
     INSERT INTO platform.user_accounts
-      (email, password_hash, full_name, company_id)
+      (email, password_hash, full_name, company_id, must_change_password)
     VALUES
-      (${input.adminEmail}, ${passwordHash}, ${input.adminName}, ${companyId})
+      (${input.adminEmail}, ${passwordHash}, ${input.adminName}, ${companyId}, true)
     RETURNING id
   `;
   const adminAccountId = account.id;

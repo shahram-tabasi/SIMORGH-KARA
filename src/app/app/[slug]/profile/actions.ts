@@ -34,7 +34,8 @@ export async function changePasswordAction(
 
   const hash = await hashPassword(next);
   await sql`
-    UPDATE platform.user_accounts SET password_hash = ${hash}
+    UPDATE platform.user_accounts
+    SET password_hash = ${hash}, must_change_password = false
     WHERE id = ${ctx.session.sub}
   `;
   return { ok: "رمز عبور با موفقیت تغییر کرد." };

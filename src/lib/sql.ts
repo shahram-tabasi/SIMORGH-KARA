@@ -59,6 +59,9 @@ CREATE TABLE IF NOT EXISTS platform.user_accounts (
   company_id         uuid REFERENCES platform.companies(id) ON DELETE CASCADE,
   status             text NOT NULL DEFAULT 'active'
                        CHECK (status IN ('active','disabled')),
+  -- true while the account still carries a password somebody else chose
+  -- (creation or an admin reset); the panels force a change before use.
+  must_change_password boolean NOT NULL DEFAULT false,
   created_at         timestamptz NOT NULL DEFAULT now()
 );
 
