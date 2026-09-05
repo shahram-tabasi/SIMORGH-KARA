@@ -422,6 +422,41 @@ CREATE INDEX IF NOT EXISTS idx_hrc_audit_at ON hrc_audit_log(at DESC);
 CREATE INDEX IF NOT EXISTS idx_hrc_audit_subject
   ON hrc_audit_log(subject_member_id, at DESC);
 
+-- ═══════════ هویت دستگاه — بلیت ثبت‌نام و چالش تازه‌سازی (فاز ۳) ═══════════
+-- کلید خصوصی هرگز از Keystore گوشی بیرون نمی‌آید؛ سرور فقط کلید عمومی را دارد.
+-- بلیت ثبت‌نام کوتاه‌عمر و یک‌بارمصرف است و فقط هشِ آن ذخیره می‌شود.
+CREATE TABLE IF NOT EXISTS hrc_enrolment_tickets (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  token_hash text NOT NULL UNIQUE,
+  member_id  uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  issued_ip  text,
+  expires_at timestamptz NOT NULL,
+  used_at    timestamptz,
+  device_id  uuid REFERENCES hrc_devices(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_hrc_ticket_expiry
+  ON hrc_enrolment_tickets(expires_at) WHERE used_at IS NULL;
+
+-- چالش تازه‌سازی: سرور یک nonce می‌دهد، دستگاه آن را با کلید Keystore امضا
+-- می‌کند. هر nonce یک‌بارمصرف است، پس امضای شنود‌شده دوباره کار نمی‌کند.
+CREATE TABLE IF NOT EXISTS hrc_device_challenges (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  device_id  uuid NOT NULL REFERENCES hrc_devices(id) ON DELETE CASCADE,
+  nonce      text NOT NULL UNIQUE,
+  expires_at timestamptz NOT NULL,
+  used_at    timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_hrc_challenge_device
+  ON hrc_device_challenges(device_id, expires_at DESC);
+
+-- کلید عمومی دستگاه چه الگوریتمی دارد (EC P-256 از Keystore یا Ed25519)
+ALTER TABLE hrc_devices
+  ADD COLUMN IF NOT EXISTS key_algorithm text,
+  ADD COLUMN IF NOT EXISTS enrolled_at timestamptz,
+  ADD COLUMN IF NOT EXISTS token_version int NOT NULL DEFAULT 1;
+
 -- شمارهٔ پرسنلی خوانا (EMP-1028) — اختیاری و افزودنی، هیچ کد موجودی به آن وابسته نیست
 ALTER TABLE members
   ADD COLUMN IF NOT EXISTS employee_code text;

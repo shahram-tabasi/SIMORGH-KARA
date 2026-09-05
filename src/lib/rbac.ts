@@ -72,6 +72,18 @@ export const PERMISSIONS = {
   "hrc.teams.manage": "مدیریت تیم‌های امداد و واکنش (HRC)",
   "hrc.dispatch": "اعزام تیم HRC به محل حادثه",
   "hrc.thresholds.manage": "تنظیم آستانه‌های سلامت و قوانین هشدار",
+  // HRC نسخهٔ ۲ — کلیدهای افزوده. هیچ‌کدام کلید قدیمی را جایگزین نمی‌کند، پس
+  // هیچ نقشی دسترسی از دست نمی‌دهد.
+  "hrc.device.self": "ثبت و مدیریت دستگاه ایمنی خودم (اپ موبایل)",
+  "hrc.incidents.view": "مشاهدهٔ پرونده‌های حادثه",
+  "hrc.incidents.ack": "تأیید دریافت و پیگیری پروندهٔ حادثه",
+  "hrc.incidents.respond": "ثبت اقدام میدانی و بستن پروندهٔ حادثه",
+  "hrc.zones.manage": "مدیریت ناحیه‌های ایمنی (ژئوفنس نسخهٔ ۲)",
+  "hrc.rules.manage": "مدیریت قوانین ریسک و هشدار",
+  "hrc.policy.manage": "تنظیم سیاست حریم خصوصی و مدت نگهداشت داده",
+  "hrc.audit.view": "مشاهدهٔ گزارش حسابرسی دسترسی به داده‌های افراد",
+  "hrc.analytics.view": "مشاهدهٔ گزارش‌ها و تحلیل‌های ایمنی",
+  "hrc.simulator.run": "اجرای شبیه‌ساز دمو",
 
   /* --------------------------------- API ------------------------------- */
   "api.keys.manage": "مدیریت کلیدهای API و اتصال نرم‌افزارهای دیگر",
@@ -137,6 +149,16 @@ export const PERMISSION_MODULE: Record<PermissionKey, ModuleKey> = {
   "hrc.teams.manage": "hrc",
   "hrc.dispatch": "hrc",
   "hrc.thresholds.manage": "hrc",
+  "hrc.device.self": "hrc",
+  "hrc.incidents.view": "hrc",
+  "hrc.incidents.ack": "hrc",
+  "hrc.incidents.respond": "hrc",
+  "hrc.zones.manage": "hrc",
+  "hrc.rules.manage": "hrc",
+  "hrc.policy.manage": "hrc",
+  "hrc.audit.view": "hrc",
+  "hrc.analytics.view": "hrc",
+  "hrc.simulator.run": "hrc",
 
   "api.keys.manage": "api",
   "api.read": "api",
@@ -196,7 +218,7 @@ export const DEFAULT_ROLES: {
   {
     name: "کاربر",
     description: "دسترسی پایه — فقط کارتابل شخصی خود",
-    permissions: ["calendar.view", "hrc.view"],
+    permissions: ["calendar.view", "hrc.view", "hrc.device.self"],
     is_system: true,
   },
   {
@@ -245,6 +267,52 @@ export const DEFAULT_ROLES: {
       "hrc.dispatch",
       "hrc.teams.manage",
     ],
+    is_system: false,
+  },
+  // نردبان نقش‌های HRC نسخهٔ ۲ — هر پله شامل پلهٔ قبلی است.
+  {
+    name: "نگهبان (HRC)",
+    description: "قالب آماده — پایش زنده و تأیید دریافت هشدار، بدون اقدام میدانی",
+    permissions: ["hrc.view", "hrc.monitor", "hrc.incidents.view", "hrc.incidents.ack"],
+    is_system: false,
+  },
+  {
+    name: "امدادگر (HRC)",
+    description: "قالب آماده — پاسخ میدانی به حادثه و بستن پرونده",
+    permissions: [
+      "hrc.view",
+      "hrc.monitor",
+      "hrc.incidents.view",
+      "hrc.incidents.ack",
+      "hrc.incidents.respond",
+      "hrc.dispatch",
+    ],
+    is_system: false,
+  },
+  {
+    name: "مدیر ایمنی (HRC)",
+    description: "قالب آماده — ناحیه‌بندی، قوانین ریسک و مدیریت دستگاه‌ها",
+    permissions: [
+      "hrc.view",
+      "hrc.monitor",
+      "hrc.incidents.view",
+      "hrc.incidents.ack",
+      "hrc.incidents.respond",
+      "hrc.dispatch",
+      "hrc.teams.manage",
+      "hrc.zones.manage",
+      "hrc.map.manage",
+      "hrc.rules.manage",
+      "hrc.thresholds.manage",
+      "hrc.devices.manage",
+      "hrc.analytics.view",
+    ],
+    is_system: false,
+  },
+  {
+    name: "مدیر HRC",
+    description: "قالب آماده — دسترسی کامل به پنل HRC شامل حریم خصوصی و حسابرسی",
+    permissions: permissionsOfModule("hrc"),
     is_system: false,
   },
 ];

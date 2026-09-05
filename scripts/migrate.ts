@@ -418,21 +418,36 @@ async function main() {
       `);
 
       // Add the ready-made panel roles (مدیر مالی، انباردار، کارشناس HRC…) for
-      // companies provisioned before they existed. Existing roles are untouched.
+      // companies provisioned before they existed.
+      //
+      // A role that already exists keeps every key it has. For *system* roles
+      // («مدیر سامانه»، «کاربر») the default keys are also granted additively,
+      // so a company provisioned before a key existed still gets it — that is
+      // how an existing «کاربر» picks up hrc.device.self and can enrol a phone.
+      // Company-tuned template roles (is_system = false) are never touched.
       for (const role of DEFAULT_ROLES) {
-        const [r] = await sql.unsafe<{ id: string }[]>(
+        const [created] = await sql.unsafe<{ id: string }[]>(
           `INSERT INTO "${schema_name}".roles (name, description, is_system)
            VALUES ($1,$2,$3)
            ON CONFLICT (name) DO NOTHING
            RETURNING id`,
           [role.name, role.description, role.is_system]
         );
-        if (!r) continue; // role already existed — leave its permissions alone
+        let roleId = created?.id ?? null;
+        if (!roleId) {
+          if (!role.is_system) continue; // existing template role — leave it alone
+          const [existing] = await sql.unsafe<{ id: string }[]>(
+            `SELECT id FROM "${schema_name}".roles WHERE name = $1 AND is_system = true`,
+            [role.name]
+          );
+          roleId = existing?.id ?? null;
+          if (!roleId) continue;
+        }
         for (const perm of role.permissions) {
           await sql.unsafe(
             `INSERT INTO "${schema_name}".role_permissions (role_id, permission_key)
              VALUES ($1,$2) ON CONFLICT DO NOTHING`,
-            [r.id, perm]
+            [roleId, perm]
           );
         }
       }

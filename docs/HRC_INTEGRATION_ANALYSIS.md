@@ -613,7 +613,7 @@ the APKs; that is a Phase 8 task, not an assumption.
 |---|---|---|
 | **1** | This analysis | ✔ done |
 | **2** | Schema + migrations: all tables in §4, backfill from v1, retention/audit scaffolding, seed default rules | ✔ done — see `docs/HRC_SCHEMA_V2.md` |
-| **3** | Backend API: device identity & enrolment, ingest pipeline, risk engine, incident lifecycle, RBAC keys, privacy policy gate, audit log, OpenAPI docs | ✔ HTTP tests against a running server |
+| **3** | Backend API: device identity & enrolment, ingest pipeline, risk engine, incident lifecycle, RBAC keys, privacy policy gate, audit log, OpenAPI docs | ✔ done — see `docs/HRC_API_V2.md` |
 | **4** | Real-time: NOTIFY publisher, SSE stream, permission-filtered subscriptions, dashboard live wiring | ✔ two-client SSE test with real events |
 | **5** | Android: Gradle project, shared `core/*`, phone MVP, Wear OS MVP, offline queue, phone↔watch link | ⚠ core compiles/tests here; APKs need SDK/CI |
 | **6** | HRC Command Center: map, incidents, monitor, device board, analytics, config screens, fa/en switcher | ✔ browser-driven tests |

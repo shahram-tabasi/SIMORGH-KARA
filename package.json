@@ -11,7 +11,8 @@
     "db:seed": "node --env-file=.env --import tsx scripts/seed.ts",
     "db:demo": "node --env-file=.env --import tsx scripts/demo.ts",
     "db:migrate": "node --env-file=.env --import tsx scripts/migrate.ts",
-    "db:reset": "node --env-file=.env --import tsx scripts/reset.ts"
+    "db:reset": "node --env-file=.env --import tsx scripts/reset.ts",
+    "hrc:retention": "node --env-file=.env --import tsx scripts/hrc-retention.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
