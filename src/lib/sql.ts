@@ -398,5 +398,152 @@ CREATE TABLE IF NOT EXISTS ledger_lines (
   debit      numeric(18,2) NOT NULL DEFAULT 0,
   credit     numeric(18,2) NOT NULL DEFAULT 0
 );
+
+-- HRC — سلامت و ایمنی (Health & Safety) ------------------------------------
+
+-- شرکت‌ها می‌توانند موقعیت جغرافیایی خود را ثبت کنند تا روی نقشه نمایش داده شود.
+CREATE TABLE IF NOT EXISTS company_locations (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id    uuid NOT NULL REFERENCES platform.companies(id) ON DELETE CASCADE,
+  name          text NOT NULL,                 -- نام سایت/کارخانه/دفتر
+  address       text,
+  lat           double precision NOT NULL,     -- عرض جغرافیایی
+  lng           double precision NOT NULL,     -- طول جغرافیایی
+  radius_meters int NOT NULL DEFAULT 100,      -- شعاع محدودهٔ مجاز (برای geofence)
+  location_type text NOT NULL DEFAULT 'office'
+                  CHECK (location_type IN ('office','factory','mine','warehouse','other')),
+  is_active     boolean NOT NULL DEFAULT true,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_company_locations_company ON company_locations(company_id);
+
+-- گزارش حوادث /近 Misses (گزارش شبه‌حادثه)
+CREATE TABLE IF NOT EXISTS hrc_incidents (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  reported_by   uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  location_id   uuid REFERENCES company_locations(id) ON DELETE SET NULL,
+  incident_type text NOT NULL DEFAULT 'near_miss'
+                  CHECK (incident_type IN ('near_miss','injury','equipment_damage','fire','chemical_spill','other')),
+  severity      text NOT NULL DEFAULT 'low'
+                  CHECK (severity IN ('low','medium','high','critical')),
+  title         text NOT NULL,
+  description   text,
+  occurred_at   timestamptz NOT NULL DEFAULT now(),
+  lat           double precision,              -- موقعیت دقیق حادثه
+  lng           double precision,
+  photo_url     text,                          -- عکس صحنه حادثه
+  status        text NOT NULL DEFAULT 'reported'
+                  CHECK (status IN ('reported','under_review','resolved','closed')),
+  assigned_to   uuid REFERENCES members(id) ON DELETE SET NULL,
+  resolved_at   timestamptz,
+  resolution    text,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_hrc_incidents_location ON hrc_incidents(location_id);
+CREATE INDEX IF NOT EXISTS idx_hrc_incidents_status ON hrc_incidents(status);
+
+-- بازرسی‌های ایمنی (Safety Inspections)
+CREATE TABLE IF NOT EXISTS hrc_inspections (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  inspector_id  uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  location_id   uuid REFERENCES company_locations(id) ON DELETE SET NULL,
+  inspection_date date NOT NULL DEFAULT current_date,
+  checklist     jsonb,                         -- چک‌لیست بازرسی (نتایج هر آیتم)
+  score         numeric(5,2),                  -- امتیاز کل
+  findings      text,                          -- یافته‌ها
+  recommendations text,                        -- توصیه‌ها
+  status        text NOT NULL DEFAULT 'draft'
+                  CHECK (status IN ('draft','submitted','completed')),
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_hrc_inspections_location ON hrc_inspections(location_id);
+
+-- تجهیزات ایمنی و وضعیت آن‌ها (Safety Equipment)
+CREATE TABLE IF NOT EXISTS hrc_equipment (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  location_id   uuid REFERENCES company_locations(id) ON DELETE SET NULL,
+  name          text NOT NULL,                 -- نام تجهیز (مثلاً کپسول آتش‌نشانی)
+  type          text NOT NULL DEFAULT 'fire_extinguisher'
+                  CHECK (type IN ('fire_extinguisher','first_aid_kit','eye_wash','gas_detector','ppe_cabinet','other')),
+  serial_number text,
+  install_date  date,
+  last_check_date date,
+  next_check_date date,
+  status        text NOT NULL DEFAULT 'ok'
+                  CHECK (status IN ('ok','needs_attention','out_of_service','expired')),
+  notes         text,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_hrc_equipment_location ON hrc_equipment(location_id);
+
+-- آموزش‌های ایمنی گذرانده‌شده توسط اعضا
+CREATE TABLE IF NOT EXISTS hrc_training_records (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  member_id     uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  training_type text NOT NULL,                 -- نوع آموزش (مثلاً ایمنی حریق، HSE مقدماتی)
+  completed_at  timestamptz NOT NULL DEFAULT now(),
+  expiry_date   date,                          -- تاریخ انقضای گواهینامه
+  certificate_url text,
+  trainer       text,                          -- نام مربی
+  score         numeric(5,2),                  -- نمره کسب‌شده
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_hrc_training_member ON hrc_training_records(member_id);
+
+-- ساعت‌های هوشمند و دستگاه‌های پوشیدنی (Smartwatches & Wearables)
+CREATE TABLE IF NOT EXISTS hrc_smartwatches (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  member_id     uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  device_name   text NOT NULL,                 -- نام دستگاه (مثلاً QCY Watch، Amazfit)
+  device_model  text,                          -- مدل دستگاه
+  mac_address   text UNIQUE,                   -- آدرس MAC برای اتصال بلوتوث
+  device_token  text UNIQUE,                   -- توکن احراز هویت برای API
+  is_active     boolean NOT NULL DEFAULT true,
+  last_sync     timestamptz,                   -- آخرین همگام‌سازی داده‌ها
+  battery_level int CHECK (battery_level >= 0 AND battery_level <= 100),
+  firmware_version text,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_hrc_smartwatches_member ON hrc_smartwatches(member_id);
+
+-- داده‌های سلامت لحظه‌ای از ساعت‌های هوشمند
+CREATE TABLE IF NOT EXISTS hrc_health_metrics (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  smartwatch_id uuid NOT NULL REFERENCES hrc_smartwatches(id) ON DELETE CASCADE,
+  member_id     uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  recorded_at   timestamptz NOT NULL DEFAULT now(),
+  heart_rate    int CHECK (heart_rate >= 0 AND heart_rate <= 250),  -- ضربان قلب
+  spo2          int CHECK (spo2 >= 0 AND spo2 <= 100),              -- سطح اکسیژن خون
+  body_temp     numeric(4,2),                                       -- دمای بدن (درجه سانتی‌گراد)
+  steps         int DEFAULT 0,                                      -- تعداد قدم‌ها
+  calories      int DEFAULT 0,                                      -- کالری سوزانده شده
+  activity_level text DEFAULT 'normal'
+                  CHECK (activity_level IN ('idle','walking','running','heavy_work','rest')),
+  stress_level  int CHECK (stress_level >= 0 AND stress_level <= 100), -- سطح استرس
+  is_alert      boolean NOT NULL DEFAULT false,                     -- آیا هشدار سلامت دارد؟
+  alert_reason  text,                                               -- دلیل هشدار
+  location_lat  double precision,                                   -- موقعیت مکانی هنگام ثبت
+  location_lng  double precision,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_hrc_health_metrics_member ON hrc_health_metrics(member_id);
+CREATE INDEX IF NOT EXISTS idx_hrc_health_metrics_time ON hrc_health_metrics(recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_hrc_health_metrics_alerts ON hrc_health_metrics(is_alert) WHERE is_alert = true;
+
+-- اهداف و شاخص‌های HRC (KPIs) در سطح شرکت
+CREATE TABLE IF NOT EXISTS hrc_goals (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id    uuid NOT NULL REFERENCES platform.companies(id) ON DELETE CASCADE,
+  year          int NOT NULL,
+  goal_type     text NOT NULL DEFAULT 'ltif'
+                  CHECK (goal_type IN ('ltif','trir','near_miss_reports','training_hours','inspection_score')),
+  target_value  numeric(10,2) NOT NULL,
+  actual_value  numeric(10,2) DEFAULT 0,
+  status        text NOT NULL DEFAULT 'in_progress'
+                  CHECK (status IN ('in_progress','achieved','at_risk','missed')),
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_hrc_goals_company ON hrc_goals(company_id);
 `;
 }

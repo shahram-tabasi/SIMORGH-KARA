@@ -83,6 +83,12 @@ export default async function TenantLayout({
       ],
     },
     {
+      title: "HRC — سلامت و ایمنی",
+      items: [
+        { href: `${base}/hrc`, label: "داشبورد ایمنی", icon: "🛡️" },
+      ],
+    },
+    {
       title: "حساب کاربری",
       items: [{ href: `${base}/profile`, label: "پروفایل من", icon: "👤" }],
     },
