@@ -10,7 +10,7 @@ export async function GET(
   try {
     const ctx = await requireTenant(params.slug);
     
-    const smartwatches = await withTenant(ctx.company.schema_name, async (tx) => {
+    const smartwatches = await withTenant(ctx.company.schema, async (tx) => {
       const result = await tx`
         SELECT 
           sw.id,
@@ -59,7 +59,7 @@ export async function POST(
       );
     }
 
-    const smartwatch = await withTenant(ctx.company.schema_name, async (tx) => {
+    const smartwatch = await withTenant(ctx.company.schema, async (tx) => {
       const result = await tx`
         INSERT INTO hrc_smartwatches (member_id, device_name, device_model, mac_address, device_token)
         VALUES (${member_id}, ${device_name}, ${device_model || null}, ${mac_address || null}, ${device_token || null})

@@ -1,0 +1,51 @@
+name: qcy_health_gateway
+description: اپلیکیشن موبایل برای دریافت داده از ساعت‌های هوشمند QCY و ارسال به سیمرغ‌کارا
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # بلوتوث و اتصال به ساعت
+  flutter_blue_plus: ^1.32.0
+  permission_handler: ^11.0.1
+  
+  # ارتباط با سرور
+  http: ^1.1.0
+  dio: ^5.4.0
+  
+  # ذخیره‌سازی محلی
+  shared_preferences: ^2.2.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  
+  # UI و آیکون
+  cupertino_icons: ^1.0.6
+  flutter_svg: ^2.0.9
+  
+  # مدیریت وضعیت
+  provider: ^6.1.1
+  get_it: ^7.6.4
+  
+  # کاربردی
+  uuid: ^4.2.2
+  intl: ^0.18.1
+  connectivity_plus: ^5.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.7
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/icons/

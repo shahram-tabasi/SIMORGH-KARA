@@ -1,0 +1,57 @@
+# پیکربندی پل ارتباطی ساعت‌های هوشمند QCY به سیمرغ‌کارا
+# این فایل تنظیمات پیش‌فرض و ساختار داده‌های ارسالی را تعریف می‌کند
+
+app:
+  name: "QCy Bridge"
+  version: "1.0.0"
+  description: "اندروید بریج برای خواندن داده‌های سلامت از ساعت‌های QCY و ارسال به HRC"
+
+server:
+  # آدرس پایه API سیمرغ‌کارا
+  base_url: "https://your-simorgh-kara-domain.com"
+  # اندپوینت دریافت داده‌های سلامت
+  health_endpoint: "/api/v1/hrc/health"
+  # اندپوینت دریافت موقعیت مکانی
+  location_endpoint: "/api/v1/hrc/location"
+  # توکن احراز هویت دستگاه (باید از پنل ادمین گرفته شود)
+  device_token: "YOUR_DEVICE_TOKEN_HERE"
+
+connection:
+  # نوع اتصال به ساعت (Bluetooth LE)
+  type: "BLE"
+  # نام‌های شناخته شده ساعت‌های QCY برای فیلتر کردن
+  allowed_devices:
+    - "QCY Watch"
+    - "QCY GTS"
+    - "QCY GT"
+  # بازه زمانی ارسال داده‌ها (ثانیه)
+  sync_interval: 30
+  # حداقل تغییرات برای ارسال فوری (مثلاً اگر ضربان قلب ناگهان تغییر کرد)
+  immediate_threshold:
+    heart_rate_max: 180
+    heart_rate_min: 40
+    spo2_min: 90
+
+data_format:
+  # ساختار JSON ارسالی به سرور
+  schema:
+    device_id: "string"      # شناسه یکتای ساعت (MAC Address یا Serial)
+    employee_code: "string"  # کد پرسنلی متصل به این ساعت
+    timestamp: "iso8601"     # زمان دقیق ثبت داده
+    metrics:
+      heart_rate: "integer"  # ضربان قلب
+      spo2: "integer"        # درصد اکسیژن خون
+      temperature: "float"   # دمای بدن (در صورت پشتیبانی سخت‌افزار)
+      steps: "integer"       # تعداد گام‌ها
+      battery: "integer"     # درصد باتری ساعت
+    location:
+      latitude: "float"
+      longitude: "float"
+      accuracy: "float"
+    status: "string"         # وضعیت: normal, warning, critical, sos
+
+security:
+  encryption: "TLS1.3"
+  retry_policy:
+    max_retries: 3
+    backoff_seconds: 5

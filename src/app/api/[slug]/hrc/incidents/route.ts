@@ -10,7 +10,7 @@ export async function GET(
     const ctx = await requireTenant(params.slug);
     
     // Get recent incidents from tenant schema
-    const incidents = await withTenant(ctx.company.schema_name, async (tx) => {
+    const incidents = await withTenant(ctx.company.schema, async (tx) => {
       const result = await tx`
         SELECT 
           id,
