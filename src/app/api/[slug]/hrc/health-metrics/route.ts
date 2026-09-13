@@ -15,7 +15,7 @@ export async function GET(
     const limit = parseInt(searchParams.get("limit") || "50");
     const alerts_only = searchParams.get("alerts_only") === "true";
     
-    const healthMetrics = await withTenant(ctx.company.schema_name, async (tx) => {
+    const healthMetrics = await withTenant(ctx.company.schema, async (tx) => {
       let query = tx`
         SELECT 
           hm.id,
@@ -119,7 +119,7 @@ export async function POST(
     
     const alert_reason = alert_reasons.length > 0 ? alert_reasons.join("، ") : null;
 
-    const metric = await withTenant(ctx.company.schema_name, async (tx) => {
+    const metric = await withTenant(ctx.company.schema, async (tx) => {
       const result = await tx`
         INSERT INTO hrc_health_metrics (
           smartwatch_id, 
@@ -157,7 +157,7 @@ export async function POST(
     });
 
     // Update last_sync on the smartwatch
-    await withTenant(ctx.company.schema_name, async (tx) => {
+    await withTenant(ctx.company.schema, async (tx) => {
       await tx`
         UPDATE hrc_smartwatches 
         SET last_sync = now() 

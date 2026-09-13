@@ -1,0 +1,53 @@
+# QCY Smartwatch Gateway - Docker Compose Configuration
+# این فایل برای اجرای گیت‌وی دریافت داده از ساعت‌های QCY استفاده می‌شود
+
+version: '3.8'
+
+services:
+  qcy-gateway:
+    image: node:18-alpine
+    container_name: qcy-gateway-service
+    working_dir: /app
+    volumes:
+      - ./qcy-gateway:/app
+      - ./node_modules:/app/node_modules
+    ports:
+      - "3001:3001"  # پورت سرویس گیت‌وی
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - SIMORGH_KARA_URL=http://localhost:3000
+      - API_TOKEN=your_api_token_here
+      - BLE_ENABLED=true
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    networks:
+      - simorgh-network
+    command: >
+      sh -c "npm install && npm run build && npm start"
+
+  # سرویس اختیاری برای شبیه‌سازی داده‌های تست
+  qcy-simulator:
+    image: node:18-alpine
+    container_name: qcy-simulator-service
+    working_dir: /app/simulator
+    volumes:
+      - ./qcy-simulator:/app/simulator
+    environment:
+      - GATEWAY_URL=http://qcy-gateway:3001
+      - SIMULATION_INTERVAL=5000  # هر 5 ثانیه داده ارسال می‌کند
+      - DEVICE_COUNT=5  # تعداد دستگاه‌های شبیه‌سازی شده
+    restart: unless-stopped
+    networks:
+      - simorgh-network
+    command: >
+      sh -c "npm install && npm start"
+    profiles:
+      - simulation  # فقط با دستور docker-compose --profile simulation up اجرا می‌شود
+
+networks:
+  simorgh-network:
+    driver: bridge
+
+volumes:
+  node_modules:

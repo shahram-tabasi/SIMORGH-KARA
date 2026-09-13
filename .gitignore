@@ -1,164 +1,75 @@
 ```
 # Dependencies
 node_modules/
+.qcy-bridge-app/.gradle/
+.qcy-bridge-app/build/
+.qcy-bridge-app/app/build/
+.qcy-mobile-app/.dart_tool/
+.qcy-mobile-app/build/
 
 # Build outputs
 dist/
 build/
-.next/
-out/
-
-# Environment variables
-.env
-.env.local
-*.env.*
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
+target/
 
 # Logs
 *.log
 
-# Temporary files
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 *.tmp
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Coverage
 coverage/
 htmlcov/
 .coverage
 
-# Python cache
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Compiled files
-*.o
-*.obj
+.Python
 *.so
-*.a
-*.dll
-*.exe
+*.egg-info/
+.eggs/
+.mypy_cache/
+.pytest_cache/
 
-# OS files
-.DS_Store
-Thumbs.db
-
-# Package managers
+# Node.js
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Testing
-.mypy_cache/
-.pytest_cache/
-coverage.xml
-*.gcov
-*.lcov
+# Java/Android
+*.class
+*.jar
+*.war
+*.ear
+hs_err_pid*
+.recommenders
 
-# Distribution / packaging
-.Python
-*.egg-info/
-.installed.cfg
-*.egg
+# Dart/Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugin-dependencies
+.packages
+*.g.dart
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-coverage.xml
-*.cover
-*.log
-
-# Translations
-*.mo
-*.pot
-
-# Django
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask
-instance/
-.webassets-cache
-
-# Scrapy
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# pipenv
-Pipfile.lock
-
-# PEP 582
-__pypackages__/
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# Sage
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre
-.pyre/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Testing
-.hypothesis/
-.coverage*
-
-# Security
-secret_key
-.salt
-
-# Distribution / Packaging
-.pybuild/
+# TypeScript
+*.tsbuildinfo
+.next/
+.nuxt/
 ```
