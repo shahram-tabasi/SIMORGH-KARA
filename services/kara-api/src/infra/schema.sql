@@ -33,3 +33,43 @@ BEGIN
     ALTER TABLE platform.companies ADD COLUMN IF NOT EXISTS odoo_company_id integer;
   END IF;
 END $$;
+
+-- ── Links and communication (VEO §9a) ─────────────────────────────────────
+
+-- Every Kara record's counterparts in the other systems: one row per system.
+CREATE SCHEMA IF NOT EXISTS kara_core;
+CREATE TABLE IF NOT EXISTS kara_core.links (
+  tenant_id   uuid        NOT NULL,
+  kara_type   text        NOT NULL,              -- company | project | order | member | …
+  kara_id     text        NOT NULL,
+  system      text        NOT NULL,              -- odoo | nextcloud | jitsi | matrix | openstack | …
+  external_id text        NOT NULL,
+  url         text,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, kara_type, kara_id, system)
+);
+
+-- Calls between Kara users: Kara rings, Jitsi carries the voice and video.
+CREATE SCHEMA IF NOT EXISTS kara_comms;
+CREATE TABLE IF NOT EXISTS kara_comms.calls (
+  id          uuid        PRIMARY KEY,
+  tenant_id   uuid        NOT NULL,
+  room        text        NOT NULL,
+  caller      uuid        NOT NULL,               -- platform.user_accounts.id
+  video       boolean     NOT NULL DEFAULT false,
+  status      text        NOT NULL,               -- ringing | active | ended | missed | declined | cancelled
+  started_at  timestamptz NOT NULL DEFAULT now(),
+  answered_at timestamptz,
+  ended_at    timestamptz
+);
+CREATE INDEX IF NOT EXISTS calls_tenant_started ON kara_comms.calls (tenant_id, started_at DESC);
+CREATE TABLE IF NOT EXISTS kara_comms.call_parties (
+  call_id     uuid        NOT NULL REFERENCES kara_comms.calls(id) ON DELETE CASCADE,
+  account_id  uuid        NOT NULL,
+  role        text        NOT NULL,               -- caller | callee
+  state       text        NOT NULL,               -- ringing | joined | declined | missed | busy | left | cancelled
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (call_id, account_id)
+);
+CREATE INDEX IF NOT EXISTS call_parties_account ON kara_comms.call_parties (account_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS call_parties_ringing ON kara_comms.call_parties (updated_at) WHERE state = 'ringing';

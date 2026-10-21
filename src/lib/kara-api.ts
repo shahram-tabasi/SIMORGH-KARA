@@ -86,3 +86,17 @@ export async function syncIdentity(actorAccountId: string, accountId: string): P
     return `ثبت در سامانهٔ ورود انجام نشد: ${(e as Error).message}`;
   }
 }
+
+/**
+ * A kara-api response passed through as it comes (server-sent events): the
+ * caller hands `res.body` to the browser. Aborts with `signal`.
+ */
+export async function karaApiStream(accountId: string, path: string, signal: AbortSignal): Promise<Response> {
+  const base = (process.env.KARA_API_URL ?? "").replace(/\/+$/, "");
+  if (!base) throw new KaraApiError(503, "KARA_API_URL is not set");
+  return fetch(`${base}${path}`, {
+    headers: { authorization: `Bearer ${await serviceToken()}`, "x-kara-account": accountId, accept: "text/event-stream" },
+    signal,
+    cache: "no-store",
+  });
+}

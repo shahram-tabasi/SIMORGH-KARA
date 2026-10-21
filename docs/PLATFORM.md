@@ -92,3 +92,26 @@ Then publish `kara.simorghai.com` like the other names (PowerDNS A record →
 Rolling back the sign-in: `--set kara.passwordLogin=true` brings Kara's
 password form back beside Keycloak (accounts made while it was off have a
 random password: they use "forgot password" in Keycloak, or an admin sets one).
+
+## Calls and meetings (Jitsi)
+
+Kara rings, Jitsi carries the voice and video (docs/VEO.md §9a):
+
+- **Calls between colleagues**: "تماس و جلسه" in the menu (people, group call,
+  recent and missed calls) and 📞 / 🎥 next to each member. The callee's Kara
+  rings at the top of the screen (accept / decline); both meet in the call's
+  private Jitsi room `call-<id>` inside Kara. Unanswered after 45 s
+  (`CALL_RING_SECONDS`): missed, shown to both.
+- **Meeting rooms**: one fixed room per record, `kara-<company>-<topic>`; the
+  company's room from "اتاق جلسه شرکت".
+- **How it works**: kara-api `comms` module. Calls in `kara_comms.calls` /
+  `call_parties`; each open tab holds one server-sent-events stream
+  (`/app/<slug>/comms/live` → kara-api `/v1/me/live`), fed through Postgres
+  NOTIFY so any kara-api replica reaches any tab; a tab that (re)connects is
+  sent the calls still ringing for it. kara-api signs a Jitsi token per person
+  and room (HS256, iss `kara`, aud `jitsi`, sub `meet.jitsi`), with the secret
+  Jitsi's prosody also holds.
+- **Switching it on** (after Kara is deployed with this version):
+  `deploy/jitsi/enable-kara-tokens.sh` makes the shared secret (jitsi/jitsi-jwt
+  and kara/kara-jitsi), restarts kara-api, and switches Jitsi to Kara tokens
+  only (no anonymous rooms). `… off` reopens Jitsi.

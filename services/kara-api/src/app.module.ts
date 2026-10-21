@@ -2,6 +2,9 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { ActorGuard } from './auth/actor.guard';
+import { CallsService } from './comms/calls.service';
+import { CommsController } from './comms/comms.controller';
+import { LiveService } from './comms/live.service';
 import { ConnectorClient } from './erp/connector.client';
 import { ErpConsumer } from './erp/erp.consumer';
 import { ErpController } from './erp/erp.controller';
@@ -31,8 +34,8 @@ function requestLog(req: Request & { actor?: { email: string; via: string } }, r
 }
 
 @Module({
-  controllers: [ErpController, IdentityController, HealthController, MetricsController],
-  providers: [DbService, TenantsService, ActorGuard, ConnectorClient, ReadModelService, ErpConsumer, IdentityService],
+  controllers: [ErpController, IdentityController, CommsController, HealthController, MetricsController],
+  providers: [DbService, TenantsService, ActorGuard, ConnectorClient, ReadModelService, ErpConsumer, IdentityService, LiveService, CallsService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

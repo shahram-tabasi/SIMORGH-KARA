@@ -99,7 +99,8 @@ spec:
 {{/*
 Everything to kara-web; kara-api is not published (kara-web calls it inside
 the cluster). Uploads (face photos, attachments) and the leave assistant's
-answers can take a while: 120 s.
+answers can take a while: 120 s. The live stream (incoming calls, one per
+open tab) stays open for good: no request timeout on that path.
 */}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -115,6 +116,13 @@ spec:
   hostnames:
     - {{ .Values.kara.host }}
   rules:
+    - matches:
+        - path: { type: RegularExpression, value: "^/app/[^/]+/comms/live$" }
+      backendRefs:
+        - name: kara-web
+          port: 3000
+      timeouts:
+        request: 0s
     - matches:
         - path: { type: PathPrefix, value: / }
       backendRefs:

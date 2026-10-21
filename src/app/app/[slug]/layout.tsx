@@ -2,7 +2,8 @@ import { requireTenant } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { Shell, type NavGroup, type NavItem } from "@/components/Shell";
 import { ReminderWatcher } from "@/components/ReminderWatcher";
-import { karaApiEnabled } from "@/lib/kara-api";
+import { karaApi, karaApiEnabled } from "@/lib/kara-api";
+import { CallProvider } from "@/components/comms/CallProvider";
 
 export default async function TenantLayout({
   children,
@@ -20,6 +21,11 @@ export default async function TenantLayout({
     return m?.avatar_url ?? null;
   });
   const can = (k: string) => ctx.member.permissions.has(k);
+  // Calls and meetings only when kara-api has Jitsi configured.
+  const comms = karaApiEnabled()
+    ? await karaApi<{ calls: boolean; meetings: boolean }>(ctx.session.sub, "GET", `/v1/tenants/${encodeURIComponent(params.slug)}/comms`).catch(() => null)
+    : null;
+  const callsOn = !!comms?.calls;
   const push = (cond: boolean, item: NavItem) => (cond ? [item] : []);
 
   const groups: NavGroup[] = [
@@ -42,6 +48,12 @@ export default async function TenantLayout({
           label: "زیرگروه‌ها",
           icon: "🗂",
         }),
+      ],
+    },
+    {
+      title: "ارتباطات",
+      items: [
+        ...push(callsOn, { href: `${base}/calls`, label: "تماس و جلسه", icon: "📞" }),
       ],
     },
     {
@@ -111,7 +123,9 @@ export default async function TenantLayout({
       avatarUrl={avatarUrl}
       profileHref={`${base}/profile`}
     >
-      {children}
+      <CallProvider slug={params.slug} enabled={callsOn}>
+        {children}
+      </CallProvider>
       <ReminderWatcher slug={params.slug} />
     </Shell>
   );

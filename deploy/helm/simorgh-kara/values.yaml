@@ -76,6 +76,15 @@ api:
     connectorUrl: http://erp-connector.erp.svc.cluster.local:3000
     # kara-api's service account in realm simorgh, which the connector trusts.
     tokenUrl: http://keycloak.keycloak.svc.cluster.local:8080/realms/simorgh/protocol/openid-connect/token
+  # Meetings and calls on Jitsi (docs/VEO.md §9a): kara-api signs a token per
+  # person and room. The secret (key jwtSecret) is the one Jitsi's prosody
+  # holds: deploy/jitsi/enable-kara-tokens.sh makes both. Without the Secret,
+  # calls and meetings are simply off.
+  jitsi:
+    url: https://meet.simorghai.com
+    # Jitsi's XMPP domain (the chart's xmpp.domain): the tokens' `sub`.
+    subject: meet.jitsi
+    existingSecret: kara-jitsi
   kafka:
     # 9093 is the plain listener on this cluster (9092 is TLS).
     brokers: simorgh-kafka-kafka-bootstrap.kafka.svc.cluster.local:9093

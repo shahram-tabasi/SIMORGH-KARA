@@ -9,10 +9,12 @@ import { EmploymentForm } from "./EmploymentForm";
 import { UsernameField } from "./UsernameField";
 import { toggleMemberRoleAction, toggleMemberGroupAction } from "../actions";
 import { toJalali } from "@/lib/jalali";
+import { CallButtons } from "@/components/comms/CallButtons";
 
 interface MemberRow {
   id: string;
   full_name: string;
+  account_id: string;
   title: string | null;
   status: string;
   email: string;
@@ -23,7 +25,7 @@ interface MemberRow {
 async function loadData(schema: string) {
   return withTenant(schema, async (tx) => {
     const members = await tx<MemberRow[]>`
-      SELECT m.id, m.full_name, m.title, m.status, m.schedule_id, ua.email, ua.username
+      SELECT m.id, m.full_name, m.account_id, m.title, m.status, m.schedule_id, ua.email, ua.username
       FROM members m
       JOIN platform.user_accounts ua ON ua.id = m.account_id
       ORDER BY m.created_at
@@ -95,6 +97,7 @@ export default async function MembersPage({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-slate-800">{m.full_name}</span>
+                  {!isSelf && m.status === "active" && <CallButtons accountId={m.account_id} name={m.full_name} />}
                   {isSelf && (
                     <span className="badge bg-brand-50 text-brand-700">شما</span>
                   )}

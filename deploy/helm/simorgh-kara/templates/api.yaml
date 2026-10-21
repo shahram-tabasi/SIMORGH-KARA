@@ -93,6 +93,13 @@ spec:
                 secretKeyRef: { name: {{ $kc.existingSecret }}, key: erpClientSecret, optional: true }
             - name: KAFKA_BROKERS
               value: {{ $a.kafka.brokers | quote }}
+            - name: JITSI_URL
+              value: {{ $a.jitsi.url | quote }}
+            - name: JITSI_SUBJECT
+              value: {{ $a.jitsi.subject | quote }}
+            - name: JITSI_JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ $a.jitsi.existingSecret }}, key: jwtSecret, optional: true }
           resources:
             {{- toYaml $a.resources | nindent 12 }}
           securityContext:

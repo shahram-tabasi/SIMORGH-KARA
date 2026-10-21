@@ -65,6 +65,26 @@ export const config = {
     timeoutMs: num('ERP_TIMEOUT_MS', 30_000),
   },
 
+  /**
+   * Meetings and calls on Jitsi (meet.simorghai.com, token auth): Kara signs a
+   * short-lived token per person and room with the secret Jitsi's prosody
+   * also holds (Secret kara-jitsi, the same value as jitsi/jitsi-jwt).
+   */
+  jitsi: {
+    /** Empty turns meetings and calls off. */
+    url: trim(str('JITSI_URL', '')),
+    appId: str('JITSI_APP_ID', 'kara'),
+    audience: str('JITSI_AUDIENCE', 'jitsi'),
+    /** Jitsi's XMPP domain (XMPP_DOMAIN of the chart): the token's `sub`. */
+    subject: str('JITSI_SUBJECT', 'meet.jitsi'),
+    secret: str('JITSI_JWT_SECRET', ''),
+    tokenTtlSeconds: num('JITSI_TOKEN_TTL_SECONDS', 4 * 3600),
+  },
+  calls: {
+    /** Unanswered for this long: a missed call. */
+    ringSeconds: num('CALL_RING_SECONDS', 45),
+  },
+
   kafka: {
     /** Empty: no events; read models only from the backfill. */
     brokers: list('KAFKA_BROKERS'),
