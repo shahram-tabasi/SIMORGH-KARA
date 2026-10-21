@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { sql } from "@/lib/db";
 import { oidcEnabled, passwordLoginEnabled } from "@/lib/oidc";
 import { CompanyLoginForm } from "./LoginForm";
@@ -16,6 +16,8 @@ export default async function CompanyLoginPage({
     SELECT name, slug, domain, status FROM platform.companies WHERE slug = ${params.slug}
   `;
   if (!company) notFound();
+  // Keycloak only: straight to its (Kara-themed) page, for this organization.
+  if (oidcEnabled() && !passwordLoginEnabled()) redirect(`/auth/login?org=${encodeURIComponent(company.slug)}`);
 
   return (
     <main

@@ -1,0 +1,195 @@
+/* =========================================================
+   KARA — Keycloak 26.x login theme (on keycloak.v2 / PatternFly 5)
+   Kara's login page: the welcome background under a dark veil, the Kara
+   logo and name, a glass card, an indigo button edged in amber.
+   ========================================================= */
+@import url("https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css");
+
+:root {
+  --kara-ink: #0a0712;
+  --kara-text: #ffffff;
+  --kara-muted: rgba(255, 255, 255, 0.60);
+  --kara-amber: #fbbf24;
+  --kara-amber-soft: rgba(251, 191, 36, 0.30);
+  --kara-brand: #4f46e5;
+  --kara-indigo: #4338ca;
+  --kara-field: rgba(0, 0, 0, 0.50);
+  --kara-field-border: rgba(255, 255, 255, 0.10);
+}
+
+html.login-pf,
+html.login-pf body,
+.pf-v5-c-login,
+.pf-v5-c-button,
+.pf-v5-c-form-control > input,
+.pf-v5-c-title {
+  font-family: "Vazirmatn", Tahoma, system-ui, sans-serif !important;
+}
+
+/* ── The background ──────────────────────────────────────── */
+
+html.login-pf {
+  min-height: 100%;
+  background: var(--kara-ink) url("../img/kara-bg.jpg") center / cover no-repeat fixed;
+}
+html.login-pf body#keycloak-bg {
+  min-height: 100vh;
+  color: var(--kara-text);
+  /* Kara's two veils: darker where the text sits, clearer in the middle. */
+  background:
+    linear-gradient(to left, rgba(10, 7, 18, 0.65), rgba(10, 7, 18, 0.10) 50%, rgba(10, 7, 18, 0.90)),
+    rgba(10, 7, 18, 0.40) !important;
+}
+.pf-v5-c-login { position: relative; z-index: 1; background: transparent !important; }
+
+/* ── Logo and name (built by js/kara.js) ─────────────────── */
+
+#kc-header { padding-top: 2.5rem !important; margin-bottom: 1.5rem !important; }
+#kc-header-wrapper {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  gap: .35rem;
+  color: var(--kara-text) !important;
+  text-align: center;
+}
+.kara-logo {
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 35px rgba(245, 158, 11, 0.40));
+}
+.kara-name { font-size: 1.85rem; font-weight: 800; letter-spacing: -.01em; text-shadow: 0 2px 12px rgba(0,0,0,.5); }
+.kara-sub {
+  display: flex; align-items: center; gap: .5rem;
+  font-size: .75rem; color: rgba(252, 211, 77, 0.90);
+}
+.kara-sub::before, .kara-sub::after { content: ""; width: 1.5rem; height: 1px; background: rgba(251, 191, 36, 0.40); }
+
+/* ── The glass card ──────────────────────────────────────── */
+
+.pf-v5-c-login__main {
+  max-width: 24rem;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.60);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+.pf-v5-c-login__main::before { display: none; }
+.pf-v5-c-login__main-header { border: 0 !important; text-align: center; justify-content: center; }
+.pf-v5-c-login__main-header .pf-v5-c-title { font-size: 1.25rem !important; font-weight: 700 !important; }
+.pf-v5-c-title { color: var(--kara-text) !important; }
+.pf-v5-c-login__main-body,
+.pf-v5-c-login__main-footer { color: var(--kara-text); }
+
+/* ── Fields ──────────────────────────────────────────────── */
+
+.pf-v5-c-form__label-text,
+.pf-v5-c-form__helper-text,
+.pf-v5-c-helper-text,
+.pf-v5-c-check__label { color: rgba(255, 255, 255, 0.65) !important; font-size: .78rem; }
+
+.pf-v5-c-form-control { background: var(--kara-field) !important; border-radius: .75rem !important; }
+.pf-v5-c-form-control::before { border-color: var(--kara-field-border) !important; border-radius: .75rem !important; }
+.pf-v5-c-form-control::after { border-bottom-width: 0 !important; }
+.pf-v5-c-form-control:focus-within::before {
+  border-color: rgba(251, 191, 36, 0.50) !important;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.30);
+}
+.pf-v5-c-form-control > input,
+.pf-v5-c-form-control > select { color: var(--kara-text) !important; background: transparent !important; }
+.pf-v5-c-form-control > input::placeholder { color: rgba(255, 255, 255, 0.30) !important; }
+.pf-v5-c-form-control > input:focus { outline: none !important; }
+/* Email and password are typed left to right, as on Kara's page. */
+#username, #password, #password-new, #password-confirm, #email { direction: ltr; text-align: left; }
+
+/* Password field and its show/hide button read as one control. */
+.pf-v5-c-button.pf-m-control {
+  background: var(--kara-field) !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+.pf-v5-c-button.pf-m-control::after { border-color: var(--kara-field-border) !important; }
+.pf-v5-c-button.pf-m-control:hover { color: rgba(255, 255, 255, 0.80) !important; }
+.pf-v5-c-check__input { accent-color: var(--kara-brand); }
+
+/* ── Buttons and links ───────────────────────────────────── */
+
+.pf-v5-c-button.pf-m-primary {
+  min-height: 46px;
+  border: 0 !important;
+  border-radius: .75rem !important;
+  background: linear-gradient(to left, var(--kara-brand), var(--kara-indigo)) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 10px 15px -3px rgba(49, 46, 129, 0.50), 0 0 0 1px var(--kara-amber-soft);
+  transition: box-shadow .15s ease, filter .15s ease;
+}
+.pf-v5-c-button.pf-m-primary:hover { box-shadow: 0 10px 15px -3px rgba(49, 46, 129, 0.50), 0 0 0 1px rgba(251, 191, 36, 0.70); }
+.pf-v5-c-button.pf-m-secondary,
+.pf-v5-c-button.pf-m-link { color: rgba(252, 211, 77, 0.90) !important; }
+a { color: rgba(252, 211, 77, 0.90) !important; }
+a:hover { color: #ffffff !important; }
+
+/* ── Alerts, language, identity providers ────────────────── */
+
+.pf-v5-c-alert { border-radius: .75rem !important; background: rgba(255, 255, 255, 0.05) !important; }
+.pf-v5-c-alert.pf-m-danger { background: rgba(239, 68, 68, 0.10) !important; }
+#login-select-toggle {
+  background: var(--kara-field) !important;
+  color: var(--kara-muted) !important;
+  border-color: var(--kara-field-border) !important;
+  border-radius: .6rem !important;
+}
+.pf-v5-c-login__main-footer .pf-v5-c-button {
+  border-radius: .75rem !important;
+  border-color: var(--kara-field-border) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* ── Footer line ─────────────────────────────────────────── */
+
+#kc-login-footer-links { list-style: none; margin: .5rem 0 0; padding: 0; text-align: center; }
+#kc-login-footer-links li { color: rgba(255, 255, 255, 0.45); font-size: .75rem; }
+
+/* ── Wide screens: the card on the left, Kara's heading and features on the
+      right (built by js/kara.js), as on Kara's own page. ─────────────── */
+
+.kara-aside { display: none; }
+@media (min-width: 1100px) {
+  .pf-v5-c-login__container {
+    margin-left: max(6vw, calc(50vw - 33rem)) !important;
+    margin-right: auto !important;
+    max-width: 24rem;
+  }
+  .kara-aside {
+    display: block;
+    position: fixed;
+    z-index: 1;
+    top: 50%;
+    right: max(6vw, calc(50vw - 33rem));
+    transform: translateY(-50%);
+    max-width: 28rem;
+    direction: rtl;
+    text-align: right;
+    color: var(--kara-text);
+  }
+  .kara-aside h2 { margin: 0; font-size: 2.25rem; font-weight: 800; line-height: 1.5; text-shadow: 0 4px 16px rgba(0,0,0,.6); }
+  .kara-aside h2 span { background: linear-gradient(to left, #fde68a, #fbbf24, #f59e0b); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .kara-aside p { margin: 1.25rem 0 0; max-width: 24rem; font-size: .875rem; line-height: 1.8; color: rgba(255,255,255,.75); }
+  .kara-aside ul { list-style: none; margin: 2rem 0 0; padding: 0; }
+  .kara-aside li { display: flex; align-items: center; gap: .6rem; margin-top: .85rem; font-size: .875rem; color: rgba(255,255,255,.90); }
+  .kara-aside li::before {
+    content: "✓";
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.5rem; height: 1.5rem; border-radius: 999px;
+    font-size: .7rem; color: #fcd34d;
+    background: rgba(251, 191, 36, 0.15); box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.30);
+  }
+}
+
+@media (max-width: 768px) {
+  #kc-header { padding-top: 1.5rem !important; }
+  .kara-logo { width: 88px; height: 88px; }
+}

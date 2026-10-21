@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { oidcEnabled, passwordLoginEnabled } from "@/lib/oidc";
 import { LoginScreen } from "./LoginScreen";
 
@@ -14,7 +15,13 @@ const ERRORS: Record<string, string> = {
   company: "دسترسی شرکت شما غیرفعال شده یا حساب به شرکتی متصل نیست.",
 };
 
+/**
+ * With Keycloak sign-in only, there is one login page: Keycloak's, in Kara's
+ * theme (deploy/keycloak/theme/kara). This page shows itself only to say why
+ * a sign-in did not end in Kara, with the button to try again.
+ */
 export default function LoginPage({ searchParams }: { searchParams: { error?: string } }) {
+  if (oidcEnabled() && !passwordLoginEnabled() && !searchParams.error) redirect("/auth/login");
   return (
     <LoginScreen
       oidc={oidcEnabled()}

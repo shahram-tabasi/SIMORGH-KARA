@@ -55,6 +55,14 @@ keycloak:
   # sign-in, not by kara-api. Set only once staff-idp has run.
   brokeredDomains: ""
 
+# Kara's look for Keycloak's pages and emails in realm kara
+# (keycloak-theme/kara): a ConfigMap in Keycloak's namespace that the
+# simorgh-keycloak chart mounts (its extraThemes). The realm uses it once
+# deploy/keycloak/setup-realm.sh theme has run.
+keycloakTheme:
+  enabled: true
+  namespace: keycloak
+
 web:
   replicas: 2
   resources:

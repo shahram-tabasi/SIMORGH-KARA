@@ -6,6 +6,7 @@
 #   deploy/helm/simorgh-kara/scripts/setup.sh secrets    # kara-db, kara-app, pull secret
 #   deploy/helm/simorgh-kara/scripts/setup.sh keycloak   # realm kara, clients → kara-keycloak
 #   deploy/helm/simorgh-kara/scripts/setup.sh mail       # realm kara's SMTP again (from realm simorgh)
+#   deploy/helm/simorgh-kara/scripts/setup.sh theme      # realm kara uses Kara's login and email theme
 #   helm upgrade --install kara deploy/helm/simorgh-kara -n kara
 #
 # keycloak runs deploy/keycloak/setup-realm.sh realm (read its header): it
@@ -55,5 +56,6 @@ case "${1:-}" in
   secrets) secrets ;;
   keycloak) namespace; KARA_NAMESPACE="$NS" "$HERE/../../../keycloak/setup-realm.sh" realm ;;
   mail) KARA_NAMESPACE="$NS" "$HERE/../../../keycloak/setup-realm.sh" mail ;;
-  *) echo "usage: $0 secrets | keycloak | mail"; exit 2 ;;
+  theme) KARA_NAMESPACE="$NS" "$HERE/../../../keycloak/setup-realm.sh" theme ;;
+  *) echo "usage: $0 secrets | keycloak | mail | theme"; exit 2 ;;
 esac

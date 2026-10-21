@@ -5,11 +5,12 @@
 #
 #   deploy/keycloak/setup-realm.sh realm          # realm, clients, secrets into ns kara
 #   deploy/keycloak/setup-realm.sh mail           # only the SMTP settings, again
+#   deploy/keycloak/setup-realm.sh theme          # Kara's login and email theme (chart's keycloak-theme/kara)
 #   deploy/keycloak/setup-realm.sh staff-idp ORG  # Simorgh staff sign in with their
 #                                                 # realm-simorgh account (org alias ORG)
 #
 # realm      Realm `kara` (organizations on: one organization per Kara tenant,
-#            alias = the tenant's slug), Persian first, the simorgh theme,
+#            alias = the tenant's slug), Persian first,
 #            SMTP copied from realm `simorgh` (its password is asked for, or
 #            SMTP_PASSWORD), and two clients:
 #              kara-web  confidential, code flow + PKCE, for the browser login
@@ -41,7 +42,7 @@ KARA_HOST="${KARA_HOST:-kara.simorghai.com}"
 KARA_SCHEME="${KARA_SCHEME:-https}"
 PUBLIC_KC="${PUBLIC_KC:-https://auth.simorghai.com}"
 STAFF_DOMAIN="${STAFF_DOMAIN:-simorghai.com}"
-THEME="${THEME-simorgh}"
+THEME="${THEME-kara}"
 NS="${KARA_NAMESPACE:-kara}"
 KC_NS="${KEYCLOAK_NAMESPACE:-keycloak}"
 CFG=/tmp/kcadm-kara.config
@@ -117,6 +118,17 @@ print(json.dumps({"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
   echo "stored $key in $NS/kara-keycloak"
 }
 
+# Login and email theme of the realm: `kara` (published by the simorgh-kara
+# chart, mounted by simorgh-keycloak's extraThemes). Set it only once Keycloak
+# has the theme (pods restarted after both charts): a realm naming a theme
+# Keycloak does not have shows an error page instead of the login.
+theme() {
+  say "theme $THEME"
+  [ -n "$THEME" ] || { echo "skipped (THEME empty)"; return; }
+  printf '%s' "{\"loginTheme\":\"$THEME\",\"emailTheme\":\"$THEME\"}" \
+    | kc update "realms/$REALM" -f - >/dev/null && echo "login and email theme: $THEME"
+}
+
 mail() {
   say "mail (from realm $STAFF_REALM)"
   if [ -n "${NO_SMTP:-}" ]; then echo "skipped (NO_SMTP)"; else
@@ -141,9 +153,7 @@ realm() {
   if kc get "realms/$REALM" --fields realm >/dev/null 2>&1; then echo "exists"; else
     kc create realms -s realm="$REALM" -s enabled=true >/dev/null && echo created
   fi
-  local themes=""
-  [ -n "$THEME" ] && themes="\"loginTheme\":\"$THEME\",\"emailTheme\":\"$THEME\","
-  printf '%s' "{\"displayName\":\"سیمرغ کارا\",\"displayNameHtml\":\"Simorgh Kara\",$themes
+  printf '%s' "{\"displayName\":\"سیمرغ کارا\",\"displayNameHtml\":\"Simorgh Kara\",
     \"organizationsEnabled\":true,\"registrationAllowed\":false,\"resetPasswordAllowed\":true,
     \"loginWithEmailAllowed\":true,\"duplicateEmailsAllowed\":false,\"rememberMe\":true,
     \"verifyEmail\":false,\"bruteForceProtected\":true,
@@ -238,6 +248,7 @@ trap logout EXIT
 case "${1:-}" in
   realm) realm ;;
   mail) mail ;;
+  theme) theme ;;
   staff-idp) shift; staff_idp "$@" ;;
-  *) echo "usage: $0 realm | mail | staff-idp ORG_ALIAS"; exit 2 ;;
+  *) echo "usage: $0 realm | mail | theme | staff-idp ORG_ALIAS"; exit 2 ;;
 esac

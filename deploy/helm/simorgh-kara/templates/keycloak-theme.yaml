@@ -1,0 +1,38 @@
+{{- /*
+  Kara's Keycloak theme (keycloak-theme/kara in this chart): the login pages
+  and the emails of realm kara. Published as a ConfigMap in Keycloak's
+  namespace, one key per file with / written as __; the simorgh-keycloak
+  chart mounts it (extraThemes) and rebuilds the folders. Keycloak reads
+  themes at start: after a change here,
+    kubectl -n keycloak rollout restart statefulset/keycloak
+*/ -}}
+{{- if .Values.keycloakTheme.enabled }}
+{{- $binary := list ".png" ".ico" ".jpg" ".svg" ".woff" ".woff2" }}
+{{- /* A hash of the files, put into theme.properties as ?v=: Keycloak serves
+       theme files for 30 days, so a changed theme must be a new address. */}}
+{{- $all := "" }}
+{{- range $path, $_ := .Files.Glob "keycloak-theme/kara/**" }}{{ $all = print $all $path ($.Files.Get $path | sha256sum) }}{{ end }}
+{{- $version := $all | sha256sum | trunc 10 }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-theme-kara
+  namespace: {{ .Values.keycloakTheme.namespace }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+  annotations:
+    simorghai.com/theme-version: {{ $version | quote }}
+data:
+  {{- range $path, $_ := .Files.Glob "keycloak-theme/kara/**" }}
+  {{- if not (has (ext $path) $binary) }}
+  {{ trimPrefix "keycloak-theme/kara/" $path | replace "/" "__" }}: |-
+    {{- $.Files.Get $path | replace "__THEME_VERSION__" $version | nindent 4 }}
+  {{- end }}
+  {{- end }}
+binaryData:
+  {{- range $path, $_ := .Files.Glob "keycloak-theme/kara/**" }}
+  {{- if has (ext $path) $binary }}
+  {{ trimPrefix "keycloak-theme/kara/" $path | replace "/" "__" }}: {{ $.Files.Get $path | b64enc }}
+  {{- end }}
+  {{- end }}
+{{- end }}

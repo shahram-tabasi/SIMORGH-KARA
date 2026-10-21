@@ -30,6 +30,21 @@ Further modules move to kara-api one at a time (members, leave, attendance,
 kartabl…), each with its tables; kara-web then calls kara-api instead of the
 database. Until a module moves, it stays as it is.
 
+## One login page, Kara's look
+
+With Keycloak only (`kara.passwordLogin=false`), /login and /c/<slug> go
+straight to Keycloak, which shows Kara's own login page: the theme
+`deploy/helm/simorgh-kara/keycloak-theme/kara` (login: keycloak.v2 restyled —
+background, logo, glass card, amber/indigo, Vazirmatn, RTL; email: Persian,
+dark header with the Kara logo embedded, Kara signature). The chart publishes
+it as ConfigMap `keycloak-theme-kara` in namespace keycloak; the
+simorgh-keycloak chart mounts it (`extraThemes`); `setup.sh theme` makes realm
+kara use it. After changing the theme: upgrade this chart, then
+`kubectl -n keycloak rollout restart statefulset/keycloak`.
+
+Kara's /login page shows itself only to say why a sign-in did not end in
+Kara (no account for that email, company suspended…), with a retry button.
+
 ## Tenants, organizations, Odoo companies
 
 - A tenant (`platform.companies`) is a Keycloak **organization** in realm
