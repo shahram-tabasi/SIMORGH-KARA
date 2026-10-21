@@ -17,11 +17,29 @@ import postgres from "postgres";
 import bcrypt from "bcryptjs";
 import { PLATFORM_DDL } from "../src/lib/sql";
 
+/** Waits for the database here, every 3 s for up to 10 minutes: left to the
+ *  Job's restarts, the backoff (10 s, 20 s, … 5 min) outlasts a Postgres that
+ *  was ready long before, and helm's hook times out. */
+async function waitForDatabase(sql: postgres.Sql) {
+  const deadline = Date.now() + 10 * 60_000;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await sql`SELECT 1`;
+      return;
+    } catch (e) {
+      if (Date.now() > deadline) throw e;
+      if (attempt === 1 || attempt % 10 === 0) console.log(`… waiting for the database (${(e as Error).message})`);
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
+}
+
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set.");
-  const sql = postgres(url, { max: 1, onnotice: () => {} });
+  const sql = postgres(url, { max: 1, onnotice: () => {}, connect_timeout: 10 });
   try {
+    await waitForDatabase(sql);
     console.log("→ platform schema");
     await sql.unsafe(PLATFORM_DDL);
     const [{ n }] = await sql<{ n: number }[]>`SELECT count(*)::int AS n FROM platform.user_accounts WHERE is_platform_admin`;
