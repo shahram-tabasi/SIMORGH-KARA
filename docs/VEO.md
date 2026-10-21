@@ -196,6 +196,50 @@ be rebuilt by hand in each workflow.
 Every record screen in Kara gets the same **collaboration bar**: files, chat
 room, meeting, process status, AI assistant.
 
+## 9a. How everything plugs into Kara (2026-10-21)
+
+Kara is the one screen; every other system is a **back service** reached in
+the same five ways. A new system is integrated when all five are answered.
+
+| Layer | Rule |
+|---|---|
+| **1. Identity** | One login, Keycloak realm `kara`. Each system trusts Keycloak itself (OIDC/SAML/JWT), so a person is the same `sub` everywhere; no second password anywhere. |
+| **2. Provisioning** | When Kara creates a company, VO, project, team or person, a *provisioning process* (Operaton, one idempotent step per system, retried, its state shown in Kara) creates the matching thing in every system. Removing a person or ending a VO runs the reverse. |
+| **3. Links** | kara-api keeps one table `links(kara_type, kara_id, system, external_id, url)`: project 12 ↔ Odoo project 7 ↔ Nextcloud folder ↔ Matrix room ↔ Jitsi room ↔ OpenStack project. Every screen finds its neighbours there; nobody guesses names. |
+| **4. Events** | Each system's changes come back as CloudEvents on Kafka (`erp.*`, `files.*`, `chat.*`, `call.*`, `vm.*`), through a small adapter where the system has only webhooks. Kara's read models, kartabl and notifications listen; nothing polls a screen. |
+| **5. UI** | Inside Kara, never "go to another app": native Kara screens over each system's API where the work is daily (lists, forms, chat, softphone); the system's own UI embedded only where rebuilding it is pointless (Collabora editor, Jitsi room, VM console), always with single sign-on. |
+
+### Per system
+
+| System | Identity | Provisioned by Kara | In Kara's UI | Events back |
+|---|---|---|---|---|
+| **Odoo** (ERP, MRP II) | integration user per app; the person's rights checked by Kara + OpenFGA before every call | company (+warehouse), projects, analytic accounts, employees, partners | native screens over the erp-connector; Odoo itself hidden | `erp.*.v1` (done) |
+| **Nextcloud** (files) | OIDC login (user_oidc app) against Keycloak; groups from the token | a group per company / VO / project; a Group Folder per record (`/VO/<code>`, `/Projects/<code>`, `/Orders/<ref>`) with those groups; federation share to a partner's cloud for a VO | Files tab on every record (WebDAV list, upload, versions); open in Collabora in an embedded frame | webhook_listeners app → adapter → `files.*.v1` (uploaded, shared, approved) |
+| **Jitsi** (meetings) | JWT signed for Keycloak users (prosody token auth); guests by one-time link | a stable room per record (`kara-<type>-<id>`), moderator = record owner | "Meet" button on every record; Jitsi IFrame API inside Kara; meeting saved as an Odoo calendar event with attendees | join/leave via prosody event-sync → `call.meeting.*` (minutes, attendance) |
+| **Messaging: Matrix** (Synapse + MAS, Element) | MAS with Keycloak upstream: same account | a space per company and per VO, a room per project / order / ticket; members follow Kara's groups (a bot keeps them in step) | chat panel in Kara (matrix-js-sdk), same rooms in Element mobile; Kara posts system messages (approval needed, order shipped) to the room | appservice → `chat.*.v1` (mentions become kartabl items) |
+| **VoIP calls: Asterisk** (PBX, LTS) with **SIP over WebRTC** | SIP account per person, created from Keycloak; the browser registers with a short-lived credential kara-api issues | an extension per person, ring groups per team, queues for sales / after-sales, a SIP trunk to the telecom operator for outside numbers | softphone in Kara's top bar (JsSIP): click-to-call on any phone number (customers, suppliers, colleagues); incoming call shows the caller's Odoo partner, open tickets and orders; desk IP phones use the same extension | AMI/ARI adapter → `call.voice.*.v1` (call log on the partner in Odoo, missed calls in the kartabl, recordings in Nextcloud where the law allows) |
+| **User VMs: OpenStack** (on the Ceph cluster) | Keystone federated to Keycloak (OIDC mapping: Kara company → Keystone domain, team/VO group → project role) | a Keystone domain per company, a project per team / VO with quotas; a VM request is a BPMN process: request → approval → n8n/Operaton calls Nova/Heat (templates: engineering workstation, EPLAN, GPU) | "My workspace": my VMs, start/stop/snapshot, open the desktop in the browser through Apache Guacamole (RDP/SSH/VNC, Keycloak SSO) or the noVNC console | Nova notifications → adapter → `vm.*.v1`; monthly usage (CloudKitty/Gnocchi) → cost lines to the project's analytic account in Odoo |
+
+### One example end to end
+
+A partner company joins a VO for an offer:
+1. Kara: *add company B to VO "Substation X"* → OpenFGA relation `vo:X#participant@company:B`.
+2. Provisioning: Keycloak group, Matrix room invite, Nextcloud federated share
+   of `/VO/X`, Jitsi room access, OpenStack project role on `vo-x` (if it has
+   VMs), Odoo partner for B on the VO's project.
+3. B's engineer signs in once, sees the VO in Kara: files, chat, the next
+   meeting, the offer's approval waiting in the kartabl, a call button to the
+   sales engineer, and the shared EPLAN workstation VM.
+4. The VO ends: the reverse process removes every grant; the records stay.
+
+### Order of work (fits §11)
+
+1. Links table, provisioning framework (Operaton), the collaboration bar with
+   Nextcloud + Jitsi (phase 0b).
+2. Matrix with MAS and the Kara chat panel (task "Matrix").
+3. Asterisk with WebRTC, the softphone and click-to-call, Odoo call log.
+4. OpenStack: Keystone federation, VM request process, Guacamole, cost to Odoo.
+
 ## 10. A decision to take now: Odoo 19 or 20
 
 Odoo 20 Community is only weeks old; the OCA 20.0 branches are almost empty
