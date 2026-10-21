@@ -1,0 +1,121 @@
+# Simorgh Kara — docs/PLATFORM.md in this repository.
+#
+#   browser ─► Gateway kara.simorghai.com (192.168.1.132) ─► kara-web (Next.js, 3000)
+#                                                              │ service token + X-Kara-Account
+#   Keycloak realm kara ◄── sign-in, users, organizations ──── kara-api (NestJS, 3001)
+#                                                              │ REST (realm simorgh token)   ▲ erp.*.v1
+#                                                       erp-connector ─► Odoo         Kafka ─┘
+#   kara-web + kara-api ─► Postgres (platform + tenant schemas, kara_erp read model)
+
+namespace:
+  name: kara
+  create: true
+  istioDataplaneMode: ambient
+  # istiod's generated Gateway pod has no seccompProfile, which `restricted`
+  # refuses (as in the Odoo, n8n and Keycloak charts).
+  podSecurity:
+    enforce: baseline
+    audit: restricted
+    warn: restricted
+
+registry:
+  host: registry.simorghai.com
+  # Copied in from `simorgh` by scripts/setup.sh secrets.
+  pullSecret: harbor-registry
+
+# One tag for the three images of a release (web, migrate, api): a new one
+# every build.
+image:
+  tag: "2.0.0"
+  pullPolicy: IfNotPresent
+  web: simorgh/kara-web
+  migrate: simorgh/kara-migrate
+  api: simorgh/kara-api
+
+kara:
+  host: kara.simorghai.com
+  # The first platform admin, made by the migration Job only while there is
+  # none. They sign in with Keycloak (an invitation once kara-api imports them).
+  superAdmin:
+    email: s.tabasi@simorghai.com
+    name: مدیر سیمرغ‌کارا
+  # Kara's own password form beside Keycloak: for the switch-over only.
+  passwordLogin: false
+  # Secret with key sessionSecret (scripts/setup.sh secrets).
+  existingSecret: kara-app
+
+keycloak:
+  issuer: https://auth.simorghai.com/realms/kara
+  # The same realm inside the cluster: tokens, keys and the admin API never leave it.
+  internalUrl: http://keycloak.keycloak.svc.cluster.local:8080/realms/kara
+  # Secret from deploy/keycloak/setup-realm.sh: webClientSecret, apiClientSecret, erpClientSecret.
+  existingSecret: kara-keycloak
+  # Email domains that sign in through the staff identity provider
+  # (setup-realm.sh staff-idp): their Keycloak users are made on first
+  # sign-in, not by kara-api. Set only once staff-idp has run.
+  brokeredDomains: ""
+
+web:
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { memory: 1Gi }
+
+api:
+  replicas: 2
+  erp:
+    # Empty turns the Odoo part off (tenants show "not linked").
+    connectorUrl: http://erp-connector.erp.svc.cluster.local:3000
+    # kara-api's service account in realm simorgh, which the connector trusts.
+    tokenUrl: http://keycloak.keycloak.svc.cluster.local:8080/realms/simorgh/protocol/openid-connect/token
+  kafka:
+    # 9093 is the plain listener on this cluster (9092 is TLS).
+    brokers: simorgh-kafka-kafka-bootstrap.kafka.svc.cluster.local:9093
+  resources:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits:   { memory: 512Mi }
+
+postgresql:
+  image:
+    repository: docker-proxy/library/postgres
+    tag: "17.6-alpine"
+  username: kara
+  database: kara
+  # Secret with keys username, password (scripts/setup.sh secrets).
+  existingSecret: kara-db
+  storage:
+    size: 20Gi
+    className: ceph-rbd-simorgh
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits:   { memory: 2Gi }
+
+# ── The way in ────────────────────────────────────────────────────────────
+gateway:
+  enabled: true
+  name: kara
+  className: istio
+  # Check it is free first: `ping -c2 192.168.1.132` must not answer, and
+  # `kubectl get svc -A | grep 192.168.1.132` must print nothing.
+  loadBalancerIP: 192.168.1.132
+  poolLabel:
+    key: simorgh.io/lb-pool
+    value: kara
+  ipPool:
+    enabled: true
+    name: simorgh-lb-pool-kara
+  l2Announcement:
+    enabled: true
+    interfaces: ["^ens34$"]
+    nodes: ["worker1", "worker2"]
+
+# The office *.simorghai.com certificate, copied into the namespace (and
+# again after each renewal):
+#   ~/simorgh-technical-chatbot-cloud/deploy/scripts/sync-wildcard-cert.sh kara
+certificate:
+  secretName: wildcard-simorghai-tls
+
+serviceMonitor:
+  enabled: true
+  labels:
+    release: kube-prometheus-stack

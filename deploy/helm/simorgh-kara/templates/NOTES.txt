@@ -1,0 +1,7 @@
+Simorgh Kara {{ .Values.image.tag }} in namespace {{ include "kara.namespace" . }} — https://{{ .Values.kara.host }}
+
+  kubectl -n {{ include "kara.namespace" . }} get pods
+  kubectl -n {{ include "kara.namespace" . }} logs job/kara-migrate        (while it exists)
+
+Accounts into Keycloak (realm kara), once and after bulk changes:
+  kubectl -n {{ include "kara.namespace" . }} exec deploy/kara-api -- /nodejs/bin/node dist/cli.js import-identities [--invite]

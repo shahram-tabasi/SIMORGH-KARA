@@ -1,0 +1,56 @@
+{{- $ns := include "kara.namespace" . -}}
+{{/*
+The database step of every release (scripts/deploy-migrate.ts): platform
+schema, the first platform admin while there is none, every tenant schema
+brought up to date. After install/upgrade, so the database exists; it waits
+for it through its retries. The web pods serve meanwhile: the schema only
+ever grows, so the previous code keeps working against it.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kara-migrate
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+    app.kubernetes.io/name: kara-migrate
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 8
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "kara.labels" . | nindent 8 }}
+        app.kubernetes.io/name: kara-migrate
+    spec:
+      {{- include "kara.imagePullSecrets" . | nindent 6 }}
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "kara.podSecurity" . | nindent 8 }}
+        runAsUser: 1000      # node, in the node image
+        runAsGroup: 1000
+      containers:
+        - name: migrate
+          image: {{ include "kara.image" (dict "root" . "repo" .Values.image.migrate) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- include "kara.dbEnv" . | nindent 12 }}
+            - name: SUPERADMIN_EMAIL
+              value: {{ .Values.kara.superAdmin.email | quote }}
+            - name: SUPERADMIN_NAME
+              value: {{ .Values.kara.superAdmin.name | quote }}
+          resources:
+            requests: { cpu: 50m, memory: 256Mi }
+            limits:   { memory: 768Mi }
+          securityContext:
+            {{- include "kara.containerSecurity" . | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 128Mi }

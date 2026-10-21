@@ -6,13 +6,15 @@ import { z } from "zod";
 import { requireHolding } from "@/lib/session";
 import { sql } from "@/lib/db";
 import { provisionCompany } from "@/lib/provision";
+import { initialPasswordField } from "@/lib/identity";
+import { syncIdentity } from "@/lib/kara-api";
 
 const schema = z.object({
   name: z.string().min(2, "نام شرکت را وارد کنید."),
   maxUsers: z.coerce.number().int().min(1).max(100000).default(25),
   adminName: z.string().min(2, "نام مدیر شرکت را وارد کنید."),
   adminEmail: z.string().email("ایمیل مدیر شرکت نامعتبر است."),
-  adminPassword: z.string().min(6, "رمز عبور حداقل ۶ کاراکتر باشد."),
+  adminPassword: initialPasswordField,
 });
 
 export interface HoldingFormState {
@@ -49,7 +51,9 @@ export async function createHoldingCompanyAction(
   }
 
   try {
-    await provisionCompany({ ...parsed.data, holdingId: ctx.holding.id });
+    const { adminAccountId } = await provisionCompany({ ...parsed.data, holdingId: ctx.holding.id });
+    const warning = await syncIdentity(ctx.session.sub, adminAccountId);
+    if (warning) console.warn(JSON.stringify({ level: "warn", context: "identity", message: warning }));
   } catch (e) {
     return { error: e instanceof Error ? e.message : "خطا در ساخت شرکت." };
   }

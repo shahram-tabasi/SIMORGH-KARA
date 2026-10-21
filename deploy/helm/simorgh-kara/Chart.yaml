@@ -1,0 +1,13 @@
+apiVersion: v2
+name: simorgh-kara
+description: "Simorgh Kara on the platform — kara-web (Next.js), kara-api (NestJS: Keycloak identities, Odoo read models), its Postgres, the release migration Job, and the gateway for kara.simorghai.com."
+type: application
+version: 1.0.0
+appVersion: "2.0.0"
+kubeVersion: ">=1.33.0-0"
+
+annotations:
+  simorghai.com/requires: |
+    Keycloak realm kara (deploy/keycloak/setup-realm.sh) · istio 1.25 (ambient) with the gateway-api CRDs
+    cilium LB-IPAM + L2 announcements · the ceph-rbd-simorgh StorageClass
+    optional: the erp-connector (simorgh-odoo) and Strimzi Kafka simorgh-kafka for the Odoo data

@@ -2,6 +2,9 @@ import Link from "next/link";
 import { sql } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 
+// Live counts: never prerendered at build (there is no database then).
+export const dynamic = "force-dynamic";
+
 async function getStats() {
   const [stats] = await sql<
     { companies: number; active: number; accounts: number }[]

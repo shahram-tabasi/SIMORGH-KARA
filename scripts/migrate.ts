@@ -32,6 +32,10 @@ async function main() {
         ADD COLUMN IF NOT EXISTS is_holding_admin boolean NOT NULL DEFAULT false;
       ALTER TABLE platform.user_accounts
         ADD COLUMN IF NOT EXISTS holding_id uuid REFERENCES platform.holdings(id) ON DELETE CASCADE;
+      -- The tenant's company in Odoo (multi-company), set by the platform
+      -- admin; kara-api serves that company's data. kara-api adds it too.
+      ALTER TABLE platform.companies
+        ADD COLUMN IF NOT EXISTS odoo_company_id integer;
       -- Per-company login domain + company-scoped username
       ALTER TABLE platform.companies
         ADD COLUMN IF NOT EXISTS domain text;

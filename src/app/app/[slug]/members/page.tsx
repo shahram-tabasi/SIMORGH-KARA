@@ -3,6 +3,7 @@ import { withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { ToggleForm } from "@/components/ToggleForm";
 import { MemberForm } from "./MemberForm";
+import { passwordLoginEnabled } from "@/lib/oidc";
 import { ScheduleSelect } from "./ScheduleSelect";
 import { EmploymentForm } from "./EmploymentForm";
 import { UsernameField } from "./UsernameField";
@@ -81,7 +82,7 @@ export default async function MembersPage({
 
       {canManage && (
         <div className="mb-6">
-          <MemberForm slug={params.slug} />
+          <MemberForm slug={params.slug} askPassword={passwordLoginEnabled()} />
         </div>
       )}
 

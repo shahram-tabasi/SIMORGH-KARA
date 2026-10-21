@@ -6,15 +6,21 @@ import { z } from "zod";
 import { sql } from "@/lib/db";
 import { requirePlatformAdmin } from "@/lib/session";
 import { provisionCompany } from "@/lib/provision";
-import { hashPassword } from "@/lib/password";
+import { initialPasswordField, initialPasswordHash } from "@/lib/identity";
+import { karaApi, syncIdentity } from "@/lib/kara-api";
 import { slugify, shortId } from "@/lib/utils";
+
+/** The account is made either way; a sign-in invitation that failed is only logged (import-identities catches up). */
+async function logIdentity(warning: string | null) {
+  if (warning) console.warn(JSON.stringify({ level: "warn", context: "identity", message: warning }));
+}
 
 const newHoldingSchema = z.object({
   name: z.string().min(2, "نام هولدینگ حداقل ۲ کاراکتر باشد."),
   maxCompanies: z.coerce.number().int().min(1).max(1000).default(1),
   adminName: z.string().min(2, "نام مدیر هولدینگ را وارد کنید."),
   adminEmail: z.string().email("ایمیل مدیر هولدینگ نامعتبر است."),
-  adminPassword: z.string().min(6, "رمز عبور حداقل ۶ کاراکتر باشد."),
+  adminPassword: initialPasswordField,
 });
 
 /** Platform admin sets/raises how many companies a holding may create. */
@@ -31,7 +37,7 @@ export async function createHoldingAction(
   _prev: CompanyFormState,
   formData: FormData
 ): Promise<CompanyFormState> {
-  await requirePlatformAdmin();
+  const { session } = await requirePlatformAdmin();
   const parsed = newHoldingSchema.safeParse({
     name: formData.get("name"),
     maxCompanies: formData.get("maxCompanies") || 1,
@@ -52,13 +58,15 @@ export async function createHoldingAction(
       INSERT INTO platform.holdings (name, slug, max_companies)
       VALUES (${parsed.data.name}, ${slug}, ${parsed.data.maxCompanies}) RETURNING id
     `;
-    const passwordHash = await hashPassword(parsed.data.adminPassword);
-    await sql`
+    const passwordHash = await initialPasswordHash(parsed.data.adminPassword);
+    const [admin] = await sql<{ id: string }[]>`
       INSERT INTO platform.user_accounts
         (email, password_hash, full_name, is_holding_admin, holding_id)
       VALUES (${parsed.data.adminEmail}, ${passwordHash}, ${parsed.data.adminName},
               true, ${holding.id})
+      RETURNING id
     `;
+    await logIdentity(await syncIdentity(session.sub, admin.id));
   } catch (e) {
     return { error: e instanceof Error ? e.message : "خطا در ساخت هولدینگ." };
   }
@@ -72,7 +80,7 @@ const newCompanySchema = z.object({
   maxUsers: z.coerce.number().int().min(1).max(100000).default(10),
   adminName: z.string().min(2, "نام مدیر را وارد کنید."),
   adminEmail: z.string().email("ایمیل مدیر نامعتبر است."),
-  adminPassword: z.string().min(6, "رمز عبور حداقل ۶ کاراکتر باشد."),
+  adminPassword: initialPasswordField,
 });
 
 export interface CompanyFormState {
@@ -83,7 +91,7 @@ export async function createCompanyAction(
   _prev: CompanyFormState,
   formData: FormData
 ): Promise<CompanyFormState> {
-  await requirePlatformAdmin();
+  const { session } = await requirePlatformAdmin();
 
   const parsed = newCompanySchema.safeParse({
     name: formData.get("name"),
@@ -98,7 +106,8 @@ export async function createCompanyAction(
   }
 
   try {
-    await provisionCompany(parsed.data);
+    const { adminAccountId } = await provisionCompany(parsed.data);
+    await logIdentity(await syncIdentity(session.sub, adminAccountId));
   } catch (e) {
     return { error: e instanceof Error ? e.message : "خطا در ساخت شرکت." };
   }
@@ -128,5 +137,20 @@ export async function updateCompanyAction(formData: FormData) {
     SET plan = ${plan}, max_users = ${maxUsers}
     WHERE id = ${id}
   `;
+  revalidatePath("/admin/companies");
+}
+
+/** A tenant ↔ its Odoo company (kara-api checks the company exists). Empty unlinks. */
+export async function linkOdooCompanyAction(formData: FormData) {
+  const { session } = await requirePlatformAdmin();
+  const slug = String(formData.get("slug"));
+  const raw = String(formData.get("odooCompanyId") ?? "");
+  try {
+    await karaApi(session.sub, "PUT", `/v1/admin/tenants/${slug}/erp-link`, {
+      body: { odooCompanyId: raw ? Number(raw) : null },
+    });
+  } catch (e) {
+    console.warn(JSON.stringify({ level: "warn", context: "erp-link", message: (e as Error).message }));
+  }
   revalidatePath("/admin/companies");
 }

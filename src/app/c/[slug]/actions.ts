@@ -2,7 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { sql } from "@/lib/db";
-import { verifyPassword, createSession } from "@/lib/auth";
+import { verifyPassword } from "@/lib/auth";
+import { startSession, type AccountRow } from "@/lib/login";
+import { passwordLoginEnabled } from "@/lib/oidc";
 
 export interface CompanyLoginState {
   error?: string;
@@ -22,26 +24,19 @@ export async function companyLoginAction(
 
   if (!username || !password) return { error: "نام کاربری و رمز عبور را وارد کنید." };
 
-  const [company] = await sql<
-    { id: string; slug: string; schema_name: string; status: string }[]
-  >`
-    SELECT id, slug, schema_name, status FROM platform.companies WHERE slug = ${slug}
+  if (!passwordLoginEnabled()) return { error: "ورود با رمز عبور غیرفعال است؛ از «ورود با حساب سیمرغ» استفاده کنید." };
+
+  const [company] = await sql<{ id: string; status: string }[]>`
+    SELECT id, status FROM platform.companies WHERE slug = ${slug}
   `;
   if (!company || company.status === "suspended") {
     return { error: "شرکت یافت نشد یا غیرفعال است." };
   }
 
   // Match by username within this company; fall back to email for convenience.
-  const [account] = await sql<
-    {
-      id: string;
-      email: string;
-      full_name: string;
-      password_hash: string;
-      status: string;
-    }[]
-  >`
-    SELECT id, email, full_name, password_hash, status
+  const [account] = await sql<(AccountRow & { password_hash: string })[]>`
+    SELECT id, email, full_name, password_hash, is_platform_admin,
+           is_holding_admin, holding_id, company_id, status
     FROM platform.user_accounts
     WHERE company_id = ${company.id}
       AND (username = ${username} OR email = ${username})
@@ -54,14 +49,7 @@ export async function companyLoginAction(
   const ok = await verifyPassword(password, account.password_hash);
   if (!ok) return { error: "نام کاربری یا رمز عبور نادرست است." };
 
-  await createSession({
-    sub: account.id,
-    email: account.email,
-    name: account.full_name,
-    kind: "tenant",
-    companyId: company.id,
-    schema: company.schema_name,
-    slug: company.slug,
-  });
-  redirect(`/app/${company.slug}`);
+  const outcome = await startSession(account, slug);
+  if ("error" in outcome) return outcome;
+  redirect(outcome.redirectTo);
 }

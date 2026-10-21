@@ -1,0 +1,39 @@
+{{- $ns := include "kara.namespace" . -}}
+{{/*
+L4, enforced by ztunnel from the caller's mesh identity. kara-api answers
+kara-web (same namespace) and Prometheus; its Postgres answers this
+namespace only. kara-web is reached through the Gateway, which runs here too.
+*/}}
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: kara-api
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kara-api
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces: [{{ $ns | quote }}, "monitoring"]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: kara-postgresql
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kara-postgresql
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces: [{{ $ns | quote }}]

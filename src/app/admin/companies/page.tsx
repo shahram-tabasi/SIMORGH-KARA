@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { sql } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
-import { setCompanyStatusAction, updateCompanyAction } from "../actions";
+import { linkOdooCompanyAction, setCompanyStatusAction, updateCompanyAction } from "../actions";
+import { karaApi, karaApiEnabled } from "@/lib/kara-api";
+import { requirePlatformAdmin } from "@/lib/session";
 
 interface CompanyRow {
   id: string;
@@ -10,13 +12,14 @@ interface CompanyRow {
   status: string;
   plan: string;
   max_users: number;
+  odoo_company_id: number | null;
   user_count: number;
   created_at: string;
 }
 
 async function getCompanies(): Promise<CompanyRow[]> {
   return sql<CompanyRow[]>`
-    SELECT c.id, c.name, c.slug, c.status, c.plan, c.max_users,
+    SELECT c.id, c.name, c.slug, c.status, c.plan, c.max_users, c.odoo_company_id,
            c.created_at,
            (SELECT count(*) FROM platform.user_accounts u
               WHERE u.company_id = c.id)::int AS user_count
@@ -37,8 +40,19 @@ const statusLabel: Record<string, string> = {
   pending: "در انتظار",
 };
 
+/** Odoo's companies, for linking tenants; null when kara-api is not configured or not answering. */
+async function getOdooCompanies(accountId: string): Promise<{ id: number; name: string }[] | null> {
+  if (!karaApiEnabled()) return null;
+  try {
+    return (await karaApi<{ items: { id: number; name: string }[] }>(accountId, "GET", "/v1/admin/erp/companies")).items;
+  } catch {
+    return null;
+  }
+}
+
 export default async function CompaniesPage() {
-  const companies = await getCompanies();
+  const { session } = await requirePlatformAdmin();
+  const [companies, odooCompanies] = await Promise.all([getCompanies(), getOdooCompanies(session.sub)]);
 
   return (
     <>
@@ -118,6 +132,27 @@ export default async function CompaniesPage() {
                 </div>
                 <button className="btn-ghost">ذخیره تغییرات</button>
               </form>
+
+              {odooCompanies && (
+                <form
+                  action={linkOdooCompanyAction}
+                  className="mt-4 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-4"
+                >
+                  <input type="hidden" name="slug" value={c.slug} />
+                  <div>
+                    <label className="label">شرکت متناظر در Odoo</label>
+                    <select name="odooCompanyId" defaultValue={c.odoo_company_id ?? ""} className="input">
+                      <option value="">— متصل نیست —</option>
+                      {odooCompanies.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.name} (#{o.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button className="btn-ghost">ذخیره اتصال</button>
+                </form>
+              )}
             </div>
           ))}
         </div>

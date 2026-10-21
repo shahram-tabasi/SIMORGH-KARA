@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import { sql } from "@/lib/db";
+import { oidcEnabled, passwordLoginEnabled } from "@/lib/oidc";
 import { CompanyLoginForm } from "./LoginForm";
+
+export const dynamic = "force-dynamic";
 
 export default async function CompanyLoginPage({
   params,
@@ -43,9 +46,9 @@ export default async function CompanyLoginPage({
         <div className="w-full rounded-2xl border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/60 backdrop-blur-xl">
           <div className="mb-5 text-center">
             <h2 className="text-lg font-bold">خوش آمدید</h2>
-            <p className="mt-1 text-xs text-white/55">با نام کاربری سازمانی خود وارد شوید.</p>
+            <p className="mt-1 text-xs text-white/55">{oidcEnabled() ? "با حساب سازمانی خود وارد شوید." : "با نام کاربری سازمانی خود وارد شوید."}</p>
           </div>
-          <CompanyLoginForm slug={company.slug} />
+          <CompanyLoginForm slug={company.slug} oidc={oidcEnabled()} password={passwordLoginEnabled()} />
         </div>
 
         <p className="mt-5 text-center text-[11px] text-white/35">

@@ -57,12 +57,15 @@ export function ProfileForm({
   email,
   username,
   avatarUrl,
+  accountUrl = null,
 }: {
   slug: string;
   name: string;
   email: string;
   username: string | null;
   avatarUrl: string | null;
+  /** With Keycloak sign-in, the password lives there: its account page instead of the form. */
+  accountUrl?: string | null;
 }) {
   const [pwState, pwAction] = useFormState<ProfileState, FormData>(changePasswordAction, {});
   const [avState, avAction] = useFormState<ProfileState, FormData>(updateAvatarAction, {});
@@ -136,6 +139,16 @@ export function ProfileForm({
       {/* Password change */}
       <div className="card">
         <h3 className="mb-4 text-sm font-semibold text-slate-700 dark:text-slate-200">تغییر رمز عبور</h3>
+        {accountUrl ? (
+          <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
+            <p>رمز عبور، نشست‌های فعال و ورود دومرحله‌ای در حساب سیمرغ (ورود یکپارچه) مدیریت می‌شوند.</p>
+            <div className="flex justify-end">
+              <a href={accountUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost">
+                مدیریت حساب سیمرغ
+              </a>
+            </div>
+          </div>
+        ) : (
         <form action={pwAction} className="space-y-3">
           <input type="hidden" name="slug" value={slug} />
           <div>
@@ -159,6 +172,7 @@ export function ProfileForm({
             <SaveBtn label="تغییر رمز" />
           </div>
         </form>
+        )}
       </div>
     </div>
   );

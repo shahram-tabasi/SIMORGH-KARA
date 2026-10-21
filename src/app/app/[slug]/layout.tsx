@@ -2,6 +2,7 @@ import { requireTenant } from "@/lib/session";
 import { withTenant } from "@/lib/db";
 import { Shell, type NavGroup, type NavItem } from "@/components/Shell";
 import { ReminderWatcher } from "@/components/ReminderWatcher";
+import { karaApiEnabled } from "@/lib/kara-api";
 
 export default async function TenantLayout({
   children,
@@ -80,6 +81,12 @@ export default async function TenantLayout({
       title: "مالی",
       items: [
         ...push(can("ledger.view") || can("ledger.manage"), { href: `${base}/ledger`, label: "دفتر کل", icon: "📒" }),
+      ],
+    },
+    {
+      title: "داده‌های سازمان (Odoo)",
+      items: [
+        ...push(karaApiEnabled() && can("erp.view"), { href: `${base}/erp`, label: "طرف‌حساب‌ها، کالاها، کارکنان", icon: "🗃️" }),
       ],
     },
     {

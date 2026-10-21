@@ -17,11 +17,28 @@ function SubmitButton() {
   );
 }
 
-export function CompanyLoginForm({ slug }: { slug: string }) {
+export function CompanyLoginForm({ slug, oidc = false, password = true }: { slug: string; oidc?: boolean; password?: boolean }) {
   const [state, formAction] = useFormState<CompanyLoginState, FormData>(companyLoginAction, {});
   const [show, setShow] = useState(false);
 
   return (
+    <>
+    {oidc && (
+      <a
+        href={`/auth/login?org=${encodeURIComponent(slug)}`}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-brand-600 to-indigo-700 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/50 ring-1 ring-amber-400/30 transition hover:ring-amber-400/70"
+      >
+        ورود با حساب سازمانی
+      </a>
+    )}
+    {oidc && password && (
+      <div className="my-5 flex items-center gap-3 text-[11px] text-white/40">
+        <span className="h-px flex-1 bg-white/10" />
+        یا با نام کاربری کارا
+        <span className="h-px flex-1 bg-white/10" />
+      </div>
+    )}
+    {password && (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="slug" value={slug} />
       {state.error && (
@@ -69,5 +86,7 @@ export function CompanyLoginForm({ slug }: { slug: string }) {
       </div>
       <SubmitButton />
     </form>
+    )}
+    </>
   );
 }

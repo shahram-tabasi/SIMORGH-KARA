@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS platform.companies (
                  CHECK (status IN ('active','suspended','pending')),
   plan         text NOT NULL DEFAULT 'standard',
   max_users    integer NOT NULL DEFAULT 10,
+  odoo_company_id integer,                   -- its company in Odoo (kara-api serves that data)
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 

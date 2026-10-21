@@ -1,5 +1,8 @@
 "use server";
 
+import { initialPasswordField, initialPasswordHash } from "@/lib/identity";
+import { syncIdentity } from "@/lib/kara-api";
+
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { sql, withTenant } from "@/lib/db";
@@ -29,13 +32,15 @@ function rev(slug: string, sub = "") {
 const memberSchema = z.object({
   fullName: z.string().min(2, "نام را وارد کنید."),
   email: z.string().email("ایمیل نامعتبر است."),
-  password: z.string().min(6, "رمز عبور حداقل ۶ کاراکتر باشد."),
+  password: initialPasswordField,
   title: z.string().optional(),
 });
 
 export interface ActionState {
   error?: string;
   ok?: boolean;
+  /** Done, but something to tell (the sign-in invitation was not sent). */
+  warning?: string;
 }
 
 export async function createMemberAction(
@@ -71,7 +76,7 @@ export async function createMemberAction(
   `;
   if (existing) return { error: "این ایمیل قبلاً ثبت شده است." };
 
-  const passwordHash = await hashPassword(parsed.data.password);
+  const passwordHash = await initialPasswordHash(parsed.data.password);
   const [account] = await sql<{ id: string }[]>`
     INSERT INTO platform.user_accounts (email, password_hash, full_name, company_id)
     VALUES (${parsed.data.email}, ${passwordHash}, ${parsed.data.fullName}, ${ctx.company.id})
@@ -88,8 +93,9 @@ export async function createMemberAction(
     await tx`INSERT INTO member_employment (member_id) VALUES (${m.id})`;
   });
 
+  const warning = await syncIdentity(ctx.session.sub, account.id);
   rev(slug, "/members");
-  return { ok: true };
+  return { ok: true, warning: warning ?? undefined };
 }
 
 export async function toggleMemberRoleAction(formData: FormData) {

@@ -6,7 +6,7 @@ import { DEFAULT_LEAVE_TYPES } from "./leave-types";
 import { fetchOfficialHolidays } from "./online-holidays";
 import { officialOccasionsFor } from "./iran-events";
 import { todayJalali } from "./jalali";
-import { hashPassword } from "./password";
+import { initialPasswordHash } from "./identity";
 import { slugify, shortId, schemaNameFromSlug } from "./utils";
 
 export interface NewCompanyInput {
@@ -16,7 +16,8 @@ export interface NewCompanyInput {
   holdingId?: string;
   adminName: string;
   adminEmail: string;
-  adminPassword: string;
+  /** Empty with Keycloak sign-in only: a random unknown one, and an email to set it. */
+  adminPassword?: string | null;
 }
 
 export interface ProvisionResult {
@@ -74,7 +75,7 @@ export async function provisionCompany(
   await sql.unsafe(tenantDDL(schema));
 
   // 3) admin identity in the global directory
-  const passwordHash = await hashPassword(input.adminPassword);
+  const passwordHash = await initialPasswordHash(input.adminPassword);
   const [account] = await sql<{ id: string }[]>`
     INSERT INTO platform.user_accounts
       (email, password_hash, full_name, company_id)

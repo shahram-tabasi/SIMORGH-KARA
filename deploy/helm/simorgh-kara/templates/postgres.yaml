@@ -1,0 +1,106 @@
+{{- $ns := include "kara.namespace" . -}}
+{{- $pg := .Values.postgresql -}}
+{{/*
+Kara's database: the platform schema (tenants, accounts), one schema per
+tenant (members, leave, attendance, kartabl…) and kara-api's kara_erp read
+model. Every tenant's data: Ceph RBD, three copies; back it up like Odoo's.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: kara-postgresql
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+    app.kubernetes.io/name: kara-postgresql
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: kara-postgresql
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kara-postgresql
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+    app.kubernetes.io/name: kara-postgresql
+    app.kubernetes.io/component: database
+spec:
+  serviceName: kara-postgresql
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kara-postgresql
+  template:
+    metadata:
+      labels:
+        {{- include "kara.labels" . | nindent 8 }}
+        app.kubernetes.io/name: kara-postgresql
+    spec:
+      {{- include "kara.imagePullSecrets" . | nindent 6 }}
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70          # postgres, in the alpine image
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: postgresql
+          image: {{ printf "%s/%s:%s" .Values.registry.host $pg.image.repository $pg.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {{ $pg.database | quote }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: { name: {{ $pg.existingSecret }}, key: username }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ $pg.existingSecret }}, key: password }
+            # A fresh RBD volume has lost+found at its root, which initdb refuses.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            {{- toYaml $pg.resources | nindent 12 }}
+          securityContext:
+            {{- include "kara.containerSecurity" . | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ $pg.username | quote }}, "-d", {{ $pg.database | quote }}]
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ $pg.username | quote }}, "-d", {{ $pg.database | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: run, mountPath: /var/run/postgresql }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: run
+          emptyDir: { sizeLimit: 32Mi }
+        - name: tmp
+          emptyDir: { sizeLimit: 256Mi }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ $pg.storage.className }}
+        resources:
+          requests:
+            storage: {{ $pg.storage.size }}

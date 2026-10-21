@@ -1,5 +1,7 @@
 "use server";
 
+import { passwordLoginEnabled } from "@/lib/oidc";
+
 import { revalidatePath } from "next/cache";
 import { sql, withTenant } from "@/lib/db";
 import { requireTenant } from "@/lib/session";
@@ -17,6 +19,7 @@ export async function changePasswordAction(
 ): Promise<ProfileState> {
   const slug = String(formData.get("slug"));
   const ctx = await requireTenant(slug);
+  if (!passwordLoginEnabled()) return { error: "رمز عبور در حساب سیمرغ (ورود یکپارچه) تغییر می‌کند." };
   const current = String(formData.get("current") || "");
   const next = String(formData.get("next") || "");
   const confirm = String(formData.get("confirm") || "");

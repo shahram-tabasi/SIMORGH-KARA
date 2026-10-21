@@ -1,0 +1,122 @@
+{{- $ns := include "kara.namespace" . -}}
+{{- $kc := .Values.keycloak -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: kara-web
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+    app.kubernetes.io/name: kara-web
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: kara-web
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      appProtocol: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kara-web
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+    app.kubernetes.io/name: kara-web
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kara-web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels:
+        {{- include "kara.labels" . | nindent 8 }}
+        app.kubernetes.io/name: kara-web
+    spec:
+      {{- include "kara.imagePullSecrets" . | nindent 6 }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "kara.podSecurity" . | nindent 8 }}
+        runAsUser: 65532
+        runAsGroup: 65532
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: kara-web
+      containers:
+        - name: kara-web
+          image: {{ include "kara.image" (dict "root" . "repo" .Values.image.web) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            {{- include "kara.dbEnv" . | nindent 12 }}
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.kara.existingSecret }}, key: sessionSecret }
+            - name: APP_URL
+              value: {{ printf "https://%s" .Values.kara.host | quote }}
+            - name: KEYCLOAK_ISSUER
+              value: {{ $kc.issuer | quote }}
+            - name: KEYCLOAK_INTERNAL_URL
+              value: {{ $kc.internalUrl | quote }}
+            - name: KEYCLOAK_CLIENT_ID
+              value: kara-web
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ $kc.existingSecret }}, key: webClientSecret }
+            - name: PASSWORD_LOGIN
+              value: {{ .Values.kara.passwordLogin | quote }}
+            - name: KARA_API_URL
+              value: http://kara-api:3001
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+          securityContext:
+            {{- include "kara.containerSecurity" . | nindent 12 }}
+          startupProbe:
+            httpGet: { path: /login, port: http }
+            periodSeconds: 3
+            failureThreshold: 40
+          livenessProbe:
+            httpGet: { path: /login, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet: { path: /login, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            # Next writes its cache next to the app; the root stays read-only.
+            - { name: cache, mountPath: /app/.next/cache }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: cache
+          emptyDir: { sizeLimit: 512Mi }
+        - name: tmp
+          emptyDir: { sizeLimit: 128Mi }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kara-web
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kara-web

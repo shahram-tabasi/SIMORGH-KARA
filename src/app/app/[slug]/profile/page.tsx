@@ -2,6 +2,7 @@ import { requireTenant } from "@/lib/session";
 import { sql, withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { ProfileForm } from "./ProfileForm";
+import { accountUrl, passwordLoginEnabled } from "@/lib/oidc";
 
 export default async function ProfilePage({
   params,
@@ -33,6 +34,7 @@ export default async function ProfilePage({
         email={account?.email ?? ""}
         username={account?.username ?? null}
         avatarUrl={avatarUrl}
+        accountUrl={passwordLoginEnabled() ? null : accountUrl()}
       />
     </>
   );

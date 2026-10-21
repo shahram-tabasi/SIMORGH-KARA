@@ -13,7 +13,7 @@ function Submit() {
   );
 }
 
-export function MemberForm({ slug }: { slug: string }) {
+export function MemberForm({ slug, askPassword = true }: { slug: string; askPassword?: boolean }) {
   const [state, action] = useFormState<ActionState, FormData>(
     createMemberAction,
     {}
@@ -37,6 +37,11 @@ export function MemberForm({ slug }: { slug: string }) {
           عضو با موفقیت افزوده شد.
         </div>
       )}
+      {state.warning && (
+        <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          {state.warning}
+        </div>
+      )}
       <input type="hidden" name="slug" value={slug} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
@@ -51,10 +56,14 @@ export function MemberForm({ slug }: { slug: string }) {
           <label className="label">ایمیل</label>
           <input name="email" type="email" dir="ltr" required className="input text-left" />
         </div>
-        <div>
-          <label className="label">رمز عبور اولیه</label>
-          <input name="password" type="text" required className="input" placeholder="حداقل ۶ کاراکتر" />
-        </div>
+        {askPassword ? (
+          <div>
+            <label className="label">رمز عبور اولیه</label>
+            <input name="password" type="text" required className="input" placeholder="حداقل ۶ کاراکتر" />
+          </div>
+        ) : (
+          <p className="self-end pb-2 text-xs text-slate-500">ورود با حساب سیمرغ: پیوند تعیین رمز به ایمیل فرستاده می‌شود.</p>
+        )}
       </div>
       <div className="flex justify-end">
         <Submit />

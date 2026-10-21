@@ -1,0 +1,125 @@
+{{- $ns := include "kara.namespace" . -}}
+{{- if .Values.gateway.ipPool.enabled }}
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: {{ .Values.gateway.ipPool.name }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+spec:
+  blocks:
+    - start: {{ .Values.gateway.loadBalancerIP }}
+      stop: {{ .Values.gateway.loadBalancerIP }}
+  serviceSelector:
+    matchLabels:
+      {{ .Values.gateway.poolLabel.key }}: {{ .Values.gateway.poolLabel.value }}
+{{- end }}
+{{- if .Values.gateway.l2Announcement.enabled }}
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: simorgh-kara-l2
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+spec:
+  serviceSelector:
+    matchLabels:
+      {{ .Values.gateway.poolLabel.key }}: {{ .Values.gateway.poolLabel.value }}
+  interfaces:
+    {{- toYaml .Values.gateway.l2Announcement.interfaces | nindent 4 }}
+  {{- with .Values.gateway.l2Announcement.nodes }}
+  nodeSelector:
+    matchExpressions:
+      - key: kubernetes.io/hostname
+        operator: In
+        values:
+          {{- toYaml . | nindent 10 }}
+  {{- end }}
+  externalIPs: true
+  loadBalancerIPs: true
+{{- end }}
+{{- if .Values.gateway.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gateway.name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+spec:
+  gatewayClassName: {{ .Values.gateway.className }}
+  # Copied by istiod onto the Service it generates, which is where Cilium
+  # looks (`lbipam.cilium.io/ips`; the old `io.cilium/lb-ipam-ips` is ignored).
+  infrastructure:
+    labels:
+      {{ .Values.gateway.poolLabel.key }}: {{ .Values.gateway.poolLabel.value }}
+    annotations:
+      lbipam.cilium.io/ips: {{ .Values.gateway.loadBalancerIP | quote }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: {{ .Values.kara.host }}
+      allowedRoutes:
+        namespaces: { from: Same }
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: {{ .Values.kara.host }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ .Values.certificate.secretName }}
+      allowedRoutes:
+        namespaces: { from: Same }
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kara-https-redirect
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      sectionName: http
+  hostnames:
+    - {{ .Values.kara.host }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+---
+{{/*
+Everything to kara-web; kara-api is not published (kara-web calls it inside
+the cluster). Uploads (face photos, attachments) and the leave assistant's
+answers can take a while: 120 s.
+*/}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kara
+  namespace: {{ $ns }}
+  labels:
+    {{- include "kara.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      sectionName: https
+  hostnames:
+    - {{ .Values.kara.host }}
+  rules:
+    - matches:
+        - path: { type: PathPrefix, value: / }
+      backendRefs:
+        - name: kara-web
+          port: 3000
+      timeouts:
+        request: 120s
+{{- end }}

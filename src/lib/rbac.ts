@@ -26,6 +26,8 @@ export const PERMISSIONS = {
   "ledger.view": "مشاهده دفتر کل",
   "ledger.manage": "ثبت و مدیریت اسناد دفتر کل",
   "settings.manage": "مدیریت تنظیمات شرکت",
+  "erp.view": "مشاهده داده‌های Odoo (طرف‌حساب‌ها، کالاها، کارکنان)",
+  "erp.manage": "ثبت طرف‌حساب و کالا در Odoo",
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;

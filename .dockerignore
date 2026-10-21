@@ -1,0 +1,14 @@
+node_modules
+.next
+.env
+.env.*
+.git
+services
+apps
+data
+docs
+qcy-*
+mobile-qcy-gateway
+docker-compose*.yml
+simulator.js
+deploy

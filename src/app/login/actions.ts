@@ -3,7 +3,9 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { sql } from "@/lib/db";
-import { verifyPassword, createSession } from "@/lib/auth";
+import { verifyPassword } from "@/lib/auth";
+import { startSession, type AccountRow } from "@/lib/login";
+import { passwordLoginEnabled } from "@/lib/oidc";
 
 const schema = z.object({
   email: z.string().email("ایمیل نامعتبر است."),
@@ -28,19 +30,9 @@ export async function loginAction(
 
   const { email, password } = parsed.data;
 
-  const [account] = await sql<
-    {
-      id: string;
-      email: string;
-      full_name: string;
-      password_hash: string;
-      is_platform_admin: boolean;
-      is_holding_admin: boolean;
-      holding_id: string | null;
-      company_id: string | null;
-      status: string;
-    }[]
-  >`
+  if (!passwordLoginEnabled()) return { error: "ورود با رمز عبور غیرفعال است؛ از «ورود با حساب سیمرغ» استفاده کنید." };
+
+  const [account] = await sql<(AccountRow & { password_hash: string })[]>`
     SELECT id, email, full_name, password_hash, is_platform_admin,
            is_holding_admin, holding_id, company_id, status
     FROM platform.user_accounts WHERE email = ${email}
@@ -55,50 +47,7 @@ export async function loginAction(
     return { error: "ایمیل یا رمز عبور نادرست است." };
   }
 
-  if (account.is_platform_admin) {
-    await createSession({
-      sub: account.id,
-      email: account.email,
-      name: account.full_name,
-      kind: "platform",
-    });
-    redirect("/admin");
-  }
-
-  if (account.is_holding_admin && account.holding_id) {
-    await createSession({
-      sub: account.id,
-      email: account.email,
-      name: account.full_name,
-      kind: "holding",
-      holdingId: account.holding_id,
-    });
-    redirect("/holding");
-  }
-
-  if (!account.company_id) {
-    return { error: "این حساب به هیچ شرکتی متصل نیست." };
-  }
-
-  const [company] = await sql<
-    { slug: string; schema_name: string; status: string }[]
-  >`
-    SELECT slug, schema_name, status FROM platform.companies
-    WHERE id = ${account.company_id}
-  `;
-
-  if (!company || company.status === "suspended") {
-    return { error: "دسترسی شرکت شما غیرفعال شده است. با پشتیبانی تماس بگیرید." };
-  }
-
-  await createSession({
-    sub: account.id,
-    email: account.email,
-    name: account.full_name,
-    kind: "tenant",
-    companyId: account.company_id,
-    schema: company.schema_name,
-    slug: company.slug,
-  });
-  redirect(`/app/${company.slug}`);
+  const outcome = await startSession(account);
+  if ("error" in outcome) return outcome;
+  redirect(outcome.redirectTo);
 }

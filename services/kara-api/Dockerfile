@@ -1,0 +1,26 @@
+# kara-api. Built from this folder:
+#
+#   buildah bud -t registry.simorghai.com/simorgh/kara-api:$VERSION services/kara-api
+#
+# Bases come through Harbor's proxy caches, as every Simorgh image does: the
+# build host reaches the internet only through registry.simorghai.com.
+ARG NODE_IMAGE=registry.simorghai.com/docker-proxy/library/node:20.17-bookworm-slim
+ARG RUNTIME_IMAGE=registry.simorghai.com/gcr-proxy/distroless/nodejs20-debian12:nonroot
+
+FROM ${NODE_IMAGE} AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY tsconfig.json tsconfig.build.json ./
+COPY src ./src
+RUN npm run build && npm prune --omit=dev
+
+FROM ${RUNTIME_IMAGE}
+WORKDIR /app
+ENV NODE_ENV=production PORT=3001 NODE_OPTIONS="--enable-source-maps"
+COPY --from=build /app/package.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+USER nonroot
+EXPOSE 3001
+CMD ["dist/main.js"]
