@@ -8,6 +8,10 @@
 #   deploy/keycloak/setup-realm.sh theme          # Kara's login and email theme (chart's keycloak-theme/kara)
 #   deploy/keycloak/setup-realm.sh staff-idp ORG  # Simorgh staff sign in with their
 #                                                 # realm-simorgh account (org alias ORG)
+#   KEEP_EMAILS="a@x b@y" deploy/keycloak/setup-realm.sh reset-identities
+#                                                 # DELETES every organization and user
+#                                                 # of the realm but service accounts and
+#                                                 # KEEP_EMAILS (deploy/scripts/reset-kara.sh)
 #
 # realm      Realm `kara` (organizations on: one organization per Kara tenant,
 #            alias = the tenant's slug), Persian first,
@@ -243,6 +247,26 @@ print(json.dumps(p))' | kc update identity-provider/instances/simorgh -r "$REALM
   echo "staff with @$STAFF_DOMAIN emails go to the staff login"
 }
 
+# The one deleting command here, for deploy/scripts/reset-kara.sh: the realm's
+# organizations, and its users except the clients' service accounts and
+# KEEP_EMAILS. Settings, clients, theme, mail and identity providers stay.
+reset_identities() {
+  local keep=" ${KEEP_EMAILS:-} " n=0 id user email alias
+  say "organizations of realm $REALM"
+  while IFS=, read -r id alias; do
+    [ -n "$id" ] || continue
+    kc delete "organizations/$id" -r "$REALM" && echo "deleted organization $alias" && n=$((n+1))
+  done < <(kc get organizations -r "$REALM" --limit 100000 --fields id,alias --format csv --noquotes | tr -d '\r')
+  say "users of realm $REALM"
+  while IFS=, read -r id user email; do
+    [ -n "$id" ] || continue
+    case "$user" in service-account-*) continue ;; esac
+    if [ -n "$email" ] && [[ "$keep" == *" $email "* ]]; then echo "kept $email"; continue; fi
+    kc delete "users/$id" -r "$REALM" && n=$((n+1))
+  done < <(kc get users -r "$REALM" --limit 100000 --fields id,username,email --format csv --noquotes | tr -d '\r')
+  echo "deleted: $n organizations and users"
+}
+
 login
 trap logout EXIT
 case "${1:-}" in
@@ -250,5 +274,6 @@ case "${1:-}" in
   mail) mail ;;
   theme) theme ;;
   staff-idp) shift; staff_idp "$@" ;;
-  *) echo "usage: $0 realm | mail | theme | staff-idp ORG_ALIAS"; exit 2 ;;
+  reset-identities) reset_identities ;;
+  *) echo "usage: $0 realm | mail | theme | staff-idp ORG_ALIAS | reset-identities"; exit 2 ;;
 esac
