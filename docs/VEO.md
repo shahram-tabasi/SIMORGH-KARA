@@ -1,6 +1,6 @@
 # Simorgh Kara — Virtual Enterprise Organization (VEO) blueprint
 
-Status: proposal, 2026-10-21. Kara is the one screen a complex engineering /
+Status: agreed 2026-10-21 (decisions in §12). Kara is the one screen a complex engineering /
 manufacturing company works in; Odoo is the system of record behind it; the
 rest of the platform (Keycloak, Kafka, Istio, ELK, Nextcloud, Jitsi, n8n,
 the Design Suite, the AI chatbots) plugs into Kara instead of living beside it.
@@ -224,3 +224,12 @@ change: JSON-2, the webhooks and the models they use are the same in 19.
 | 7 R&D, IT, finance localisation | stage-gate, ITIL desk, Moodian e-invoicing, payroll postings | |
 
 Each phase ships to the cluster with its chart changes, tests, and docs.
+
+## 12. Decisions (2026-10-21)
+
+| Question | Decision |
+|---|---|
+| Odoo version | **19.0** now, with the OCA 19.0 modules; OpenUpgrade to 20 once OCA has ported |
+| Processes | **BPMN 2.0/DMN** modelled in Kara (bpmn-js), run on **Operaton**; user tasks in Kara's kartabl, service tasks through **n8n** |
+| Messaging | **Matrix** (Synapse + Matrix Authentication Service → Keycloak, Element), federated for VOs |
+| First after the foundations | the **process backbone** (phase 1) |
