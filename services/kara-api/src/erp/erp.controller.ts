@@ -26,6 +26,7 @@ function linked(t: Tenant): number {
  * Platform admin:
  *   GET  /v1/admin/erp/companies                       Odoo's companies
  *   PUT  /v1/admin/tenants/:slug/erp-link              {odooCompanyId: number | null}
+ *   POST /v1/admin/tenants/:slug/erp-company           a new Odoo company for the tenant, linked
  */
 @Controller('v1')
 @UseGuards(ActorGuard)
@@ -121,6 +122,21 @@ export class ErpController {
     }
     const t = await this.tenants.setOdooCompany(slug, id);
     return { slug: t.slug, odooCompanyId: t.odooCompanyId };
+  }
+
+  /** A new Odoo company named after the tenant (idempotent by slug), linked to it. */
+  @Post('admin/tenants/:slug/erp-company')
+  async createAndLink(@CurrentActor() actor: Actor, @Param('slug') slug: string) {
+    this.platformOnly(actor);
+    const tenant = await this.tenants.tenantBySlug(slug);
+    if (tenant.odooCompanyId != null) return { slug, odooCompanyId: tenant.odooCompanyId, created: false };
+    const company = await this.connector.call<{ id: number; name: string }>('POST', '/v1/companies', {
+      body: { name: tenant.name, externalId: `tenant:${slug}` },
+    });
+    const t = await this.tenants.setOdooCompany(slug, company.id);
+    // Partners and products shared by every company are already in the read
+    // model; the new company has nothing of its own yet.
+    return { slug: t.slug, odooCompanyId: t.odooCompanyId, odooCompanyName: company.name, created: true };
   }
 
   private platformOnly(actor: Actor) {

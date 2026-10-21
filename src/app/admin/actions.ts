@@ -7,7 +7,7 @@ import { sql } from "@/lib/db";
 import { requirePlatformAdmin } from "@/lib/session";
 import { provisionCompany } from "@/lib/provision";
 import { initialPasswordField, initialPasswordHash } from "@/lib/identity";
-import { karaApi, syncIdentity } from "@/lib/kara-api";
+import { karaApi, karaApiEnabled, syncIdentity } from "@/lib/kara-api";
 import { slugify, shortId } from "@/lib/utils";
 
 /** The account is made either way; a sign-in invitation that failed is only logged (import-identities catches up). */
@@ -106,8 +106,16 @@ export async function createCompanyAction(
   }
 
   try {
-    const { adminAccountId } = await provisionCompany(parsed.data);
+    const { adminAccountId, slug } = await provisionCompany(parsed.data);
     await logIdentity(await syncIdentity(session.sub, adminAccountId));
+    if (formData.get("createOdooCompany") === "on" && karaApiEnabled()) {
+      try {
+        await karaApi(session.sub, "POST", `/v1/admin/tenants/${slug}/erp-company`);
+      } catch (e) {
+        // The company exists in Kara either way; linking can be done on /admin/companies.
+        console.warn(JSON.stringify({ level: "warn", context: "erp-company", message: (e as Error).message }));
+      }
+    }
   } catch (e) {
     return { error: e instanceof Error ? e.message : "خطا در ساخت شرکت." };
   }
@@ -140,17 +148,27 @@ export async function updateCompanyAction(formData: FormData) {
   revalidatePath("/admin/companies");
 }
 
-/** A tenant ↔ its Odoo company (kara-api checks the company exists). Empty unlinks. */
+/**
+ * A tenant ↔ its Odoo company: an existing one (kara-api checks it exists),
+ * "new" for a company made in Odoo with the tenant's name, empty to unlink.
+ * Errors come back to the page as ?erp_error=…&erp_slug=….
+ */
 export async function linkOdooCompanyAction(formData: FormData) {
   const { session } = await requirePlatformAdmin();
   const slug = String(formData.get("slug"));
   const raw = String(formData.get("odooCompanyId") ?? "");
+  let error: string | null = null;
   try {
-    await karaApi(session.sub, "PUT", `/v1/admin/tenants/${slug}/erp-link`, {
-      body: { odooCompanyId: raw ? Number(raw) : null },
-    });
+    if (raw === "new") {
+      await karaApi(session.sub, "POST", `/v1/admin/tenants/${slug}/erp-company`);
+    } else {
+      await karaApi(session.sub, "PUT", `/v1/admin/tenants/${slug}/erp-link`, {
+        body: { odooCompanyId: raw ? Number(raw) : null },
+      });
+    }
   } catch (e) {
-    console.warn(JSON.stringify({ level: "warn", context: "erp-link", message: (e as Error).message }));
+    error = (e as Error).message;
   }
   revalidatePath("/admin/companies");
+  if (error) redirect(`/admin/companies?erp_slug=${encodeURIComponent(slug)}&erp_error=${encodeURIComponent(error.slice(0, 300))}`);
 }

@@ -13,7 +13,7 @@ function Submit() {
   );
 }
 
-export function NewCompanyForm({ askPassword }: { askPassword: boolean }) {
+export function NewCompanyForm({ askPassword, offerOdoo = false }: { askPassword: boolean; offerOdoo?: boolean }) {
   const [state, action] = useFormState<CompanyFormState, FormData>(
     createCompanyAction,
     {}
@@ -91,6 +91,13 @@ export function NewCompanyForm({ askPassword }: { askPassword: boolean }) {
             )}
           </div>
         </div>
+
+        {offerOdoo && (
+          <label className="card flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+            <input type="checkbox" name="createOdooCompany" defaultChecked className="h-4 w-4" />
+            ساخت شرکت متناظر در Odoo با همین نام (برای مشتریان بیرونی خاموش کنید)
+          </label>
+        )}
 
         <div className="flex justify-end">
           <Submit />
