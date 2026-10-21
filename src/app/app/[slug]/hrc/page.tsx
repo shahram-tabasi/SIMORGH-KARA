@@ -8,7 +8,7 @@ export default async function HRCPage({ params }: { params: { slug: string } }) 
   const base = `/app/${params.slug}`;
   
   // Fetch some stats
-  const stats = await withTenant(ctx.company.schema_name, async (tx) => {
+  const stats = await withTenant(ctx.company.schema, async (tx) => {
     const incidentsCount = await tx`SELECT COUNT(*) FROM hrc_incidents WHERE occurred_at >= NOW() - INTERVAL '30 days'`;
     const alertsCount = await tx`SELECT COUNT(*) FROM hrc_health_metrics WHERE is_alert = true AND recorded_at >= NOW() - INTERVAL '7 days'`;
     const smartwatchesCount = await tx`SELECT COUNT(*) FROM hrc_smartwatches WHERE is_active = true`;
