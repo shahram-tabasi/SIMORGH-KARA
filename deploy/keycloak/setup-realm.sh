@@ -4,6 +4,7 @@
 # in place, never deleted. Nothing secret is printed or put on a command line.
 #
 #   deploy/keycloak/setup-realm.sh realm          # realm, clients, secrets into ns kara
+#   deploy/keycloak/setup-realm.sh mail           # only the SMTP settings, again
 #   deploy/keycloak/setup-realm.sh staff-idp ORG  # Simorgh staff sign in with their
 #                                                 # realm-simorgh account (org alias ORG)
 #
@@ -116,6 +117,25 @@ print(json.dumps({"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
   echo "stored $key in $NS/kara-keycloak"
 }
 
+mail() {
+  say "mail (from realm $STAFF_REALM)"
+  if [ -n "${NO_SMTP:-}" ]; then echo "skipped (NO_SMTP)"; else
+    local smtp
+    # `smtpServer(*)`: kcadm prints a nested object empty unless asked for its fields.
+    smtp="$(kc get "realms/$STAFF_REALM" --fields 'smtpServer(*)' 2>/dev/null || echo '{}')"
+    if printf '%s' "$smtp" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("smtpServer",{}).get("host") else 1)'; then
+      local pass="${SMTP_PASSWORD:-}"
+      [ -n "$pass" ] || { read -rsp "SMTP password of $(printf '%s' "$smtp" | python3 -c 'import json,sys; print(json.load(sys.stdin)["smtpServer"].get("user",""))'): " pass; echo; }
+      printf '%s' "$smtp" | P="$pass" python3 -c '
+import json, os, sys
+s = json.load(sys.stdin)["smtpServer"]
+s["password"] = os.environ["P"]
+s["fromDisplayName"] = "سیمرغ کارا"
+print(json.dumps({"smtpServer": s}))' | kc update "realms/$REALM" -f - >/dev/null && echo "copied (sender $(printf '%s' "$smtp" | python3 -c 'import json,sys; print(json.load(sys.stdin)["smtpServer"].get("from",""))'))"
+    else echo "realm $STAFF_REALM has no SMTP: set it in the console (Realm settings → Email)"; fi
+  fi
+}
+
 realm() {
   say "realm $REALM"
   if kc get "realms/$REALM" --fields realm >/dev/null 2>&1; then echo "exists"; else
@@ -132,21 +152,7 @@ realm() {
     \"passwordPolicy\":\"length(8) and notUsername and notEmail\"}" \
     | kc update "realms/$REALM" -f - >/dev/null && echo "settings applied"
 
-  say "mail (from realm $STAFF_REALM)"
-  if [ -n "${NO_SMTP:-}" ]; then echo "skipped (NO_SMTP)"; else
-    local smtp
-    smtp="$(kc get "realms/$STAFF_REALM" --fields smtpServer 2>/dev/null || echo '{}')"
-    if printf '%s' "$smtp" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("smtpServer",{}).get("host") else 1)'; then
-      local pass="${SMTP_PASSWORD:-}"
-      [ -n "$pass" ] || { read -rsp "SMTP password of $(printf '%s' "$smtp" | python3 -c 'import json,sys; print(json.load(sys.stdin)["smtpServer"].get("user",""))'): " pass; echo; }
-      printf '%s' "$smtp" | P="$pass" python3 -c '
-import json, os, sys
-s = json.load(sys.stdin)["smtpServer"]
-s["password"] = os.environ["P"]
-s["fromDisplayName"] = "سیمرغ کارا"
-print(json.dumps({"smtpServer": s}))' | kc update "realms/$REALM" -f - >/dev/null && echo "copied (sender $(printf '%s' "$smtp" | python3 -c 'import json,sys; print(json.load(sys.stdin)["smtpServer"].get("from",""))'))"
-    else echo "realm $STAFF_REALM has no SMTP: set it in the console (Realm settings → Email)"; fi
-  fi
+  mail
 
   say "client kara-web (browser login)"
   local base="$KARA_SCHEME://$KARA_HOST" web api
@@ -231,6 +237,7 @@ login
 trap logout EXIT
 case "${1:-}" in
   realm) realm ;;
+  mail) mail ;;
   staff-idp) shift; staff_idp "$@" ;;
-  *) echo "usage: $0 realm | staff-idp ORG_ALIAS"; exit 2 ;;
+  *) echo "usage: $0 realm | mail | staff-idp ORG_ALIAS"; exit 2 ;;
 esac
