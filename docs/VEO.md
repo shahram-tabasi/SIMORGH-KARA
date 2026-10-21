@@ -217,8 +217,8 @@ the same five ways. A new system is integrated when all five are answered.
 | **Nextcloud** (files) | OIDC login (user_oidc app) against Keycloak; groups from the token | a group per company / VO / project; a Group Folder per record (`/VO/<code>`, `/Projects/<code>`, `/Orders/<ref>`) with those groups; federation share to a partner's cloud for a VO | Files tab on every record (WebDAV list, upload, versions); open in Collabora in an embedded frame | webhook_listeners app → adapter → `files.*.v1` (uploaded, shared, approved) |
 | **Jitsi** (meetings) | JWT signed for Keycloak users (prosody token auth); guests by one-time link | a stable room per record (`kara-<type>-<id>`), moderator = record owner | "Meet" button on every record; Jitsi IFrame API inside Kara; meeting saved as an Odoo calendar event with attendees | join/leave via prosody event-sync → `call.meeting.*` (minutes, attendance) |
 | **Messaging: Matrix** (Synapse + MAS, Element) | MAS with Keycloak upstream: same account | a space per company and per VO, a room per project / order / ticket; members follow Kara's groups (a bot keeps them in step) | chat panel in Kara (matrix-js-sdk), same rooms in Element mobile; Kara posts system messages (approval needed, order shipped) to the room | appservice → `chat.*.v1` (mentions become kartabl items) |
-| **VoIP calls: Asterisk** (PBX, LTS) with **SIP over WebRTC** | SIP account per person, created from Keycloak; the browser registers with a short-lived credential kara-api issues | an extension per person, ring groups per team, queues for sales / after-sales, a SIP trunk to the telecom operator for outside numbers | softphone in Kara's top bar (JsSIP): click-to-call on any phone number (customers, suppliers, colleagues); incoming call shows the caller's Odoo partner, open tickets and orders; desk IP phones use the same extension | AMI/ARI adapter → `call.voice.*.v1` (call log on the partner in Odoo, missed calls in the kartabl, recordings in Nextcloud where the law allows) |
-| **User VMs: OpenStack** (on the Ceph cluster) | Keystone federated to Keycloak (OIDC mapping: Kara company → Keystone domain, team/VO group → project role) | a Keystone domain per company, a project per team / VO with quotas; a VM request is a BPMN process: request → approval → n8n/Operaton calls Nova/Heat (templates: engineering workstation, EPLAN, GPU) | "My workspace": my VMs, start/stop/snapshot, open the desktop in the browser through Apache Guacamole (RDP/SSH/VNC, Keycloak SSO) or the noVNC console | Nova notifications → adapter → `vm.*.v1`; monthly usage (CloudKitty/Gnocchi) → cost lines to the project's analytic account in Odoo |
+| **Calls between users** (now: Kara + Jitsi; Asterisk later, only when an outside telephone line comes) | the Jitsi token Kara signs for the person | nothing: a private room per call (`call-<uuid>`), made when the call starts | **call button** on every person (directory, chat, record owners) and group calls from a team or record; the callee's Kara **rings** (in-app ringtone, accept / decline, busy); both land in the same Jitsi room inside Kara, audio first, video on demand; history and **missed calls** in the kartabl | kara-api is the signalling (call.started / ringing / accepted / declined / ended / missed over Kara's live channel, then Kafka `call.voice.*.v1`) |
+| **User VMs: OpenStack** (all-in-one on 192.168.1.94 now; Windows workstations) | Keystone federated to Keycloak (OIDC mapping: Kara company → Keystone domain, team/VO group → project role) | a Keystone domain per company, a project per team / VO with quotas; a VM request is a BPMN process: request → approval → Kara calls Nova with a Windows image and flavor (e.g. engineering workstation, EPLAN) | "My workspace": my VMs, start / stop / restart / snapshot, **open the Windows desktop in the browser** (Apache Guacamole over RDP, Keycloak single sign-on); no VM is reachable from the internet, only through Guacamole | Nova notifications → adapter → `vm.*.v1`; monthly usage → cost lines to the project's analytic account in Odoo |
 
 ### One example end to end
 
@@ -237,8 +237,16 @@ A partner company joins a VO for an offer:
 1. Links table, provisioning framework (Operaton), the collaboration bar with
    Nextcloud + Jitsi (phase 0b).
 2. Matrix with MAS and the Kara chat panel (task "Matrix").
-3. Asterisk with WebRTC, the softphone and click-to-call, Odoo call log.
-4. OpenStack: Keystone federation, VM request process, Guacamole, cost to Odoo.
+3. Calls between users on Jitsi (ringing, accept / decline, missed calls).
+4. OpenStack: a Windows workstation image (virtio drivers, cloudbase-init,
+   RDP on, sysprep), Keystone federation, the VM request process, Guacamole,
+   cost to Odoo.
+5. Asterisk (outside telephone line, desk phones) only when a line exists.
+
+Decisions (2026-10-21): no outside telephone line yet, so calls are Kara +
+Jitsi between users; OpenStack is the all-in-one on 192.168.1.94, and the
+first VMs are Windows workstations. Every Windows VM needs its own licence
+(volume licence with KMS, or a key per VM).
 
 ## 10. A decision to take now: Odoo 19 or 20
 
