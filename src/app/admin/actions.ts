@@ -72,7 +72,7 @@ export async function createHoldingAction(
               true, ${holding.id})
       RETURNING id
     `;
-    await logIdentity(await syncIdentity(session.sub, admin.id));
+    await logIdentity(await syncIdentity(session.sub, admin.id, parsed.data.adminPassword));
   } catch (e) {
     return { error: e instanceof Error ? e.message : "خطا در ساخت هولدینگ." };
   }
@@ -115,7 +115,7 @@ export async function createCompanyAction(
     // Odoo: the company made there now, its units and people kept there by the provisioner.
     const apps = { ...appsFrom(formData), erp: formData.get("createOdooCompany") === "on" && karaApiEnabled() };
     const { adminAccountId, slug } = await provisionCompany({ ...parsed.data, apps });
-    await logIdentity(await syncIdentity(session.sub, adminAccountId));
+    await logIdentity(await syncIdentity(session.sub, adminAccountId, parsed.data.adminPassword));
     if (formData.get("createOdooCompany") === "on" && karaApiEnabled()) {
       try {
         await karaApi(session.sub, "POST", `/v1/admin/tenants/${slug}/erp-company`);

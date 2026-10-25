@@ -103,7 +103,7 @@ export async function createMemberAction(
     await enqueueSync(tx, "member", account.id, ctx.company.id, "member created");
   });
 
-  const warning = await syncIdentity(ctx.session.sub, account.id);
+  const warning = await syncIdentity(ctx.session.sub, account.id, parsed.data.password);
   rev(slug, "/members");
   return { ok: true, warning: warning ?? undefined };
 }
@@ -714,4 +714,25 @@ export async function toggleMemberAppAction(formData: FormData) {
     await syncMember(tx, memberId, ctx.company.id, `${checked ? "given" : "taken"} ${app}:${role}`);
   });
   rev(slug, "/members");
+}
+
+/* ---------------------------- sign-in password ---------------------------- */
+
+/**
+ * A temporary Keycloak password for a person, set by a company admin: the
+ * person signs in with it once and must choose their own. For a manager who
+ * never got (or lost) the invitation email.
+ */
+export async function setMemberPasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "members.manage");
+  const memberId = String(formData.get("memberId"));
+  const password = String(formData.get("password") ?? "");
+  if (password.length < 8) return { error: "رمز حداقل ۸ کاراکتر باشد." };
+  const [m] = await withTenant(ctx.company.schema, (tx) => tx<{ account_id: string }[]>`SELECT account_id FROM members WHERE id = ${memberId}`);
+  if (!m) return { error: "این عضو پیدا نشد." };
+  const note = await syncIdentity(ctx.session.sub, m.account_id, password);
+  if (note && !note.startsWith("initial password set")) return { error: note };
+  return { ok: true };
 }

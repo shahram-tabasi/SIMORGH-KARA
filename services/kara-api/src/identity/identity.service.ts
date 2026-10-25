@@ -36,7 +36,7 @@ export class IdentityService {
 
   constructor(private readonly tenants: TenantsService) {}
 
-  async sync(account: Account, opts: { invite: boolean }): Promise<SyncResult> {
+  async sync(account: Account, opts: { invite: boolean; password?: string }): Promise<SyncResult> {
     if (!this.admin.configured) throw new ServiceUnavailableException('Keycloak admin client is not configured (KEYCLOAK_CLIENT_SECRET)');
     const base = { accountId: account.id, email: account.email };
     if (brokered(account.email)) {
@@ -72,7 +72,16 @@ export class IdentityService {
 
     let invited = false;
     let note: string | undefined;
-    if (opts.invite && enabled && !(await this.admin.hasPassword(user.id))) {
+    if (opts.password) {
+      // The admin gave a first password: no invitation; Keycloak asks for a new one at the first sign-in.
+      try {
+        await this.admin.setPassword(user.id, opts.password, true);
+        note = 'initial password set (to be changed at the first sign-in)';
+      } catch (e) {
+        note = `initial password not accepted by Keycloak: ${(e as Error).message}`;
+        this.log.warn(`${account.email}: ${note}`);
+      }
+    } else if (opts.invite && enabled && !(await this.admin.hasPassword(user.id))) {
       try {
         await this.admin.invite(user.id);
         invited = true;

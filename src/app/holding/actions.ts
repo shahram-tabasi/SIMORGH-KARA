@@ -52,7 +52,7 @@ export async function createHoldingCompanyAction(
 
   try {
     const { adminAccountId } = await provisionCompany({ ...parsed.data, holdingId: ctx.holding.id });
-    const warning = await syncIdentity(ctx.session.sub, adminAccountId);
+    const warning = await syncIdentity(ctx.session.sub, adminAccountId, parsed.data.adminPassword);
     if (warning) console.warn(JSON.stringify({ level: "warn", context: "identity", message: warning }));
   } catch (e) {
     return { error: e instanceof Error ? e.message : "خطا در ساخت شرکت." };

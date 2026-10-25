@@ -65,7 +65,11 @@ export function NewSectionForm({ askPassword }: { askPassword: boolean }) {
                 <input name="adminPassword" type="text" required className="input" placeholder="حداقل ۶ کاراکتر" />
               </div>
             ) : (
-              <p className="self-end pb-2 text-xs text-slate-500">ورود با حساب سیمرغ: پیوند تعیین رمز به ایمیل فرستاده می‌شود.</p>
+              <div>
+                <label className="label">رمز اولیه (اختیاری)</label>
+                <input name="adminPassword" type="text" dir="ltr" minLength={8} autoComplete="new-password" className="input text-left" placeholder="خالی: پیوند تعیین رمز ایمیل می‌شود" />
+                <p className="mt-1 text-xs text-slate-500">حداقل ۸ کاراکتر؛ در نخستین ورود باید عوض شود.</p>
+              </div>
             )}
           </div>
         </div>

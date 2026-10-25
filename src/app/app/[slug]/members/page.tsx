@@ -7,6 +7,7 @@ import { passwordLoginEnabled } from "@/lib/oidc";
 import { ScheduleSelect } from "./ScheduleSelect";
 import { EmploymentForm } from "./EmploymentForm";
 import { UsernameField } from "./UsernameField";
+import { PasswordField } from "./PasswordField";
 import { toggleMemberRoleAction, toggleMemberGroupAction, toggleMemberAppAction } from "../actions";
 import { sql } from "@/lib/db";
 import { APPS, type CompanyApps } from "@/lib/apps";
@@ -220,6 +221,15 @@ export default async function MembersPage({
                   memberId={m.id}
                   current={m.username}
                 />
+              </div>
+            )}
+
+            {canManage && !passwordLoginEnabled() && (
+              <div className="mt-4">
+                <div className="mb-1.5 text-xs font-medium text-slate-500">
+                  رمز ورود (Keycloak) — موقت؛ در نخستین ورود باید عوض شود
+                </div>
+                <PasswordField slug={params.slug} memberId={m.id} />
               </div>
             )}
 

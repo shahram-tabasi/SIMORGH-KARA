@@ -76,10 +76,17 @@ export async function karaApi<T>(
  * and an email to set a password for a new one. Best effort: the account
  * exists in Kara either way, and `npm run`/cli import-identities catches up.
  */
-export async function syncIdentity(actorAccountId: string, accountId: string): Promise<string | null> {
+/**
+ * The account into Keycloak. With `password` (an admin's choice when making
+ * the account) it is set as a temporary password, to be changed at the first
+ * sign-in; without, Keycloak emails a link to set one.
+ */
+export async function syncIdentity(actorAccountId: string, accountId: string, password?: string | null): Promise<string | null> {
   if (!karaApiEnabled()) return null;
   try {
-    const r = await karaApi<{ invited: boolean; note?: string }>(actorAccountId, "POST", `/v1/identity/accounts/${accountId}/sync`, { body: { invite: true } });
+    const r = await karaApi<{ invited: boolean; note?: string }>(actorAccountId, "POST", `/v1/identity/accounts/${accountId}/sync`, {
+      body: { invite: true, ...(password ? { password } : {}) },
+    });
     if (r.note) return r.note;
     return null;
   } catch (e) {

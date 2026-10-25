@@ -150,6 +150,15 @@ export class KeycloakAdmin {
     return body.some(c => c.type === 'password');
   }
 
+  /**
+   * A password set by an admin in Kara. Temporary: Keycloak asks the person
+   * for their own at the first sign-in. The realm's password policy applies
+   * (its message comes back as the error).
+   */
+  async setPassword(id: string, value: string, temporary = true): Promise<void> {
+    await this.call('PUT', `/users/${id}/reset-password`, { type: 'password', value, temporary });
+  }
+
   /** Email with a link to set a password (UPDATE_PASSWORD). Needs the realm's SMTP. */
   async invite(id: string): Promise<void> {
     const q = new URLSearchParams({ lifespan: String(this.inviteOpts.lifespanSeconds) });

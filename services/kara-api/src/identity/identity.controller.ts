@@ -1,10 +1,11 @@
-import { Body, Controller, ForbiddenException, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
 import { ActorGuard, CurrentActor } from '../auth/actor.guard';
 import { Actor, TenantsService } from '../tenants/tenants.service';
 import { IdentityService } from './identity.service';
 
 /**
- *   POST /v1/identity/accounts/:id/sync   {invite?: boolean}
+ *   POST /v1/identity/accounts/:id/sync   {invite?: boolean, password?: string}
+ * (password: a temporary first password the admin chose, instead of the invitation)
  * after kara-web creates or changes an account. Allowed for the platform
  * admin, the holding admin of the account's holding, and a member of the
  * account's tenant with members.manage.
@@ -16,11 +17,13 @@ export class IdentityController {
   constructor(private readonly identity: IdentityService, private readonly tenants: TenantsService) {}
 
   @Post('accounts/:id/sync')
-  async syncOne(@CurrentActor() actor: Actor, @Param('id') id: string, @Body() body: { invite?: boolean }) {
+  async syncOne(@CurrentActor() actor: Actor, @Param('id') id: string, @Body() body: { invite?: boolean; password?: string }) {
     const account = await this.tenants.accountById(id);
     if (!account) throw new NotFoundException('no such account');
     await this.mayManage(actor, account.companyId, account.holdingId);
-    return this.identity.sync(account, { invite: body?.invite !== false });
+    const password = typeof body?.password === 'string' && body.password ? body.password : undefined;
+    if (password && (password.length < 8 || password.length > 128)) throw new BadRequestException('the initial password must be 8 to 128 characters');
+    return this.identity.sync(account, { invite: body?.invite !== false, password });
   }
 
   @Post('sync-all')
