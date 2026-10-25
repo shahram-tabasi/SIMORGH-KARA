@@ -7,6 +7,7 @@
 #   deploy/helm/simorgh-kara/scripts/setup.sh keycloak   # realm kara, clients → kara-keycloak
 #   deploy/helm/simorgh-kara/scripts/setup.sh mail       # realm kara's SMTP again (from realm simorgh)
 #   deploy/helm/simorgh-kara/scripts/setup.sh theme      # realm kara uses Kara's login and email theme
+#   deploy/helm/simorgh-kara/scripts/setup.sh llm-key    # the office LLM key (llm-api-key.sh create kara) → kara-app
 #   helm upgrade --install kara deploy/helm/simorgh-kara -n kara
 #
 # keycloak runs deploy/keycloak/setup-realm.sh realm (read its header): it
@@ -52,10 +53,26 @@ secrets() {
   fi
 }
 
+# The office LLM's key for Kara's assistants, asked for (not echoed) and put
+# into kara-app as llmApiKey; kara-web restarts to read it.
+llm_key() {
+  local key
+  read -rsp "Kara's LLM key (from llm-api-key.sh create kara): " key; echo
+  [ -n "$key" ] || { echo "nothing entered"; exit 1; }
+  kubectl -n "$NS" get secret kara-app -o json | KEY="$key" python3 -c '
+import base64, json, os, sys
+s = json.load(sys.stdin)
+s["data"]["llmApiKey"] = base64.b64encode(os.environ["KEY"].encode()).decode()
+for k in ("resourceVersion", "uid", "creationTimestamp", "managedFields"): s["metadata"].pop(k, None)
+print(json.dumps(s))' | kubectl apply -f - >/dev/null && echo "stored llmApiKey in $NS/kara-app"
+  kubectl -n "$NS" rollout restart deploy/kara-web >/dev/null && echo "kara-web restarting"
+}
+
 case "${1:-}" in
   secrets) secrets ;;
   keycloak) namespace; KARA_NAMESPACE="$NS" "$HERE/../../../keycloak/setup-realm.sh" realm ;;
   mail) KARA_NAMESPACE="$NS" "$HERE/../../../keycloak/setup-realm.sh" mail ;;
   theme) KARA_NAMESPACE="$NS" "$HERE/../../../keycloak/setup-realm.sh" theme ;;
-  *) echo "usage: $0 secrets | keycloak | mail | theme"; exit 2 ;;
+  llm-key) llm_key ;;
+  *) echo "usage: $0 secrets | keycloak | mail | theme | llm-key"; exit 2 ;;
 esac

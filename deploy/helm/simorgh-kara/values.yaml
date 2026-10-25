@@ -66,6 +66,11 @@ keycloakTheme:
 
 web:
   replicas: 2
+  # The office LLM (OpenAI-compatible) behind Kara's assistants. Its key is
+  # kara-app llmApiKey (scripts/setup.sh llm-key); none: the assistants say so.
+  llm:
+    baseUrl: https://llm.simorghai.com/v1
+    model: qwen3.8-27b-nothink
   resources:
     requests: { cpu: 100m, memory: 256Mi }
     limits:   { memory: 1Gi }

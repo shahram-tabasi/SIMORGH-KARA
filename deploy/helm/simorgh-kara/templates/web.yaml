@@ -64,6 +64,14 @@ spec:
               containerPort: 3000
           env:
             {{- include "kara.dbEnv" . | nindent 12 }}
+            # The office LLM for the assistants (src/lib/ai.ts); the key from setup.sh llm-key.
+            - name: LLM_BASE_URL
+              value: {{ .Values.web.llm.baseUrl | quote }}
+            - name: LLM_MODEL
+              value: {{ .Values.web.llm.model | quote }}
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.kara.existingSecret }}, key: llmApiKey, optional: true }
             - name: SESSION_SECRET
               valueFrom:
                 secretKeyRef: { name: {{ .Values.kara.existingSecret }}, key: sessionSecret }

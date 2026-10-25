@@ -2,7 +2,7 @@
 
 import { withTenant } from "@/lib/db";
 import { requireTenant } from "@/lib/session";
-import { askClaude, isAIConfigured } from "@/lib/ai";
+import { askAI, isAIConfigured } from "@/lib/ai";
 import { loadBalance } from "@/lib/leave-balance";
 import { todayJalali } from "@/lib/jalali";
 
@@ -87,7 +87,7 @@ export async function askAssistantAction(
   ].join("\n");
 
   try {
-    const answer = await askClaude(system, question);
+    const answer = await askAI(system, question);
     return { answer, question };
   } catch (e) {
     return {

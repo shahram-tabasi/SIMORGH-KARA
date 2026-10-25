@@ -47,7 +47,7 @@ export function Assistant({ slug, enabled }: { slug: string; enabled: boolean })
         <div className="flex items-center justify-between">
           {!enabled && (
             <span className="text-[11px] text-amber-600">
-              برای فعال‌سازی، کلید ANTHROPIC_API_KEY در محیط تنظیم شود.
+              برای فعال‌سازی، مدیر سامانه کلید LLM کارا را تنظیم کند (setup.sh llm-key).
             </span>
           )}
           <div className="mr-auto">
