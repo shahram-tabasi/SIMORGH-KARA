@@ -22,6 +22,8 @@ interface Row {
   sequence: number;
   active: boolean;
   updated_at: Date;
+  file_name: string | null;
+  file_size: number | null;
 }
 
 /**
@@ -36,7 +38,7 @@ export default async function KnowledgePage({ params }: { params: { slug: string
 
   const rows = await withTenant(ctx.company.schema, (tx) => tx<Row[]>`
     SELECT id, kind, name, code, summary, body, attributes, address, impact,
-           to_char(effective_date, 'YYYY-MM-DD') AS effective_date, sequence, active, updated_at
+           to_char(effective_date, 'YYYY-MM-DD') AS effective_date, sequence, active, updated_at, file_name, file_size
     FROM knowledge ORDER BY active DESC, sequence, name`);
   const [company] = await sql<{ apps: CompanyApps }[]>`SELECT apps FROM platform.companies WHERE id = ${ctx.company.id}`;
   const sync = company?.apps?.erp ? (await syncViews("company", [ctx.company.id]))[ctx.company.id] : undefined;
@@ -45,7 +47,7 @@ export default async function KnowledgePage({ params }: { params: { slug: string
     <>
       <PageHeader
         title="دانش شرکت"
-        description="محصولات و ویژگی‌هایشان، منابع داده، بخشنامه‌ها و آیین‌نامه‌ها — Design Suite و دستیار منابع انسانی با همین‌ها به افراد این شرکت پاسخ می‌دهند"
+        description="محصولات و ویژگی‌هایشان، منابع داده، بخشنامه‌ها و آیین‌نامه‌ها (متن یا سند PDF/Word) — Design Suite، دستیار منابع انسانی و دستیار مرخصی کارا با همین‌ها به افراد این شرکت پاسخ می‌دهند"
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -84,6 +86,12 @@ export default async function KnowledgePage({ params }: { params: { slug: string
                             {!r.active && <span className="badge mr-2 bg-slate-100 text-slate-600">بایگانی</span>}
                           </div>
                           {r.summary && <div className="text-sm text-slate-600">{r.summary}</div>}
+                          {r.file_name && (
+                            <a href={`/app/${params.slug}/knowledge/file/${r.id}`} className="text-xs text-brand-700 underline">
+                              📄 {r.file_name} ({Math.max(1, Math.round((r.file_size ?? 0) / 1024))} KB)
+                            </a>
+                          )}
+                          {r.body && <div className="text-xs text-slate-500">{r.body.length.toLocaleString("fa-IR")} نویسه متن برای دستیارها</div>}
                           {r.address && <div className="font-mono text-xs text-slate-600" dir="ltr">{r.address}</div>}
                           {r.effective_date && <div className="text-xs text-slate-500">از {new Date(r.effective_date).toLocaleDateString("fa-IR")}</div>}
                           {r.impact && <div className="text-xs text-amber-800">اثر: {r.impact}</div>}
@@ -120,7 +128,7 @@ export default async function KnowledgePage({ params }: { params: { slug: string
                               initial={{
                                 id: r.id, kind: r.kind, name: r.name, code: r.code ?? "", summary: r.summary ?? "", body: r.body ?? "",
                                 features: featuresText(r.attributes), address: r.address ?? "", impact: r.impact ?? "",
-                                effectiveDate: r.effective_date ?? "", sequence: r.sequence,
+                                effectiveDate: r.effective_date ?? "", sequence: r.sequence, fileName: r.file_name,
                               }}
                             />
                           </div>

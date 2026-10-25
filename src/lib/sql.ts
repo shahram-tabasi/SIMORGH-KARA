@@ -189,6 +189,12 @@ CREATE TABLE IF NOT EXISTS knowledge (
   created_at     timestamptz NOT NULL DEFAULT now(),
   updated_at     timestamptz NOT NULL DEFAULT now()
 );
+-- An uploaded document (an HR regulation as PDF / Word): the original, kept for
+-- download; its text is the item's body.
+ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS file_name text;
+ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS file_mime text;
+ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS file_size integer;
+ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS file_data bytea;
 
 CREATE TABLE IF NOT EXISTS member_groups (
   member_id uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,

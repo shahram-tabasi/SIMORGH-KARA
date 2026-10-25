@@ -40,3 +40,37 @@ export const featuresText = (a: Record<string, unknown> | null | undefined) =>
 export function looksSecret(address: string): boolean {
   return /:\/\/[^/@\s]+:[^/@\s]+@/.test(address) || /(password|passwd|pwd|secret|token|apikey|api_key)\s*=/i.test(address);
 }
+
+/** Words of a question, for picking passages (Persian and Latin, 2+ letters). */
+const words = (s: string) => new Set((s.toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) ?? []).filter((w) => w.length > 1));
+
+/**
+ * The passages of a company's rules and circulars closest to a question, by
+ * shared words: for an assistant's prompt, at most `budget` characters.
+ * Simple and dependable; the HR chatbot does the semantic search.
+ */
+export function relevantPassages(question: string, items: { name: string; body: string | null; summary: string | null }[], budget = 9000): string[] {
+  const q = words(question);
+  const chunks: { title: string; text: string; score: number }[] = [];
+  for (const it of items) {
+    const text = [it.summary, it.body].filter(Boolean).join("\n\n");
+    for (const part of text.split(/\n\s*\n/).reduce<string[]>((acc, p) => {
+      const last = acc[acc.length - 1];
+      if (last !== undefined && last.length + p.length < 1500) acc[acc.length - 1] = `${last}\n\n${p}`; else acc.push(p);
+      return acc;
+    }, [])) {
+      const w = words(part);
+      let score = 0;
+      for (const x of q) if (w.has(x)) score += 1;
+      if (score) chunks.push({ title: it.name, text: part.slice(0, 2000), score });
+    }
+  }
+  const out: string[] = [];
+  let used = 0;
+  for (const c of chunks.sort((a, b) => b.score - a.score)) {
+    if (used + c.text.length > budget) break;
+    out.push(`[${c.title}]\n${c.text}`);
+    used += c.text.length;
+  }
+  return out;
+}

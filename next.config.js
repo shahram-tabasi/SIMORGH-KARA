@@ -14,8 +14,11 @@ const nextConfig = {
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: "2mb",
+      // Company knowledge takes uploaded HR documents (PDF, Word) up to 20 MB.
+      bodySizeLimit: "25mb",
     },
+    // Text extraction from uploads (src/lib/extract.ts) runs as plain Node packages.
+    serverComponentsExternalPackages: ["unpdf", "mammoth"],
   },
 };
 

@@ -104,6 +104,10 @@ async function main() {
           created_at     timestamptz NOT NULL DEFAULT now(),
           updated_at     timestamptz NOT NULL DEFAULT now()
         );
+        ALTER TABLE "${schema_name}".knowledge ADD COLUMN IF NOT EXISTS file_name text;
+        ALTER TABLE "${schema_name}".knowledge ADD COLUMN IF NOT EXISTS file_mime text;
+        ALTER TABLE "${schema_name}".knowledge ADD COLUMN IF NOT EXISTS file_size integer;
+        ALTER TABLE "${schema_name}".knowledge ADD COLUMN IF NOT EXISTS file_data bytea;
       `);
 
       // HR / Calendar module (stage 1)

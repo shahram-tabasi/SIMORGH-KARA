@@ -5,6 +5,11 @@ import { withTenant } from "@/lib/db";
 import { ensurePermission, requireTenant } from "@/lib/session";
 import { enqueueSync } from "@/lib/sync";
 import { isKind, looksSecret, parseFeatures } from "@/lib/knowledge";
+import { extractText } from "@/lib/extract";
+
+const MAX_FILE = 20 * 1024 * 1024;
+/** What Odoo's copy and the assistants take of one item's text. */
+const MAX_BODY = 200_000;
 
 export interface KnowledgeState { error?: string; ok?: boolean }
 
@@ -35,11 +40,27 @@ export async function saveKnowledgeAction(_prev: KnowledgeState, fd: FormData): 
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "تاریخ اجرا درست نیست." };
   const sequence = Number(fd.get("sequence") || 10);
 
+  // An uploaded document: its text becomes the body (what the assistants read); the file is kept.
+  let file: { name: string; mime: string; data: Buffer } | null = null;
+  let extracted: string | null = null;
+  const upload = fd.get("file");
+  if (upload instanceof File && upload.size > 0) {
+    if (upload.size > MAX_FILE) return { error: "حجم فایل حداکثر ۲۰ مگابایت است." };
+    file = { name: upload.name.slice(0, 200), mime: upload.type || "application/octet-stream", data: Buffer.from(await upload.arrayBuffer()) };
+    try {
+      extracted = await extractText(file.data, file.name, file.mime);
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "متن فایل خوانده نشد." };
+    }
+    if (!extracted) return { error: "در این فایل متنی پیدا نشد (احتمالاً اسکن‌شده است)؛ نسخهٔ متنی یا Word آن را بارگذاری کنید." };
+    if (extracted.length > MAX_BODY) extracted = extracted.slice(0, MAX_BODY) + "\n\n[… ادامهٔ متن به‌خاطر حجم آورده نشد]";
+  }
+
   const values = {
     kind, name,
     code: text(fd, "code", 100),
     summary: text(fd, "summary", 2000),
-    body: text(fd, "body", 200_000),
+    body: extracted ?? text(fd, "body", MAX_BODY),
     address,
     impact: kind === "order" || kind === "hr_rule" ? text(fd, "impact", 20_000) : null,
     effective_date: kind === "order" || kind === "hr_rule" ? date : null,
@@ -55,12 +76,17 @@ export async function saveKnowledgeAction(_prev: KnowledgeState, fd: FormData): 
           impact = ${values.impact}, effective_date = ${values.effective_date}, sequence = ${values.sequence},
           updated_by = ${ctx.member.memberId}, updated_at = now()
         WHERE id = ${id} RETURNING id`;
+      if (row && file) {
+        await tx`UPDATE knowledge SET file_name = ${file.name}, file_mime = ${file.mime}, file_size = ${file.data.length}, file_data = ${file.data} WHERE id = ${id}`;
+      }
       if (!row) throw new Error("این مورد پیدا نشد.");
     } else {
       await tx`
-        INSERT INTO knowledge (kind, name, code, summary, body, attributes, address, impact, effective_date, sequence, updated_by)
+        INSERT INTO knowledge (kind, name, code, summary, body, attributes, address, impact, effective_date, sequence, updated_by,
+                               file_name, file_mime, file_size, file_data)
         VALUES (${values.kind}, ${values.name}, ${values.code}, ${values.summary}, ${values.body}, ${tx.json(features.value)},
-                ${values.address}, ${values.impact}, ${values.effective_date}, ${values.sequence}, ${ctx.member.memberId})`;
+                ${values.address}, ${values.impact}, ${values.effective_date}, ${values.sequence}, ${ctx.member.memberId},
+                ${file?.name ?? null}, ${file?.mime ?? null}, ${file?.data.length ?? null}, ${file?.data ?? null})`;
     }
     await enqueueSync(tx, "company", ctx.company.id, ctx.company.id, `knowledge ${id ? "changed" : "added"}: ${name}`);
   });

@@ -17,6 +17,8 @@ export interface KnowledgeValues {
   impact: string;
   effectiveDate: string;
   sequence: number;
+  /** An uploaded document, if any. */
+  fileName?: string | null;
 }
 
 const EMPTY: KnowledgeValues = {
@@ -83,6 +85,12 @@ export function KnowledgeForm({ slug, initial, defaultKind }: { slug: string; in
           </div>
         </div>
       )}
+      <div>
+        <label className="label">بارگذاری سند (PDF، Word، متن) — متن آن جای «متن کامل» را می‌گیرد</label>
+        <input type="file" name="file" accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
+          className="input" />
+        {initial?.fileName && <p className="mt-1 text-xs text-slate-500">سند فعلی: {initial.fileName} — فایل تازه جای آن را می‌گیرد.</p>}
+      </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
           <label className="label">متن کامل (Markdown)</label>
