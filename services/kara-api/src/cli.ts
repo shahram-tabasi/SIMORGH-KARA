@@ -5,16 +5,29 @@
 // import-identities  every Kara account into Keycloak (realm kara): user,
 //                    organization of its tenant, enabled or not. --invite also
 //                    emails each user without a password a link to set one.
+//
+//   … cli.js import-app-users [--app designSuite] --domains electrokavir.com=ekc,simorghai.com=simorgh [--dry-run]
+//
+// import-app-users   the people already in an app's realm (Design Suite: realm
+//                    simorgh) into Kara: account, member of their company (a
+//                    realm role named after the company, else the email
+//                    domain), their app roles. Verified, enabled users only.
+//                    Then import-identities gives them their Kara sign-in.
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { IdentityService } from './identity/identity.service';
+import { DbService } from './infra/db.service';
+import { importAppUsers } from './provisioning/import-app-users';
+import { ProvisionerService } from './provisioning/provisioner.service';
+import type { AppKey } from './provisioning/plan';
 
 async function main() {
   process.env.KARA_API_CLI = '1';
   const [cmd, ...flags] = process.argv.slice(2);
+  if (cmd === 'import-app-users') return importApp(flags);
   if (cmd !== 'import-identities') {
-    console.error('usage: cli.js import-identities [--invite]');
+    console.error('usage: cli.js import-identities [--invite] | import-app-users [--app designSuite] --domains a.com=slug,… [--dry-run]');
     process.exit(2);
   }
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
@@ -24,6 +37,23 @@ async function main() {
     for (const f of failed) console.log(`FAILED   ${f.email} — ${f.error}`);
     console.log(`\n${results.filter(r => r.outcome === 'created').length} created, ${results.filter(r => r.outcome === 'updated').length} updated, ${results.filter(r => r.outcome === 'skipped').length} skipped, ${results.filter(r => r.invited).length} invited, ${failed.length} failed`);
     process.exitCode = failed.length ? 1 : 0;
+  } finally {
+    await app.close();
+  }
+}
+
+function flag(flags: string[], name: string): string | undefined {
+  const i = flags.indexOf(name);
+  return i >= 0 ? flags[i + 1] : undefined;
+}
+
+async function importApp(flags: string[]) {
+  const domains = Object.fromEntries((flag(flags, '--domains') ?? '').split(',').map((p) => p.split('=').map((x) => x.trim().toLowerCase())).filter(([d, c]) => d && c));
+  const appKey = (flag(flags, '--app') ?? 'designSuite') as AppKey;
+  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
+  try {
+    const lines = await importAppUsers(app.get(DbService), app.get(ProvisionerService), { app: appKey, domains, dryRun: flags.includes('--dry-run') });
+    for (const l of lines) console.log(l);
   } finally {
     await app.close();
   }

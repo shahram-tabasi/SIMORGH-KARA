@@ -59,6 +59,7 @@ export class ProvisionerService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit() {
+    if (process.env.KARA_API_CLI) return; // a one-off task (cli.js), not the server
     if (!config.provision.enabled) {
       this.log.log('provisioning off (PROVISION_ENABLED=false)');
       return;
