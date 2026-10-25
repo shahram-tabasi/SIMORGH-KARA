@@ -2,7 +2,7 @@
 // from Kara alone (docs/INTEGRATION.md). Pure: the provisioner compares this
 // with what the realm holds and makes the difference.
 
-export type AppKey = 'designSuite' | 'hrChatbot';
+export type AppKey = 'designSuite' | 'hrChatbot' | 'erp';
 
 export interface CompanyFacts {
   id: string;
@@ -86,3 +86,42 @@ export function companyGroupPaths(c: CompanyFacts): string[] {
   for (const u of c.units) for (let i = 1; i <= u.length; i++) out.add(unitPath(c.slug, u.slice(0, i)));
   return [...out].sort();
 }
+
+// ── Odoo (departments and employees) ────────────────────────────────────────
+
+/** A unit of the company as Odoo needs it. */
+export interface UnitFacts {
+  id: string;
+  name: string;
+  parentId: string | null;
+  /** The account of the unit's manager, if any. */
+  managerAccountId: string | null;
+  path: string[];
+}
+
+/** Does the company keep its units and people in Odoo now? */
+export const companyUsesOdoo = (c: CompanyFacts) => c.status === 'active' && !!c.apps.erp;
+
+/** Parents before children, so each department's parent exists when it is made. */
+export function parentsFirst(units: UnitFacts[]): UnitFacts[] {
+  return [...units].sort((a, b) => a.path.length - b.path.length || a.path.join('/').localeCompare(b.path.join('/')));
+}
+
+/**
+ * The one department an employee has in Odoo, from the person's units in
+ * Kara (who may be in several): the deepest, then the first by path. None
+ * when the person has no unit — Odoo's department is then left as it is.
+ */
+export function primaryUnit(units: UnitFacts[]): UnitFacts | undefined {
+  return [...units].sort((a, b) => b.path.length - a.path.length || a.path.join('/').localeCompare(b.path.join('/')))[0];
+}
+
+/** Kara's references in Odoo (the connector adds the caller: `kara:unit:<id>`). */
+export const unitRef = (id: string) => `unit:${id}`;
+export const memberRef = (accountId: string) => `member:${accountId}`;
+
+/** Only the fields that differ, for a PATCH; empty when nothing changed. */
+export function changed(want: Record<string, unknown>, have: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(want).filter(([k, v]) => v !== undefined && JSON.stringify(v ?? null) !== JSON.stringify(have[k] ?? null)));
+}
+

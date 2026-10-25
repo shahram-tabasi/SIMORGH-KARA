@@ -105,6 +105,8 @@ export const config = {
     enabled: str('PROVISION_ENABLED', 'true') === 'true',
     pollMs: num('PROVISION_POLL_MS', 3000),
     maxAttempts: num('PROVISION_MAX_ATTEMPTS', 8),
+    /** Every company and person checked again this often (hours; 0: never): drift is repaired. */
+    reconcileHours: num('PROVISION_RECONCILE_HOURS', 24),
     apps: [
       {
         key: 'designSuite' as const,

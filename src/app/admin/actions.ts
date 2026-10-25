@@ -112,7 +112,9 @@ export async function createCompanyAction(
   }
 
   try {
-    const { adminAccountId, slug } = await provisionCompany({ ...parsed.data, apps: appsFrom(formData) });
+    // Odoo: the company made there now, its units and people kept there by the provisioner.
+    const apps = { ...appsFrom(formData), erp: formData.get("createOdooCompany") === "on" && karaApiEnabled() };
+    const { adminAccountId, slug } = await provisionCompany({ ...parsed.data, apps });
     await logIdentity(await syncIdentity(session.sub, adminAccountId));
     if (formData.get("createOdooCompany") === "on" && karaApiEnabled()) {
       try {

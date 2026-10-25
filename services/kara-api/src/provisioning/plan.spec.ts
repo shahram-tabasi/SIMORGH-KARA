@@ -1,6 +1,9 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { CompanyFacts, MemberFacts, companyGroupPaths, diff, managedRoles, planMember, unitPath } from './plan';
+import {
+  CompanyFacts, MemberFacts, UnitFacts, changed, companyGroupPaths, companyUsesOdoo, diff, managedRoles, parentsFirst, planMember,
+  primaryUnit, unitPath,
+} from './plan';
 
 const ekc: CompanyFacts = {
   id: 'c1', slug: 'ekc', name: 'EKC', status: 'active',
@@ -51,4 +54,21 @@ test('a company has its root group and every unit with its parents; slashes neve
     '/companies/ekc/Offer',
   ]);
   assert.equal(unitPath('ekc', ['R/D']), '/companies/ekc/R-D');
+});
+
+const unit = (id: string, path: string[], parentId: string | null = null): UnitFacts => ({ id, name: path[path.length - 1], parentId, managerAccountId: null, path });
+
+test('departments are made parents first; an employee gets their deepest unit', () => {
+  const units = [unit('c', ['Engineering', 'Electrical'], 'a'), unit('b', ['Offer']), unit('a', ['Engineering'])];
+  assert.deepEqual(parentsFirst(units).map((u) => u.id), ['a', 'b', 'c']);
+  assert.equal(primaryUnit(units)?.id, 'c');
+  assert.equal(primaryUnit([]), undefined);
+});
+
+test('Odoo only for an active company with the erp switch; a patch carries only what differs', () => {
+  assert.equal(companyUsesOdoo({ ...ekc, apps: { erp: true } }), true);
+  assert.equal(companyUsesOdoo({ ...ekc, apps: { erp: true }, status: 'suspended' }), false);
+  assert.equal(companyUsesOdoo(ekc), false);
+  assert.deepEqual(changed({ name: 'A', parentId: null, managerId: undefined }, { name: 'A', parentId: 7 }), { parentId: null });
+  assert.deepEqual(changed({ name: 'A', jobTitle: 'Eng' }, { name: 'A', jobTitle: 'Eng' }), {});
 });

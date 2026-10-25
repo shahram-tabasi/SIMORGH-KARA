@@ -99,7 +99,7 @@ export function NewCompanyForm({ askPassword, offerOdoo = false }: { askPassword
             مدیر شرکت می‌تواند به افراد شرکت دسترسی همین سامانه‌ها را بدهد؛ هر سامانه ورود خودش را در Keycloak دارد.
           </p>
           <div className="space-y-2">
-            {APPS.map((a) => (
+            {APPS.filter((a) => a.roles.length).map((a) => (
               <label key={a.key} className="flex items-start gap-2 text-sm text-slate-700">
                 <input type="checkbox" name={`app_${a.key}`} className="mt-0.5 h-4 w-4" />
                 <span>
@@ -114,7 +114,7 @@ export function NewCompanyForm({ askPassword, offerOdoo = false }: { askPassword
         {offerOdoo && (
           <label className="card flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
             <input type="checkbox" name="createOdooCompany" defaultChecked className="h-4 w-4" />
-            ساخت شرکت متناظر در Odoo با همین نام (برای مشتریان بیرونی خاموش کنید)
+            ساخت شرکت متناظر در Odoo با همین نام و نگه‌داشتن واحدها و افراد آن در Odoo (برای مشتریان بیرونی خاموش کنید)
           </label>
         )}
 

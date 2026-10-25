@@ -66,6 +66,9 @@ Kara (no account for that email, company suspended…), with a retry button.
   (organization), units (groups `/companies/<slug>/…`) and people (roles) into
   the apps' realms — `simorgh` for Design Suite, `hr` for the HR chatbot.
   Setup: `deploy/keycloak/setup-realm.sh app-realms`. Details: INTEGRATION.md §6.
+  The company app **Odoo (ERP)** keeps units as Odoo departments and people as
+  employees in the company's Odoo company (INTEGRATION.md §7); every 24 hours
+  everything is checked again.
 
 ## Running it
 

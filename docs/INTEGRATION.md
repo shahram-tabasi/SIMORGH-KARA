@@ -210,11 +210,44 @@ For each app realm the worker does this:
 - Chart: `api.provision.enabled`. kara-api reads `PROVISION_HR_CLIENT_SECRET` from that secret, and
   Design Suite's realm uses the existing `erpClientSecret`. A realm without a secret is skipped.
 
-**Not yet.** These come with phases 2 to 5:
-- the nightly reconciliation (for now, "sync again" re-runs everything);
-- Odoo as a target;
-- the knowledge screen;
-- the apps reading the organization claim.
+## 7. Phase 2 as built (Kara → Odoo)
+
+**The switch.** "Odoo (ERP)" is a company app without people roles.
+- On the new-company form it comes with "create the Odoo company", which is ticked by default.
+- For an existing company it is off until the platform admin ticks it, so a linked company never
+  suddenly receives records.
+
+**What the worker does** in the company's Odoo company, through the erp-connector as caller `kara`:
+
+| Job | In Odoo |
+|---|---|
+| Company | Uses the linked Odoo company (`odoo_company_id`), or makes one (`externalId tenant:<slug>`, the same as Admin's "create in Odoo") and links it. Each unit becomes an `hr.department` with reference `kara:unit:<id>`: parents first, name, parent, and manager (the manager's employee). A unit deleted in Kara archives its department. |
+| Person | An `hr.employee` with reference `kara:member:<account id>`: name, work email, job title (Kara's title), and department (the person's deepest unit; with no unit, Odoo's is left alone). If they manage units, they become those departments' manager. A person who is disabled or removed is archived, never deleted. No Odoo user is made (Employee only). |
+
+**Taking over, not doubling.** Kara adopts records that were already in Odoo:
+- a department with the same name under the same parent and no reference yet;
+- an employee with the same work email in that company and no reference yet.
+
+The record takes Kara's reference (connector `POST /v1/<collection>/<id>/adopt`), so nothing is doubled.
+
+**Odoo side** (simorgh-odoo):
+- `simorgh_integration` 19.0.1.3.0: `simorgh_ref` on departments, `adopt`, and the new model `simorgh.knowledge`
+  (§2.4). It holds a company's products and their features, data sources, orders and circulars with their
+  impact, and HR rules. Each company sees only its own (record rule). There is an Odoo menu "Company
+  Knowledge". Webhooks feed `erp.department.v1` and `erp.knowledge.v1`.
+- The connector serves `/v1/departments` and `/v1/knowledge`, and lists by `companyId` and
+  `externalIdPrefix`.
+
+**Reconciliation.**
+- Every `PROVISION_RECONCILE_HOURS` (24) the worker queues every company and person again, behind people's
+  own changes.
+- What drifted (an edit by hand in Keycloak or Odoo, a lost job) is put back. Kara is the master for what
+  it manages, and leaves everything else alone.
+
+**Not yet.** These come with phases 3 to 5:
+- Kara's company knowledge screen, which writes `simorgh.knowledge`;
+- `/v1/context`;
+- the apps reading the organization claim and their company's knowledge.
 
 ## Sources
 
