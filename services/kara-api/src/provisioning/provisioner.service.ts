@@ -4,7 +4,7 @@ import { config } from '../config';
 import { ConnectorClient } from '../erp/connector.client';
 import { DbService } from '../infra/db.service';
 import { splitName } from '../identity/identity.service';
-import { OdooCompany, OdooMember, OdooSync, Outcome } from './odoo';
+import { KnowledgeFacts, OdooCompany, OdooMember, OdooSync, Outcome } from './odoo';
 import {
   AppKey, AppMapping, CompanyFacts, MemberFacts, UnitFacts, companyGroupPaths, companyRoot, companyUses, companyUsesOdoo, diff,
   managedRoles, planMember,
@@ -174,9 +174,14 @@ export class ProvisionerService implements OnModuleInit, OnModuleDestroy {
         FROM t LEFT JOIN "${c.schema}".members m ON m.id = t.manager_id`);
     const unitPaths = new Map(rows.map((r) => [r.id, r.path]));
     const unitList: UnitFacts[] = rows.map((r) => ({ id: r.id, name: r.name, parentId: r.parent_id, managerAccountId: r.manager, path: r.path }));
+    const hasKnowledge = (await this.db.query<{ t: string | null }>(`SELECT to_regclass('"${c.schema}".knowledge')::text AS t`))[0]?.t;
+    const knowledge = hasKnowledge ? await this.db.query<KnowledgeFacts>(`
+      SELECT id::text, kind, name, code, summary, body, attributes, address, impact,
+             to_char(effective_date, 'YYYY-MM-DD') AS "effectiveDate", sequence, active
+      FROM "${c.schema}".knowledge ORDER BY sequence, name`) : [];
     return {
       id: c.id, slug: c.slug, name: c.name, status: c.status, schema: c.schema, apps: c.apps ?? {},
-      units: rows.map((r) => r.path), unitPaths, unitList, odooCompanyId: c.odoo,
+      units: rows.map((r) => r.path), unitPaths, unitList, odooCompanyId: c.odoo, knowledge,
     };
   }
 

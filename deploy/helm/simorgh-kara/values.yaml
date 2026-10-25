@@ -77,6 +77,13 @@ api:
   # in platform.provisioning_jobs and go out once it is on again.
   provision:
     enabled: true
+  # Namespaces whose apps read their users' company context (GET /v1/context
+  # with the user's token from the app's realm): Design Suite, the HR chatbot.
+  contextCallers: [simorgh, hr-chatbot]
+  # Service accounts (realm:client) that may read any company of their app
+  # with ?company= (an app's ingestion job). simorgh:kara-api is Kara's own
+  # client in realm simorgh (it manages that realm already): for checks.
+  contextServiceClients: "simorgh:kara-api"
   erp:
     # Empty turns the Odoo part off (tenants show "not linked").
     connectorUrl: http://erp-connector.erp.svc.cluster.local:3000

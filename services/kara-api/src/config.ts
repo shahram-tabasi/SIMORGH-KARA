@@ -133,6 +133,27 @@ export const config = {
     ],
   },
 
+  /**
+   * GET /v1/context: what an app (Design Suite, the HR chatbot) should know
+   * about its signed-in user's company. The app passes the user's token from
+   * its own realm; the realm decides which app is asking.
+   */
+  context: {
+    apps: [
+      { realm: 'simorgh', app: 'designSuite' as const, jwksUrl: `${realmUrlOf('simorgh')}/protocol/openid-connect/certs` },
+      { realm: 'hr', app: 'hrChatbot' as const, jwksUrl: `${realmUrlOf('hr')}/protocol/openid-connect/certs` },
+    ],
+    /** The public address tokens are issued for (iss), besides the in-cluster one. */
+    publicBase: trim(str('KEYCLOAK_ISSUER', 'https://auth.simorghai.com/realms/kara')).replace(/\/realms\/[^/]+$/, ''),
+    internalBase: trim(process.env.KEYCLOAK_INTERNAL_URL || '').replace(/\/realms\/[^/]+$/, ''),
+    /**
+     * Service accounts that may ask for any company of their app with
+     * ?company=<slug> (an app's ingestion job), as realm:client.
+     */
+    serviceClients: list('CONTEXT_SERVICE_CLIENTS', ''),
+    cacheSeconds: num('CONTEXT_CACHE_SECONDS', 60),
+  },
+
   kafka: {
     /** Empty: no events; read models only from the backfill. */
     brokers: list('KAFKA_BROKERS'),

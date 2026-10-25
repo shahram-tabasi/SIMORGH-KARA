@@ -17,10 +17,23 @@ interface Ref { id: number; name: string }
 interface Department { id: number; ref: string | null; name: string; active: boolean; parent: Ref | null; manager: Ref | null; company: Ref | null }
 interface Employee { id: number; ref: string | null; name: string; active: boolean; workEmail: string | null; jobTitle: string | null; department: Ref | null; company: Ref | null }
 interface Page<T> { total: number; items: T[] }
+interface RemoteKnowledge {
+  id: number; ref: string | null; active: boolean; name: string; kind: string; code: string | null; summary: string | null;
+  body: string | null; attributes: Record<string, unknown>; address: string | null; impact: string | null;
+  effectiveDate: string | null; sequence: number;
+}
+
+/** A piece of company knowledge as Kara holds it (the tenant's `knowledge` table). */
+export interface KnowledgeFacts {
+  id: string; kind: string; name: string; code: string | null; summary: string | null; body: string | null;
+  attributes: Record<string, unknown>; address: string | null; impact: string | null; effectiveDate: string | null;
+  sequence: number; active: boolean;
+}
 
 export interface OdooCompany extends CompanyFacts {
   odooCompanyId: number | null;
   unitList: UnitFacts[];
+  knowledge: KnowledgeFacts[];
 }
 
 export interface OdooMember {
@@ -123,12 +136,54 @@ export class OdooSync {
     const gone = departments.filter((d) => d.active && d.ref?.startsWith(KARA + 'unit:') && !c.unitList.some((u) => KARA + unitRef(u.id) === d.ref));
     for (const d of gone) await this.connector.call('POST', `/v1/departments/${d.id}/archive`);
 
-    const parts = [`company #${odooId}`, `${c.unitList.length} department(s)`];
+    const k = await this.knowledge(c, odooId);
+
+    const parts = [`company #${odooId}`, `${c.unitList.length} department(s)`, k];
     if (made) parts.push(`${made} made`);
     if (adopted) parts.push(`${adopted} taken over`);
     if (updated) parts.push(`${updated} updated`);
     if (gone.length) parts.push(`${gone.length} archived`);
     return { status: 'ok', externalId: company, detail: parts.join(', ') };
+  }
+
+  /** The company's knowledge as simorgh.knowledge (kara:knowledge:<id>); deleted in Kara → archived in Odoo. */
+  private async knowledge(c: OdooCompany, odooId: number): Promise<string> {
+    const remote = await this.all<RemoteKnowledge>('knowledge', { companyId: String(odooId), externalIdPrefix: 'knowledge:' });
+    const byRef = new Map(remote.map((r) => [r.ref, r]));
+    let made = 0;
+    let updated = 0;
+    let archived = 0;
+    for (const k of c.knowledge) {
+      const want = {
+        name: k.name, kind: k.kind, code: k.code, summary: k.summary, body: k.body, attributes: k.attributes ?? {},
+        address: k.address, impact: k.impact, effectiveDate: k.effectiveDate, sequence: k.sequence,
+      };
+      const r = byRef.get(`${KARA}knowledge:${k.id}`);
+      if (!r) {
+        if (!k.active) continue;
+        await this.connector.call('POST', '/v1/knowledge', { body: { externalId: `knowledge:${k.id}`, ...want, companyId: odooId } });
+        made += 1;
+        continue;
+      }
+      const diff = changed(want, { ...r });
+      if (Object.keys(diff).length) {
+        await this.connector.call('PATCH', `/v1/knowledge/${r.id}`, { body: diff });
+        updated += 1;
+      }
+      if (r.active !== k.active) {
+        await this.connector.call('POST', `/v1/knowledge/${r.id}/${k.active ? 'unarchive' : 'archive'}`);
+        if (!k.active) archived += 1;
+      }
+    }
+    for (const r of remote) {
+      if (r.active && !c.knowledge.some((k) => `${KARA}knowledge:${k.id}` === r.ref)) {
+        await this.connector.call('POST', `/v1/knowledge/${r.id}/archive`);
+        archived += 1;
+      }
+    }
+    const n = c.knowledge.filter((k) => k.active).length;
+    return [`${n} knowledge item(s)`, made && `${made} added`, updated && `${updated} changed`, archived && `${archived} archived`]
+      .filter(Boolean).join(', ');
   }
 
   // ── A person: their employee ──────────────────────────────────────────────

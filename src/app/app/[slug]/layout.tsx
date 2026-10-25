@@ -99,6 +99,7 @@ export default async function TenantLayout({
       title: "داده‌های سازمان (Odoo)",
       items: [
         ...push(karaApiEnabled() && can("erp.view"), { href: `${base}/erp`, label: "طرف‌حساب‌ها، کالاها، کارکنان", icon: "🗃️" }),
+        ...push(can("knowledge.view") || can("knowledge.manage"), { href: `${base}/knowledge`, label: "دانش شرکت", icon: "📚" }),
       ],
     },
     {

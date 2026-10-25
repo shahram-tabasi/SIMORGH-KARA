@@ -85,6 +85,27 @@ async function main() {
         );
       `);
 
+      // Company knowledge (docs/INTEGRATION.md §2.4)
+      await sql.unsafe(`
+        CREATE TABLE IF NOT EXISTS "${schema_name}".knowledge (
+          id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          kind           text NOT NULL CHECK (kind IN ('product','datasource','order','hr_rule','other')),
+          name           text NOT NULL,
+          code           text,
+          summary        text,
+          body           text,
+          attributes     jsonb NOT NULL DEFAULT '{}'::jsonb,
+          address        text,
+          impact         text,
+          effective_date date,
+          sequence       integer NOT NULL DEFAULT 10,
+          active         boolean NOT NULL DEFAULT true,
+          updated_by     uuid,
+          created_at     timestamptz NOT NULL DEFAULT now(),
+          updated_at     timestamptz NOT NULL DEFAULT now()
+        );
+      `);
+
       // HR / Calendar module (stage 1)
       await sql.unsafe(`
         ALTER TABLE "${schema_name}".members

@@ -1,8 +1,10 @@
 {{- $ns := include "kara.namespace" . -}}
 {{/*
 L4, enforced by ztunnel from the caller's mesh identity. kara-api answers
-kara-web (same namespace) and Prometheus; its Postgres answers this
-namespace only. kara-web is reached through the Gateway, which runs here too.
+kara-web (same namespace), Prometheus and the apps that read their users'
+company context (api.contextCallers: GET /v1/context, which checks each
+caller's token itself); its Postgres answers this namespace only. kara-web
+is reached through the Gateway, which runs here too.
 */}}
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
@@ -19,7 +21,7 @@ spec:
   rules:
     - from:
         - source:
-            namespaces: [{{ $ns | quote }}, "monitoring"]
+            namespaces: [{{ $ns | quote }}, "monitoring"{{ range .Values.api.contextCallers }}, {{ . | quote }}{{ end }}]
 ---
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy

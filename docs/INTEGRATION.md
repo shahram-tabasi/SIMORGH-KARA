@@ -244,10 +244,44 @@ The record takes Kara's reference (connector `POST /v1/<collection>/<id>/adopt`)
 - What drifted (an edit by hand in Keycloak or Odoo, a lost job) is put back. Kara is the master for what
   it manages, and leaves everything else alone.
 
-**Not yet.** These come with phases 3 to 5:
-- Kara's company knowledge screen, which writes `simorgh.knowledge`;
-- `/v1/context`;
-- the apps reading the organization claim and their company's knowledge.
+## 8. Phase 3 as built (company knowledge and the context API)
+
+**Kara → Company knowledge** (`/app/<slug>/knowledge`; permissions `knowledge.view` and `knowledge.manage`,
+which the company admin role gets on migration).
+- Kinds: products (with features as "name = value" lines, e.g. `tier = MV`, `maxVoltageKv = 24`), data sources
+  (an address only; anything that looks like a password is refused), orders and circulars (from-date and
+  impact), HR rules, other.
+- Items can be archived or deleted.
+- Stored in the tenant table `knowledge`. Each change queues the company job, which keeps
+  `simorgh.knowledge` in Odoo in step (`kara:knowledge:<id>`). Archived or deleted in Kara means archived in
+  Odoo.
+
+**`GET /v1/context`** on kara-api (in the cluster: `http://kara-api.kara.svc:3001`):
+- `Authorization: Bearer <the user's access token from the app's own realm>`. Realm `simorgh` means Design
+  Suite, realm `hr` means the HR chatbot. The token is checked against that realm's keys.
+- The token's `organization` claim names the company. The app must request scope `organization`. A person in
+  several companies adds `?company=<slug>`. So a person only ever gets their own company.
+- The company must be active and have that app.
+- Answer: `{ company, app, units, knowledge[], source, generatedAt }`, or Markdown with `?format=md` (for a
+  model's prompt or `company.skill.md`). It is cached for 60 s.
+- Each app gets only its kinds: Design Suite gets products, data sources, orders and other; the HR chatbot
+  gets orders, HR rules and other. Data-source addresses never reach the HR chatbot.
+- Knowledge is read from Odoo when the company is kept there, so it also includes what was entered in Odoo
+  itself. If Odoo is unreachable, Kara's own copy is used (`source`).
+- Service accounts listed in `CONTEXT_SERVICE_CLIENTS` (realm:client) may name any company of their app with
+  `?company=`, for an app's ingestion. `simorgh:kara-api` is there for checks.
+- The mesh lets namespaces `simorgh` and `hr-chatbot` reach kara-api (`api.contextCallers`).
+
+**Instead of token exchange (RFC 8693).** The app forwards its user's own token and kara-api verifies it
+against the app's realm. This gives the same guarantee (the company comes from a signed token, not from the
+app) without a token-exchange client per app. Exchange stays possible if an app ever needs to call further
+on the user's behalf.
+
+**Next.**
+- Phase 4: Design Suite asks for scope `organization`, calls `/v1/context` after sign-in, and keeps
+  `company.skill.md` for its AI.
+- Phase 5: the HR chatbot signs in with realm hr, and answers each company from its own rules: a collection
+  per company, filled from `/v1/context` or `erp.knowledge.v1`. Its own and Google users get company simorgh.
 
 ## Sources
 

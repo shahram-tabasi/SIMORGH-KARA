@@ -28,6 +28,8 @@ export const PERMISSIONS = {
   "settings.manage": "مدیریت تنظیمات شرکت",
   "erp.view": "مشاهده داده‌های Odoo (طرف‌حساب‌ها، کالاها، کارکنان)",
   "erp.manage": "ثبت طرف‌حساب و کالا در Odoo",
+  "knowledge.view": "مشاهده دانش شرکت (محصولات، منابع داده، بخشنامه‌ها، آیین‌نامه‌ها)",
+  "knowledge.manage": "ثبت و ویرایش دانش شرکت برای سامانه‌های سیمرغ",
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;

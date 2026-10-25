@@ -168,6 +168,28 @@ CREATE TABLE IF NOT EXISTS member_apps (
   PRIMARY KEY (member_id, app, role)
 );
 
+-- What the company knows about itself, for the platform's apps and their AI
+-- (docs/INTEGRATION.md §2.4): products and their features, data sources,
+-- orders and circulars with their impact, HR rules. Kara is the master; the
+-- provisioner keeps a copy in Odoo (simorgh.knowledge, kara:knowledge:<id>).
+CREATE TABLE IF NOT EXISTS knowledge (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind           text NOT NULL CHECK (kind IN ('product','datasource','order','hr_rule','other')),
+  name           text NOT NULL,
+  code           text,
+  summary        text,
+  body           text,
+  attributes     jsonb NOT NULL DEFAULT '{}'::jsonb,
+  address        text,
+  impact         text,
+  effective_date date,
+  sequence       integer NOT NULL DEFAULT 10,
+  active         boolean NOT NULL DEFAULT true,
+  updated_by     uuid,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  updated_at     timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS member_groups (
   member_id uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
   group_id  uuid NOT NULL REFERENCES groups(id) ON DELETE CASCADE,

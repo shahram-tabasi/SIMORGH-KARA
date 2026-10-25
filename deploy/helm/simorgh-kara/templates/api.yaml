@@ -96,6 +96,8 @@ spec:
             # (setup-realm.sh app-realms). A realm without a secret is skipped.
             - name: PROVISION_ENABLED
               value: {{ $a.provision.enabled | quote }}
+            - name: CONTEXT_SERVICE_CLIENTS
+              value: {{ $a.contextServiceClients | quote }}
             - name: PROVISION_HR_CLIENT_SECRET
               valueFrom:
                 secretKeyRef: { name: {{ $kc.existingSecret }}, key: hrProvisionerSecret, optional: true }
