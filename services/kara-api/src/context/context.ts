@@ -67,8 +67,9 @@ export function renderMarkdown(c: CompanyContext): string {
   const out: string[] = [
     `# ${c.company.name}`,
     '',
-    `Company \`${c.company.slug}\`, as known to Simorgh Kara for ${c.app === 'designSuite' ? 'Design Suite' : 'the HR assistant'}` +
-      ` (${c.generatedAt.slice(0, 10)}). Answer for this company only.`,
+    // No date here: an app that keeps this as a file (company.skill.md) changes it only when the company does.
+    `Company \`${c.company.slug}\`, as known to Simorgh Kara for ${c.app === 'designSuite' ? 'Design Suite' : 'the HR assistant'}.` +
+      ' Answer for this company only.',
   ];
   if (c.units.length) out.push('', '## Units', '', ...c.units.map((u) => `- ${u}`));
   for (const kind of kindsFor(c.app)) {
