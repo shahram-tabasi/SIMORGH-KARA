@@ -306,6 +306,23 @@ on the user's behalf.
 - **Isolation.** Every collection name comes from the session's company, which the API sets at sign-in. Tests in
   `apps/api/src/hr/company.spec.ts`.
 
+## 10. A company's own technical servers (TPMS API, parts database)
+
+- **One door to TPMS.** In Design Suite only `tpms-service` (NestJS) opens the TPMS MySQL database.
+  Everything else uses its REST API: the gateway's `/api/v1/tpms/…` and projects-service's access check.
+- **Per company.** Admin → companies → "سرویس‌های فنی" (technical services) holds:
+  - the company's **TPMS API server** (`tpmsApiUrl`);
+  - its **parts database** address (`partsDatabase`, never a password).
+
+  `/v1/context` gives them to Design Suite as `services`, and only to Design Suite.
+- **Routing.** Design Suite's api-gateway reads the company from the person's token, asks Kara with that token,
+  and proxies `/tpms` to the company's server. With no server set, or Kara unreachable, it uses the platform's
+  tpms-service.
+- **The server must be yours.** The gateway forwards the person's token to it. In practice it is another
+  tpms-service release in the cluster with that company's MySQL settings, e.g.
+  `http://tpms-service-ekc.simorgh.svc.cluster.local:8080`. Outside the namespace, the gateway's network policy
+  must allow it.
+
 ## Sources
 
 - Keycloak organizations and their mappers: [Server Administration Guide](https://www.keycloak.org/docs/latest/server_admin/index.html),
