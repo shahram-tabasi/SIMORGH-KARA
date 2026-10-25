@@ -12,8 +12,11 @@ ARG RUNTIME_IMAGE=registry.simorghai.com/gcr-proxy/distroless/nodejs20-debian12:
 
 FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
+# npm's source: a reachable mirror when registry.npmjs.org is not
+# (--build-arg NPM_REGISTRY=https://…/); the lockfile's npmjs URLs follow it.
+ARG NPM_REGISTRY=https://registry.npmjs.org/
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN npm ci --no-audit --no-fund --registry="$NPM_REGISTRY" --fetch-retries=5 --fetch-timeout=60000
 
 FROM deps AS build
 COPY next.config.js tsconfig.json tailwind.config.ts postcss.config.js next-env.d.ts ./
