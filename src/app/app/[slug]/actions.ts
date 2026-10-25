@@ -10,6 +10,15 @@ import { requireTenant, ensurePermission } from "@/lib/session";
 import { hashPassword } from "@/lib/password";
 import { isPermissionKey } from "@/lib/rbac";
 import { toGregorian } from "@/lib/jalali";
+import { enqueueSync } from "@/lib/sync";
+import { appByKey, isAppRole } from "@/lib/apps";
+import type postgres from "postgres";
+
+/** A member's copies in the apps' realms and Odoo follow (docs/INTEGRATION.md). */
+async function syncMember(tx: postgres.TransactionSql, memberId: string, companyId: string, reason: string) {
+  const [m] = await tx<{ account_id: string }[]>`SELECT account_id FROM members WHERE id = ${memberId}`;
+  if (m) await enqueueSync(tx, "member", m.account_id, companyId, reason);
+}
 
 /** Build a reminder Date from Jalali y/m/d + "HH:MM", or null if incomplete. */
 function reminderDate(fd: FormData): Date | null {
@@ -91,6 +100,7 @@ export async function createMemberAction(
     `;
     await tx`INSERT INTO kartabls (member_id, name) VALUES (${m.id}, 'کارتابل اصلی')`;
     await tx`INSERT INTO member_employment (member_id) VALUES (${m.id})`;
+    await enqueueSync(tx, "member", account.id, ctx.company.id, "member created");
   });
 
   const warning = await syncIdentity(ctx.session.sub, account.id);
@@ -283,6 +293,7 @@ export async function toggleMemberGroupAction(formData: FormData) {
         DELETE FROM member_groups WHERE member_id = ${memberId} AND group_id = ${groupId}
       `;
     }
+    await syncMember(tx, memberId, ctx.company.id, "units changed");
   });
   rev(slug, "/members");
 }
@@ -300,6 +311,7 @@ export async function addGroupMemberAction(formData: FormData) {
       INSERT INTO member_groups (member_id, group_id) VALUES (${memberId}, ${groupId})
       ON CONFLICT DO NOTHING
     `;
+    await syncMember(tx, memberId, ctx.company.id, "added to a unit");
   });
   rev(slug, "/groups");
   rev(slug, "/members");
@@ -320,6 +332,7 @@ export async function removeGroupMemberAction(formData: FormData) {
       UPDATE groups SET manager_id = NULL
       WHERE id = ${groupId} AND manager_id = ${memberId}
     `;
+    await syncMember(tx, memberId, ctx.company.id, "removed from a unit");
   });
   rev(slug, "/groups");
   rev(slug, "/members");
@@ -342,6 +355,8 @@ export async function setGroupManagerAction(formData: FormData) {
         ON CONFLICT DO NOTHING
       `;
       await tx`UPDATE groups SET manager_id = ${memberId} WHERE id = ${groupId}`;
+      await syncMember(tx, memberId, ctx.company.id, "made a unit's manager");
+      await enqueueSync(tx, "company", ctx.company.id, ctx.company.id, "unit manager changed");
     } else {
       await tx`UPDATE groups SET manager_id = NULL WHERE id = ${groupId}`;
     }
@@ -423,6 +438,7 @@ export async function createGroupAction(
 
   await withTenant(ctx.company.schema, async (tx) => {
     await tx`INSERT INTO groups (name, parent_id) VALUES (${name}, ${parentId})`;
+    await enqueueSync(tx, "company", ctx.company.id, ctx.company.id, `unit ${name} created`);
   });
   rev(slug, "/groups");
   return { ok: true };
@@ -434,7 +450,17 @@ export async function deleteGroupAction(formData: FormData) {
   ensurePermission(ctx, "groups.manage");
   const groupId = String(formData.get("groupId"));
   await withTenant(ctx.company.schema, async (tx) => {
+    // Its people (and those of the units under it) leave it: their copies follow.
+    const affected = await tx<{ account_id: string }[]>`
+      WITH RECURSIVE sub AS (
+        SELECT id FROM groups WHERE id = ${groupId}
+        UNION ALL SELECT g.id FROM groups g JOIN sub ON g.parent_id = sub.id
+      )
+      SELECT DISTINCT m.account_id FROM member_groups mg JOIN members m ON m.id = mg.member_id
+      WHERE mg.group_id IN (SELECT id FROM sub)`;
     await tx`DELETE FROM groups WHERE id = ${groupId}`;
+    await enqueueSync(tx, "company", ctx.company.id, ctx.company.id, "unit deleted");
+    for (const a of affected) await enqueueSync(tx, "member", a.account_id, ctx.company.id, "unit deleted");
   });
   rev(slug, "/groups");
 }
@@ -648,6 +674,44 @@ export async function createKartablAction(formData: FormData) {
   const name = String(formData.get("name") || "کارتابل");
   await withTenant(ctx.company.schema, async (tx) => {
     await tx`INSERT INTO kartabls (member_id, name) VALUES (${memberId}, ${name})`;
+  });
+  rev(slug, "/members");
+}
+
+/* ------------------------------ platform apps ----------------------------- */
+
+/**
+ * Give or take a person's access to a platform app (Design Suite as offer or
+ * engineering, the HR chatbot). Only apps the company has; the person's
+ * account in that app's Keycloak realm follows (docs/INTEGRATION.md).
+ */
+export async function toggleMemberAppAction(formData: FormData) {
+  const slug = String(formData.get("slug"));
+  const ctx = await requireTenant(slug);
+  ensurePermission(ctx, "members.manage");
+  const memberId = String(formData.get("memberId"));
+  const app = String(formData.get("app"));
+  const role = String(formData.get("role"));
+  const checked = formData.get("checked") === "1";
+  if (!appByKey(app) || !isAppRole(app, role)) return;
+
+  const [company] = await sql<{ apps: Record<string, boolean> }[]>`
+    SELECT apps FROM platform.companies WHERE id = ${ctx.company.id}
+  `;
+  // An app the company does not have cannot be given; taking it away always can.
+  if (checked && !company?.apps?.[app]) return;
+
+  await withTenant(ctx.company.schema, async (tx) => {
+    if (checked) {
+      await tx`
+        INSERT INTO member_apps (member_id, app, role, granted_by)
+        VALUES (${memberId}, ${app}, ${role}, ${ctx.member.memberId})
+        ON CONFLICT DO NOTHING
+      `;
+    } else {
+      await tx`DELETE FROM member_apps WHERE member_id = ${memberId} AND app = ${app} AND role = ${role}`;
+    }
+    await syncMember(tx, memberId, ctx.company.id, `${checked ? "given" : "taken"} ${app}:${role}`);
   });
   rev(slug, "/members");
 }

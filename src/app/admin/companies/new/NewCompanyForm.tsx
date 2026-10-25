@@ -3,6 +3,7 @@
 import { useFormState, useFormStatus } from "react-dom";
 import { PageHeader } from "@/components/Shell";
 import { createCompanyAction, type CompanyFormState } from "../../actions";
+import { APPS } from "@/lib/apps";
 
 function Submit() {
   const { pending } = useFormStatus();
@@ -89,6 +90,24 @@ export function NewCompanyForm({ askPassword, offerOdoo = false }: { askPassword
             ) : (
               <p className="self-end pb-2 text-xs text-slate-500">ورود با حساب سیمرغ: پیوند تعیین رمز به ایمیل فرستاده می‌شود.</p>
             )}
+          </div>
+        </div>
+
+        <div className="border-t border-slate-100 pt-5">
+          <h3 className="mb-1 text-sm font-semibold text-slate-700">سامانه‌های سیمرغ</h3>
+          <p className="mb-3 text-xs text-slate-400">
+            مدیر شرکت می‌تواند به افراد شرکت دسترسی همین سامانه‌ها را بدهد؛ هر سامانه ورود خودش را در Keycloak دارد.
+          </p>
+          <div className="space-y-2">
+            {APPS.map((a) => (
+              <label key={a.key} className="flex items-start gap-2 text-sm text-slate-700">
+                <input type="checkbox" name={`app_${a.key}`} className="mt-0.5 h-4 w-4" />
+                <span>
+                  <span className="font-medium">{a.label}</span>
+                  <span className="block text-xs text-slate-400">{a.note}</span>
+                </span>
+              </label>
+            ))}
           </div>
         </div>
 

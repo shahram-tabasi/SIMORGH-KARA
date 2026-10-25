@@ -65,6 +65,19 @@ export interface KcUser {
   enabled: boolean;
   emailVerified?: boolean;
   federationLink?: string;
+  attributes?: Record<string, string[]>;
+}
+
+export interface KcGroup { id: string; name: string; path: string }
+export interface KcRole { id: string; name: string }
+
+/** Which realm an admin client works on, as whom, and where its invitations send people. */
+export interface RealmTarget {
+  /** The realm's base URL (inside the cluster when there is one): …/realms/<name>. */
+  realmUrl: string;
+  clientId: string;
+  clientSecret: string;
+  invite?: { clientId: string; redirectUri: string; lifespanSeconds: number };
 }
 
 export interface KcOrganization {
@@ -74,11 +87,23 @@ export interface KcOrganization {
   enabled: boolean;
 }
 
-/** The few admin-API calls Kara needs: users, organizations, invitations. */
+/**
+ * The admin-API calls Kara needs: users, organizations, invitations, groups
+ * and realm roles. Realm `kara` by default; the provisioner gives it each
+ * app's realm (docs/INTEGRATION.md).
+ */
 export class KeycloakAdmin {
   private readonly log = new Logger('KeycloakAdmin');
-  private readonly base = realmUrl.replace('/realms/', '/admin/realms/');
-  private readonly token = new ServiceToken(`${realmUrl}/protocol/openid-connect/token`, kc.clientId, kc.clientSecret);
+  private readonly base: string;
+  private readonly token: ServiceToken;
+  private readonly inviteOpts: { clientId: string; redirectUri: string; lifespanSeconds: number };
+
+  constructor(target?: RealmTarget) {
+    const url = target?.realmUrl ?? realmUrl;
+    this.base = url.replace('/realms/', '/admin/realms/');
+    this.token = new ServiceToken(`${url}/protocol/openid-connect/token`, target?.clientId ?? kc.clientId, target?.clientSecret ?? kc.clientSecret);
+    this.inviteOpts = target?.invite ?? { clientId: kc.inviteClientId, redirectUri: kc.inviteRedirectUri, lifespanSeconds: kc.inviteLifespanSeconds };
+  }
 
   get configured(): boolean {
     return this.token.configured;
@@ -97,6 +122,11 @@ export class KeycloakAdmin {
       throw new HttpException(`Keycloak refused ${method} ${path.split('?')[0]} (HTTP ${res.status})`, HttpStatus.BAD_GATEWAY);
     }
     return { status: res.status, body: (text ? JSON.parse(text) : undefined) as T, location: res.headers.get('location') ?? undefined };
+  }
+
+  /** Any call this client may make, for what the methods below do not cover. */
+  request<T>(method: string, path: string, body?: unknown, okStatuses: number[] = []) {
+    return this.call<T>(method, path, body, okStatuses);
   }
 
   async userByEmail(email: string): Promise<KcUser | undefined> {
@@ -122,10 +152,10 @@ export class KeycloakAdmin {
 
   /** Email with a link to set a password (UPDATE_PASSWORD). Needs the realm's SMTP. */
   async invite(id: string): Promise<void> {
-    const q = new URLSearchParams({ lifespan: String(kc.inviteLifespanSeconds) });
-    if (kc.inviteRedirectUri) {
-      q.set('client_id', kc.inviteClientId);
-      q.set('redirect_uri', kc.inviteRedirectUri);
+    const q = new URLSearchParams({ lifespan: String(this.inviteOpts.lifespanSeconds) });
+    if (this.inviteOpts.redirectUri) {
+      q.set('client_id', this.inviteOpts.clientId);
+      q.set('redirect_uri', this.inviteOpts.redirectUri);
     }
     await this.call('PUT', `/users/${id}/execute-actions-email?${q}`, ['UPDATE_PASSWORD']);
   }
@@ -168,5 +198,77 @@ export class KeycloakAdmin {
 
   async removeMember(orgId: string, userId: string): Promise<void> {
     await this.call('DELETE', `/organizations/${orgId}/members/${userId}`, undefined, [404]);
+  }
+
+  // ── Groups (a company's units: /companies/<slug>/<unit path>) ──
+
+  async groupByPath(path: string): Promise<KcGroup | undefined> {
+    const { status, body } = await this.call<KcGroup>('GET', `/group-by-path/${path.split('/').filter(Boolean).map(encodeURIComponent).join('/')}`, undefined, [404]);
+    return status === 404 ? undefined : body;
+  }
+
+  async childGroups(id: string): Promise<KcGroup[]> {
+    const { body } = await this.call<KcGroup[]>('GET', `/groups/${id}/children?first=0&max=1000&briefRepresentation=true`);
+    return body;
+  }
+
+  /** The group at a path, made with its parents where missing. */
+  async ensureGroupPath(path: string): Promise<KcGroup> {
+    const parts = path.split('/').filter(Boolean);
+    let parent: KcGroup | undefined;
+    for (let i = 0; i < parts.length; i++) {
+      const at = `/${parts.slice(0, i + 1).join('/')}`;
+      let g = await this.groupByPath(at);
+      if (!g) {
+        await this.call('POST', parent ? `/groups/${parent.id}/children` : '/groups', { name: parts[i] }, [409]);
+        g = await this.groupByPath(at);
+        if (!g) throw new Error(`group ${at} was created but cannot be found`);
+      }
+      parent = g;
+    }
+    if (!parent) throw new Error('an empty group path');
+    return parent;
+  }
+
+  async deleteGroup(id: string): Promise<void> {
+    await this.call('DELETE', `/groups/${id}`, undefined, [404]);
+  }
+
+  async userGroups(userId: string): Promise<KcGroup[]> {
+    const { body } = await this.call<KcGroup[]>('GET', `/users/${userId}/groups?first=0&max=1000&briefRepresentation=true`);
+    return body;
+  }
+
+  async joinGroup(userId: string, groupId: string): Promise<void> {
+    await this.call('PUT', `/users/${userId}/groups/${groupId}`);
+  }
+
+  async leaveGroup(userId: string, groupId: string): Promise<void> {
+    await this.call('DELETE', `/users/${userId}/groups/${groupId}`, undefined, [404]);
+  }
+
+  // ── Realm roles ──
+
+  async realmRole(name: string): Promise<KcRole | undefined> {
+    const { status, body } = await this.call<KcRole>('GET', `/roles/${encodeURIComponent(name)}`, undefined, [404]);
+    return status === 404 ? undefined : body;
+  }
+
+  async userRealmRoles(userId: string): Promise<KcRole[]> {
+    const { body } = await this.call<KcRole[]>('GET', `/users/${userId}/role-mappings/realm`);
+    return body;
+  }
+
+  async addRealmRoles(userId: string, roles: KcRole[]): Promise<void> {
+    if (roles.length) await this.call('POST', `/users/${userId}/role-mappings/realm`, roles);
+  }
+
+  async removeRealmRoles(userId: string, roles: KcRole[]): Promise<void> {
+    if (roles.length) await this.call('DELETE', `/users/${userId}/role-mappings/realm`, roles);
+  }
+
+  /** Ends every session of the user (a leaver is out at once, not at token expiry). */
+  async logout(userId: string): Promise<void> {
+    await this.call('POST', `/users/${userId}/logout`, undefined, [404]);
   }
 }

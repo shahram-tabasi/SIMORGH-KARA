@@ -22,6 +22,17 @@ function list(name: string, fallback = ''): string[] {
 
 const trim = (u: string) => u.replace(/\/+$/, '');
 
+/** "offer=offer,engineering=simorgh-engineer" → { offer: 'offer', engineering: 'simorgh-engineer' }. */
+function mapping(v: string): Record<string, string> {
+  return Object.fromEntries(v.split(',').map(p => p.split('=').map(x => x.trim())).filter(([k, r]) => k && r));
+}
+
+/** Another realm on the same Keycloak as realm kara (inside the cluster when configured). */
+function realmUrlOf(realm: string): string {
+  const base = trim(process.env.KEYCLOAK_INTERNAL_URL || process.env.KEYCLOAK_ISSUER || 'https://auth.simorghai.com/realms/kara');
+  return base.replace(/\/realms\/[^/]+$/, `/realms/${realm}`);
+}
+
 export const config = {
   port: num('PORT', 3001),
   /** Kara's own database (the same one kara-web uses: platform + tenant schemas). */
@@ -83,6 +94,41 @@ export const config = {
   calls: {
     /** Unanswered for this long: a missed call. */
     ringSeconds: num('CALL_RING_SECONDS', 45),
+  },
+
+  /**
+   * Provisioning (docs/INTEGRATION.md): Kara's companies, units, people and
+   * app access into each app's Keycloak realm (and Odoo). An app with no
+   * client secret is left out.
+   */
+  provision: {
+    enabled: str('PROVISION_ENABLED', 'true') === 'true',
+    pollMs: num('PROVISION_POLL_MS', 3000),
+    maxAttempts: num('PROVISION_MAX_ATTEMPTS', 8),
+    apps: [
+      {
+        key: 'designSuite' as const,
+        target: 'kc:simorgh',
+        // Its own realm: simorgh (as today). Client kara-api there (the one the erp-connector trusts).
+        realmUrl: trim(str('PROVISION_DS_REALM_URL', realmUrlOf('simorgh'))),
+        clientId: str('PROVISION_DS_CLIENT_ID', str('ERP_CLIENT_ID', 'kara-api')),
+        clientSecret: str('PROVISION_DS_CLIENT_SECRET', str('ERP_CLIENT_SECRET', '')),
+        // Kara's role → the realm's role.
+        roles: mapping(str('PROVISION_DS_ROLES', 'offer=offer,engineering=simorgh-engineer')),
+        inviteClientId: str('PROVISION_DS_INVITE_CLIENT', 'simorgh-web'),
+        inviteRedirectUri: str('PROVISION_DS_INVITE_REDIRECT', ''),
+      },
+      {
+        key: 'hrChatbot' as const,
+        target: 'kc:hr',
+        realmUrl: trim(str('PROVISION_HR_REALM_URL', realmUrlOf('hr'))),
+        clientId: str('PROVISION_HR_CLIENT_ID', 'kara-provisioner'),
+        clientSecret: str('PROVISION_HR_CLIENT_SECRET', ''),
+        roles: mapping(str('PROVISION_HR_ROLES', 'user=hr-user')),
+        inviteClientId: str('PROVISION_HR_INVITE_CLIENT', 'simorgh-hr-chatbot'),
+        inviteRedirectUri: str('PROVISION_HR_INVITE_REDIRECT', ''),
+      },
+    ],
   },
 
   kafka: {

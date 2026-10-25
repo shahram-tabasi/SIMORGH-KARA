@@ -48,7 +48,8 @@ keycloak:
   issuer: https://auth.simorghai.com/realms/kara
   # The same realm inside the cluster: tokens, keys and the admin API never leave it.
   internalUrl: http://keycloak.keycloak.svc.cluster.local:8080/realms/kara
-  # Secret from deploy/keycloak/setup-realm.sh: webClientSecret, apiClientSecret, erpClientSecret.
+  # Secret from deploy/keycloak/setup-realm.sh: webClientSecret, apiClientSecret, erpClientSecret
+  # (realm), hrProvisionerSecret (app-realms).
   existingSecret: kara-keycloak
   # Email domains that sign in through the staff identity provider
   # (setup-realm.sh staff-idp): their Keycloak users are made on first
@@ -71,6 +72,11 @@ web:
 
 api:
   replicas: 2
+  # Kara writes companies, units and people into the apps' Keycloak realms
+  # (simorgh for Design Suite, hr for the HR chatbot). Off: changes queue up
+  # in platform.provisioning_jobs and go out once it is on again.
+  provision:
+    enabled: true
   erp:
     # Empty turns the Odoo part off (tenants show "not linked").
     connectorUrl: http://erp-connector.erp.svc.cluster.local:3000

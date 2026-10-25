@@ -7,7 +7,11 @@ import { passwordLoginEnabled } from "@/lib/oidc";
 import { ScheduleSelect } from "./ScheduleSelect";
 import { EmploymentForm } from "./EmploymentForm";
 import { UsernameField } from "./UsernameField";
-import { toggleMemberRoleAction, toggleMemberGroupAction } from "../actions";
+import { toggleMemberRoleAction, toggleMemberGroupAction, toggleMemberAppAction } from "../actions";
+import { sql } from "@/lib/db";
+import { APPS, type CompanyApps } from "@/lib/apps";
+import { syncViews } from "@/lib/sync";
+import { SyncStatus } from "@/components/SyncStatus";
 import { toJalali } from "@/lib/jalali";
 import { CallButtons } from "@/components/comms/CallButtons";
 
@@ -50,7 +54,10 @@ async function loadData(schema: string) {
     const memberGroups = await tx<{ member_id: string; group_id: string }[]>`
       SELECT member_id, group_id FROM member_groups
     `;
-    return { members, roles, groups, memberRoles, memberGroups, schedules, employment };
+    const memberApps = await tx<{ member_id: string; app: string; role: string }[]>`
+      SELECT member_id, app, role FROM member_apps
+    `;
+    return { members, roles, groups, memberRoles, memberGroups, memberApps, schedules, employment };
   });
 }
 
@@ -66,8 +73,13 @@ export default async function MembersPage({
 }) {
   const ctx = await requireTenant(params.slug);
   const canManage = ctx.member.permissions.has("members.manage");
-  const { members, roles, groups, memberRoles, memberGroups, schedules, employment } =
+  const { members, roles, groups, memberRoles, memberGroups, memberApps, schedules, employment } =
     await loadData(ctx.company.schema);
+  // The platform apps the company has, and where each person stands in them.
+  const [company] = await sql<{ apps: CompanyApps }[]>`SELECT apps FROM platform.companies WHERE id = ${ctx.company.id}`;
+  const apps = APPS.filter((a) => company?.apps?.[a.key]);
+  const appSet = new Set(memberApps.map((a) => `${a.member_id}:${a.app}:${a.role}`));
+  const sync = apps.length ? await syncViews("member", members.map((m) => m.account_id)) : {};
   const empByMember = new Map(employment.map((e) => [e.member_id, e]));
 
   const roleSet = new Set(memberRoles.map((r) => `${r.member_id}:${r.role_id}`));
@@ -144,6 +156,32 @@ export default async function MembersPage({
                 </div>
               )}
             </div>
+
+            {apps.length > 0 && (
+              <div className="mt-4">
+                <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+                  سامانه‌های سیمرغ
+                  <SyncStatus view={sync[m.account_id]} />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {apps.flatMap((a) => a.roles.map((r) => {
+                    const on = appSet.has(`${m.id}:${a.key}:${r.key}`);
+                    const label = `${a.label} — ${r.label}`;
+                    return canManage ? (
+                      <ToggleForm
+                        key={`${a.key}:${r.key}`}
+                        action={toggleMemberAppAction}
+                        hidden={{ slug: params.slug, memberId: m.id, app: a.key, role: r.key }}
+                        checked={on}
+                        label={label}
+                      />
+                    ) : on ? (
+                      <span key={`${a.key}:${r.key}`} className="badge bg-brand-50 text-brand-700">{label}</span>
+                    ) : null;
+                  }))}
+                </div>
+              </div>
+            )}
 
             {groups.length > 0 && (
               <div className="mt-4">

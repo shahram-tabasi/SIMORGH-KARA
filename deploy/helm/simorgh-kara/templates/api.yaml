@@ -91,6 +91,14 @@ spec:
             - name: ERP_CLIENT_SECRET
               valueFrom:
                 secretKeyRef: { name: {{ $kc.existingSecret }}, key: erpClientSecret, optional: true }
+            # Kara → the apps' realms (docs/INTEGRATION.md). Design Suite's realm
+            # uses the kara-api client above; realm hr its kara-provisioner
+            # (setup-realm.sh app-realms). A realm without a secret is skipped.
+            - name: PROVISION_ENABLED
+              value: {{ $a.provision.enabled | quote }}
+            - name: PROVISION_HR_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ $kc.existingSecret }}, key: hrProvisionerSecret, optional: true }
             - name: KAFKA_BROKERS
               value: {{ $a.kafka.brokers | quote }}
             - name: JITSI_URL

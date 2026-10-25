@@ -60,6 +60,12 @@ Kara (no account for that email, company suspended…), with a retry button.
   `deploy/keycloak/setup-realm.sh staff-idp <their tenant's slug>` links
   realm simorgh as the organization's identity provider for
   `@simorghai.com`; then set the chart's `keycloak.brokeredDomains`.
+- Kara is the system of record for who uses the **apps**: the platform admin
+  switches Design Suite and the HR chatbot on per company, a company admin
+  gives people app roles, and kara-api's provisioner writes the company
+  (organization), units (groups `/companies/<slug>/…`) and people (roles) into
+  the apps' realms — `simorgh` for Design Suite, `hr` for the HR chatbot.
+  Setup: `deploy/keycloak/setup-realm.sh app-realms`. Details: INTEGRATION.md §6.
 
 ## Running it
 

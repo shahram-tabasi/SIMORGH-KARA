@@ -4,6 +4,47 @@
  * during seeding and tenant provisioning.
  */
 
+/**
+ * Kara is the system of record; Keycloak (each app's realm) and Odoo hold
+ * copies. A change and the job that carries it out commit together (the
+ * transactional outbox); kara-api's provisioner runs the jobs, and records
+ * what each target holds now (docs/INTEGRATION.md).
+ */
+export const SYNC_DDL = /* sql */ `
+CREATE TABLE IF NOT EXISTS platform.provisioning_jobs (
+  id          bigserial PRIMARY KEY,
+  entity      text NOT NULL CHECK (entity IN ('company','member')),
+  entity_id   uuid NOT NULL,              -- platform.companies.id | platform.user_accounts.id
+  company_id  uuid,
+  reason      text NOT NULL DEFAULT '',
+  status      text NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','running','done','failed')),
+  attempts    int NOT NULL DEFAULT 0,
+  next_at     timestamptz NOT NULL DEFAULT now(),
+  last_error  text,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  started_at  timestamptz,
+  done_at     timestamptz
+);
+-- One waiting job per thing: a second change before it runs joins it.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_provisioning_pending
+  ON platform.provisioning_jobs (entity, entity_id) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_provisioning_due
+  ON platform.provisioning_jobs (next_at) WHERE status = 'pending';
+
+-- What each target holds for a Kara company or person, after the last run.
+CREATE TABLE IF NOT EXISTS platform.provisioning_state (
+  entity      text NOT NULL,
+  entity_id   uuid NOT NULL,
+  target      text NOT NULL,              -- kc:simorgh | kc:hr | odoo
+  status      text NOT NULL,              -- ok | absent | failed
+  external_id text,
+  detail      text,
+  synced_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (entity, entity_id, target)
+);
+`;
+
 export const PLATFORM_DDL = /* sql */ `
 CREATE SCHEMA IF NOT EXISTS platform;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;        -- gen_random_uuid()
@@ -33,6 +74,8 @@ CREATE TABLE IF NOT EXISTS platform.companies (
   plan         text NOT NULL DEFAULT 'standard',
   max_users    integer NOT NULL DEFAULT 10,
   odoo_company_id integer,                   -- its company in Odoo (kara-api serves that data)
+  -- The platform apps the company may use: {"designSuite": true, "hrChatbot": true}.
+  apps         jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 
@@ -56,7 +99,7 @@ CREATE TABLE IF NOT EXISTS platform.user_accounts (
 
 CREATE INDEX IF NOT EXISTS idx_user_accounts_company
   ON platform.user_accounts(company_id);
-`;
+` + SYNC_DDL;
 
 /**
  * Returns the DDL that builds a fresh tenant schema. The objects are created
@@ -112,6 +155,17 @@ CREATE TABLE IF NOT EXISTS groups (
   schedule_id uuid,                          -- group-wide work schedule (members inherit it)
   manager_id  uuid REFERENCES members(id) ON DELETE SET NULL,  -- the group's manager (مدیر بخش)
   created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- The platform apps a member may use and as what (Design Suite: offer,
+-- engineering; HR chatbot: user). Only apps the company has (platform.companies.apps).
+CREATE TABLE IF NOT EXISTS member_apps (
+  member_id  uuid NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  app        text NOT NULL,
+  role       text NOT NULL,
+  granted_by uuid,
+  granted_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (member_id, app, role)
 );
 
 CREATE TABLE IF NOT EXISTS member_groups (

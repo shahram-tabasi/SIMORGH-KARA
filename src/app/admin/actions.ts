@@ -9,6 +9,12 @@ import { provisionCompany } from "@/lib/provision";
 import { initialPasswordField, initialPasswordHash } from "@/lib/identity";
 import { karaApi, karaApiEnabled, syncIdentity } from "@/lib/kara-api";
 import { slugify, shortId } from "@/lib/utils";
+import { enqueueCompanyMembers, enqueueSync } from "@/lib/sync";
+import { APPS, type CompanyApps } from "@/lib/apps";
+
+/** The app switches of a company form: a checkbox per app (`app_<key>`). */
+const appsFrom = (formData: FormData): CompanyApps =>
+  Object.fromEntries(APPS.map((a) => [a.key, formData.get(`app_${a.key}`) === "on"]));
 
 /** The account is made either way; a sign-in invitation that failed is only logged (import-identities catches up). */
 async function logIdentity(warning: string | null) {
@@ -106,7 +112,7 @@ export async function createCompanyAction(
   }
 
   try {
-    const { adminAccountId, slug } = await provisionCompany(parsed.data);
+    const { adminAccountId, slug } = await provisionCompany({ ...parsed.data, apps: appsFrom(formData) });
     await logIdentity(await syncIdentity(session.sub, adminAccountId));
     if (formData.get("createOdooCompany") === "on" && karaApiEnabled()) {
       try {
@@ -129,9 +135,14 @@ export async function setCompanyStatusAction(formData: FormData) {
   const id = String(formData.get("id"));
   const status = String(formData.get("status"));
   if (!["active", "suspended"].includes(status)) return;
-  await sql`
-    UPDATE platform.companies SET status = ${status} WHERE id = ${id}
-  `;
+  await sql.begin(async (tx) => {
+    await tx`
+      UPDATE platform.companies SET status = ${status} WHERE id = ${id}
+    `;
+    // A suspended company's people lose the apps; back to active, they get them again.
+    await enqueueSync(tx, "company", id, id, `status ${status}`);
+    await enqueueCompanyMembers(tx, id, `company ${status}`);
+  });
   revalidatePath("/admin/companies");
 }
 
@@ -145,6 +156,34 @@ export async function updateCompanyAction(formData: FormData) {
     SET plan = ${plan}, max_users = ${maxUsers}
     WHERE id = ${id}
   `;
+  revalidatePath("/admin/companies");
+}
+
+/**
+ * The platform apps a company may use (Design Suite, HR chatbot). Turning one
+ * on lets its admins give people access; turning it off takes the app from
+ * everyone in the company (their accounts in its realm are disabled).
+ */
+export async function setCompanyAppsAction(formData: FormData) {
+  await requirePlatformAdmin();
+  const id = String(formData.get("id"));
+  const apps = appsFrom(formData);
+  await sql.begin(async (tx) => {
+    await tx`UPDATE platform.companies SET apps = ${tx.json(apps)} WHERE id = ${id}`;
+    await enqueueSync(tx, "company", id, id, `apps: ${APPS.filter((a) => apps[a.key]).map((a) => a.key).join(", ") || "none"}`);
+    await enqueueCompanyMembers(tx, id, "company apps changed");
+  });
+  revalidatePath("/admin/companies");
+}
+
+/** Run the company and every person of it through provisioning again (after a failure, or to repair drift). */
+export async function resyncCompanyAction(formData: FormData) {
+  await requirePlatformAdmin();
+  const id = String(formData.get("id"));
+  await sql.begin(async (tx) => {
+    await enqueueSync(tx, "company", id, id, "resync by the platform admin");
+    await enqueueCompanyMembers(tx, id, "resync by the platform admin");
+  });
   revalidatePath("/admin/companies");
 }
 

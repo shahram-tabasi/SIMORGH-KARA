@@ -4,6 +4,7 @@
  */
 import postgres from "postgres";
 import { ALL_PERMISSIONS } from "../src/lib/rbac";
+import { SYNC_DDL } from "../src/lib/sql";
 import { DEFAULT_LEAVE_TYPES } from "../src/lib/leave-types";
 import { officialHolidaysFor } from "../src/lib/iran-holidays";
 import { officialOccasionsFor } from "../src/lib/iran-events";
@@ -45,7 +46,11 @@ async function main() {
         ON platform.companies (domain) WHERE domain IS NOT NULL;
       CREATE UNIQUE INDEX IF NOT EXISTS uq_user_username_company
         ON platform.user_accounts (company_id, username) WHERE username IS NOT NULL;
+      -- Platform apps per company (docs/INTEGRATION.md)
+      ALTER TABLE platform.companies
+        ADD COLUMN IF NOT EXISTS apps jsonb NOT NULL DEFAULT '{}'::jsonb;
     `);
+    await sql.unsafe(SYNC_DDL);
 
     const tenants = await sql<{ schema_name: string }[]>`
       SELECT schema_name FROM platform.companies
@@ -66,6 +71,18 @@ async function main() {
         SET created_by = k.member_id
         FROM "${schema_name}".kartabls k
         WHERE i.kartabl_id = k.id AND i.created_by IS NULL;
+      `);
+
+      // Platform apps per member (docs/INTEGRATION.md)
+      await sql.unsafe(`
+        CREATE TABLE IF NOT EXISTS "${schema_name}".member_apps (
+          member_id  uuid NOT NULL REFERENCES "${schema_name}".members(id) ON DELETE CASCADE,
+          app        text NOT NULL,
+          role       text NOT NULL,
+          granted_by uuid,
+          granted_at timestamptz NOT NULL DEFAULT now(),
+          PRIMARY KEY (member_id, app, role)
+        );
       `);
 
       // HR / Calendar module (stage 1)

@@ -6,6 +6,8 @@
 #   deploy/keycloak/setup-realm.sh realm          # realm, clients, secrets into ns kara
 #   deploy/keycloak/setup-realm.sh mail           # only the SMTP settings, again
 #   deploy/keycloak/setup-realm.sh theme          # Kara's login and email theme (chart's keycloak-theme/kara)
+#   deploy/keycloak/setup-realm.sh app-realms     # the apps' realms for Kara's provisioner:
+#                                                 # simorgh (Design Suite) and hr (HR chatbot)
 #   deploy/keycloak/setup-realm.sh staff-idp ORG  # Simorgh staff sign in with their
 #                                                 # realm-simorgh account (org alias ORG)
 #   KEEP_EMAILS="a@x b@y" deploy/keycloak/setup-realm.sh reset-identities
@@ -108,18 +110,18 @@ attach_scopes() {  # realm client-id kind(default|optional) names…
 
 client_secret() { kc get "clients/$2/client-secret" -r "$1" --fields value --format csv --noquotes | tr -d '\r\n'; }
 
-store_secret() {  # key value-on-stdin
+store_secret() {  # key [namespace] [secret] — value on stdin
   [ -n "${NO_K8S:-}" ] && { cat >/dev/null; echo "(NO_K8S: $1 not stored)"; return; }
-  local key="$1" val
+  local key="$1" ns="${2:-$NS}" name="${3:-kara-keycloak}" val
   val="$(cat)"
-  kubectl get ns "$NS" >/dev/null 2>&1 || kubectl create ns "$NS" >/dev/null
-  { kubectl -n "$NS" get secret kara-keycloak -o json 2>/dev/null || echo '{}'; } | KEY="$key" VAL="$val" python3 -c '
+  kubectl get ns "$ns" >/dev/null 2>&1 || kubectl create ns "$ns" >/dev/null
+  { kubectl -n "$ns" get secret "$name" -o json 2>/dev/null || echo '{}'; } | KEY="$key" VAL="$val" NAME="$name" python3 -c '
 import base64, json, os, sys
 d = json.load(sys.stdin).get("data") or {}
 d[os.environ["KEY"]] = base64.b64encode(os.environ["VAL"].encode()).decode()
 print(json.dumps({"apiVersion": "v1", "kind": "Secret", "type": "Opaque",
-                  "metadata": {"name": "kara-keycloak", "namespace": sys.argv[1]}, "data": d}))' "$NS" | kubectl apply -f - >/dev/null
-  echo "stored $key in $NS/kara-keycloak"
+                  "metadata": {"name": os.environ["NAME"], "namespace": sys.argv[1]}, "data": d}))' "$ns" | kubectl apply -f - >/dev/null
+  echo "stored $key in $ns/$name"
 }
 
 # Login and email theme of the realm: `kara` (published by the simorgh-kara
@@ -133,8 +135,9 @@ theme() {
     | kc update "realms/$REALM" -f - >/dev/null && echo "login and email theme: $THEME"
 }
 
-mail() {
-  say "mail (from realm $STAFF_REALM)"
+mail() {  # [target realm] [sender name]
+  local target="${1:-$REALM}" sender="${2:-سیمرغ کارا}"
+  say "mail of realm $target (from realm $STAFF_REALM)"
   if [ -n "${NO_SMTP:-}" ]; then echo "skipped (NO_SMTP)"; else
     local smtp
     # `smtpServer(*)`: kcadm prints a nested object empty unless asked for its fields.
@@ -142,12 +145,12 @@ mail() {
     if printf '%s' "$smtp" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("smtpServer",{}).get("host") else 1)'; then
       local pass="${SMTP_PASSWORD:-}"
       [ -n "$pass" ] || { read -rsp "SMTP password of $(printf '%s' "$smtp" | python3 -c 'import json,sys; print(json.load(sys.stdin)["smtpServer"].get("user",""))'): " pass; echo; }
-      printf '%s' "$smtp" | P="$pass" python3 -c '
+      printf '%s' "$smtp" | P="$pass" SENDER="$sender" python3 -c '
 import json, os, sys
 s = json.load(sys.stdin)["smtpServer"]
 s["password"] = os.environ["P"]
-s["fromDisplayName"] = "سیمرغ کارا"
-print(json.dumps({"smtpServer": s}))' | kc update "realms/$REALM" -f - >/dev/null && echo "copied (sender $(printf '%s' "$smtp" | python3 -c 'import json,sys; print(json.load(sys.stdin)["smtpServer"].get("from",""))'))"
+s["fromDisplayName"] = os.environ["SENDER"]
+print(json.dumps({"smtpServer": s}))' | kc update "realms/$target" -f - >/dev/null && echo "copied (sender $(printf '%s' "$smtp" | python3 -c 'import json,sys; print(json.load(sys.stdin)["smtpServer"].get("from",""))'))"
     else echo "realm $STAFF_REALM has no SMTP: set it in the console (Realm settings → Email)"; fi
   fi
 }
@@ -247,6 +250,107 @@ print(json.dumps(p))' | kc update identity-provider/instances/simorgh -r "$REALM
   echo "staff with @$STAFF_DOMAIN emails go to the staff login"
 }
 
+# A realm role, created when missing.
+ensure_role() {  # realm role description
+  kc get "roles/$2" -r "$1" --fields name >/dev/null 2>&1 && return
+  kc create roles -r "$1" -s name="$2" -s "description=$3" >/dev/null && echo "created role $2 in $1"
+}
+
+# Attributes karaId and karaAdopted in the realm's user profile: karaId marks
+# an account Kara manages (the provisioner finds people by it and never
+# touches one without it); karaAdopted one that was there before Kara (a
+# staff account), which Kara never disables. Admin-only.
+kara_attribute() {  # realm
+  kc get "realms/$1/users/profile" | python3 -c '
+import json, sys
+p = json.load(sys.stdin)
+a = [x for x in p.get("attributes", []) if x.get("name") not in ("karaId", "karaAdopted")]
+for n, d in (("karaId", "Kara ID"), ("karaAdopted", "Adopted by Kara")):
+    a.append({"name": n, "displayName": d, "multivalued": False,
+              "permissions": {"view": ["admin"], "edit": ["admin"]}})
+p["attributes"] = a
+print(json.dumps(p))' | kc update "realms/$1/users/profile" -f - >/dev/null && echo "user profile: karaId, karaAdopted (admin only)"
+}
+
+# Protocol mapper on a client, created when missing (by name).
+ensure_mapper() {  # realm client-id json
+  local name
+  name="$(printf '%s' "$3" | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')"
+  if kc get "clients/$2/protocol-mappers/models" -r "$1" --fields name --format csv --noquotes | tr -d '\r' | grep -qx "$name"; then
+    echo "mapper $name exists"
+  else
+    printf '%s' "$3" | kc create "clients/$2/protocol-mappers/models" -r "$1" -f - >/dev/null && echo "mapper $name added"
+  fi
+}
+
+GROUPS_MAPPER='{"name":"groups","protocol":"openid-connect","protocolMapper":"oidc-group-membership-mapper",
+  "config":{"claim.name":"groups","full.path":"true","id.token.claim":"true","access.token.claim":"true","userinfo.token.claim":"true"}}'
+
+# The apps' realms, for Kara's provisioner (docs/INTEGRATION.md):
+#   simorgh  Design Suite's realm as today: organizations on, roles offer and
+#            simorgh-engineer, attribute karaId, the groups claim and the
+#            optional organization scope on simorgh-web, and its client
+#            kara-api allowed to manage users and organizations.
+#   hr       The HR chatbot's realm: role hr-user, client simorgh-hr-chatbot
+#            (browser login, secret into ns hr-chatbot Secret hr-keycloak key
+#            clientSecret) and kara-provisioner (secret into kara-keycloak
+#            hrProvisionerSecret). Mail copied from realm simorgh.
+app_realms() {
+  local ds="$STAFF_REALM" hr="${HR_REALM:-hr}" hr_base="https://${HR_HOST:-hr.simorghai.com}" id
+
+  say "realm $ds (Design Suite)"
+  printf '%s' '{"organizationsEnabled":true}' | kc update "realms/$ds" -f - >/dev/null && echo "organizations on"
+  ensure_role "$ds" offer "Design Suite: offer tools"
+  ensure_role "$ds" simorgh-engineer "Design Suite: engineering tools"
+  kara_attribute "$ds"
+  id="$(client_id "$ds" simorgh-web)"
+  if [ -n "$id" ]; then
+    ensure_mapper "$ds" "$id" "$GROUPS_MAPPER"
+    attach_scopes "$ds" "$id" optional organization
+  else echo "no client simorgh-web in $ds" >&2; fi
+  id="$(client_id "$ds" kara-api)"
+  [ -n "$id" ] || { echo "no client kara-api in $ds: run '$0 realm' first" >&2; exit 1; }
+  kc add-roles -r "$ds" --uusername service-account-kara-api --cclientid realm-management \
+    --rolename manage-users --rolename view-users --rolename query-users --rolename manage-realm >/dev/null
+  echo "kara-api: manage-users, view-users, query-users, manage-realm"
+
+  say "realm $hr (HR chatbot)"
+  if kc get "realms/$hr" --fields realm >/dev/null 2>&1; then echo "exists"; else
+    kc create realms -s realm="$hr" -s enabled=true >/dev/null && echo created
+  fi
+  printf '%s' '{"displayName":"Simorgh HR","organizationsEnabled":true,"registrationAllowed":false,
+    "resetPasswordAllowed":true,"loginWithEmailAllowed":true,"duplicateEmailsAllowed":false,"rememberMe":true,
+    "verifyEmail":false,"bruteForceProtected":true,
+    "internationalizationEnabled":true,"supportedLocales":["en","fa","de"],"defaultLocale":"en",
+    "ssoSessionIdleTimeout":28800,"ssoSessionMaxLifespan":86400,
+    "passwordPolicy":"length(8) and notUsername and notEmail"}' \
+    | kc update "realms/$hr" -f - >/dev/null && echo "settings applied"
+  mail "$hr" "Simorgh HR"
+  ensure_role "$hr" hr-user "HR chatbot user"
+  kara_attribute "$hr"
+
+  say "client simorgh-hr-chatbot (browser login)"
+  id="$(printf '%s' "{\"clientId\":\"simorgh-hr-chatbot\",\"name\":\"Simorgh HR\",\"enabled\":true,\"publicClient\":false,
+    \"clientAuthenticatorType\":\"client-secret\",\"standardFlowEnabled\":true,\"directAccessGrantsEnabled\":false,
+    \"implicitFlowEnabled\":false,\"serviceAccountsEnabled\":false,\"frontchannelLogout\":true,
+    \"rootUrl\":\"$hr_base\",\"baseUrl\":\"/\",\"redirectUris\":[\"$hr_base/*\"],\"webOrigins\":[\"$hr_base\"],
+    \"attributes\":{\"pkce.code.challenge.method\":\"S256\",\"post.logout.redirect.uris\":\"$hr_base/*\"}
+    }" | upsert_client "$hr" simorgh-hr-chatbot)"
+  attach_scopes "$hr" "$id" default basic profile email roles web-origins acr
+  attach_scopes "$hr" "$id" optional organization
+  ensure_mapper "$hr" "$id" "$GROUPS_MAPPER"
+  client_secret "$hr" "$id" | store_secret clientSecret "${HR_NAMESPACE:-hr-chatbot}" hr-keycloak
+
+  say "client kara-provisioner (Kara's service account in $hr)"
+  id="$(printf '%s' '{"clientId":"kara-provisioner","name":"Kara provisioner","enabled":true,"publicClient":false,
+    "clientAuthenticatorType":"client-secret","standardFlowEnabled":false,"directAccessGrantsEnabled":false,
+    "serviceAccountsEnabled":true}' | upsert_client "$hr" kara-provisioner)"
+  kc add-roles -r "$hr" --uusername service-account-kara-provisioner --cclientid realm-management \
+    --rolename manage-users --rolename view-users --rolename query-users --rolename manage-realm >/dev/null
+  echo "granted manage-users, view-users, query-users, manage-realm"
+  client_secret "$hr" "$id" | store_secret hrProvisionerSecret
+}
+
 # The one deleting command here, for deploy/scripts/reset-kara.sh: the realm's
 # organizations, and its users except the clients' service accounts and
 # KEEP_EMAILS. Settings, clients, theme, mail and identity providers stay.
@@ -273,7 +377,8 @@ case "${1:-}" in
   realm) realm ;;
   mail) mail ;;
   theme) theme ;;
+  app-realms) app_realms ;;
   staff-idp) shift; staff_idp "$@" ;;
   reset-identities) reset_identities ;;
-  *) echo "usage: $0 realm | mail | theme | staff-idp ORG_ALIAS | reset-identities"; exit 2 ;;
+  *) echo "usage: $0 realm | mail | theme | app-realms | staff-idp ORG_ALIAS | reset-identities"; exit 2 ;;
 esac

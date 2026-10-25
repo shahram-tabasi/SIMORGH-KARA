@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { sql } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
-import { linkOdooCompanyAction, setCompanyStatusAction, updateCompanyAction } from "../actions";
+import { linkOdooCompanyAction, resyncCompanyAction, setCompanyAppsAction, setCompanyStatusAction, updateCompanyAction } from "../actions";
+import { APPS, type CompanyApps } from "@/lib/apps";
+import { syncViews } from "@/lib/sync";
+import { SyncStatus } from "@/components/SyncStatus";
 import { karaApi, karaApiEnabled } from "@/lib/kara-api";
 import { requirePlatformAdmin } from "@/lib/session";
 
@@ -13,13 +16,14 @@ interface CompanyRow {
   plan: string;
   max_users: number;
   odoo_company_id: number | null;
+  apps: CompanyApps;
   user_count: number;
   created_at: string;
 }
 
 async function getCompanies(): Promise<CompanyRow[]> {
   return sql<CompanyRow[]>`
-    SELECT c.id, c.name, c.slug, c.status, c.plan, c.max_users, c.odoo_company_id,
+    SELECT c.id, c.name, c.slug, c.status, c.plan, c.max_users, c.odoo_company_id, c.apps,
            c.created_at,
            (SELECT count(*) FROM platform.user_accounts u
               WHERE u.company_id = c.id)::int AS user_count
@@ -57,6 +61,7 @@ export const dynamic = "force-dynamic";
 export default async function CompaniesPage({ searchParams }: { searchParams: { erp_slug?: string; erp_error?: string } }) {
   const { session } = await requirePlatformAdmin();
   const [companies, odoo] = await Promise.all([getCompanies(), getOdooCompanies(session.sub)]);
+  const sync = await syncViews("company", companies.map((c) => c.id));
   const odooCompanies = odoo && "items" in odoo ? odoo.items : null;
 
   return (
@@ -98,9 +103,14 @@ export default async function CompaniesPage({ searchParams }: { searchParams: { 
                   <div className="mt-1 text-xs text-slate-400" dir="ltr">
                     /app/{c.slug} · {c.user_count}/{c.max_users} کاربر
                   </div>
+                  <div className="mt-1.5"><SyncStatus view={sync[c.id]} /></div>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <form action={resyncCompanyAction}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <button className="btn-ghost" title="شرکت و همه افرادش دوباره به Keycloak و Odoo فرستاده می‌شوند">همگام‌سازی دوباره</button>
+                  </form>
                   <form action={setCompanyStatusAction}>
                     <input type="hidden" name="id" value={c.id} />
                     <input
@@ -142,6 +152,21 @@ export default async function CompaniesPage({ searchParams }: { searchParams: { 
                   />
                 </div>
                 <button className="btn-ghost">ذخیره تغییرات</button>
+              </form>
+
+              <form
+                action={setCompanyAppsAction}
+                className="mt-4 flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4"
+              >
+                <input type="hidden" name="id" value={c.id} />
+                <span className="label mb-0">سامانه‌های سیمرغ</span>
+                {APPS.map((a) => (
+                  <label key={a.key} className="flex items-center gap-1.5 text-sm text-slate-700" title={a.note}>
+                    <input type="checkbox" name={`app_${a.key}`} defaultChecked={!!c.apps?.[a.key]} className="h-4 w-4" />
+                    {a.label}
+                  </label>
+                ))}
+                <button className="btn-ghost" title="خاموش کردن یک سامانه، دسترسی همه افراد شرکت به آن را می‌گیرد">ذخیره سامانه‌ها</button>
               </form>
 
               {odooCompanies && (

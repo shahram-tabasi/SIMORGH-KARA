@@ -8,6 +8,8 @@ import { officialOccasionsFor } from "./iran-events";
 import { todayJalali } from "./jalali";
 import { initialPasswordHash } from "./identity";
 import { slugify, shortId, schemaNameFromSlug } from "./utils";
+import { enqueueSync } from "./sync";
+import type { CompanyApps } from "./apps";
 
 export interface NewCompanyInput {
   name: string;
@@ -18,6 +20,8 @@ export interface NewCompanyInput {
   adminEmail: string;
   /** Empty with Keycloak sign-in only: a random unknown one, and an email to set it. */
   adminPassword?: string | null;
+  /** The platform apps it may use (Design Suite, HR chatbot). */
+  apps?: CompanyApps;
 }
 
 export interface ProvisionResult {
@@ -61,11 +65,11 @@ export async function provisionCompany(
   // 1) control-plane company row
   const [company] = await sql<{ id: string }[]>`
     INSERT INTO platform.companies
-      (name, slug, schema_name, plan, max_users, holding_id)
+      (name, slug, schema_name, plan, max_users, holding_id, apps)
     VALUES (
       ${input.name}, ${slug}, ${schema},
       ${input.plan ?? "standard"}, ${input.maxUsers ?? 10},
-      ${input.holdingId ?? null}
+      ${input.holdingId ?? null}, ${sql.json(input.apps ?? {})}
     )
     RETURNING id
   `;
@@ -124,6 +128,10 @@ export async function provisionCompany(
       INSERT INTO member_employment (member_id, hire_date)
       VALUES (${member.id}, current_date)
     `;
+
+    // Its copies in Odoo and the apps' Keycloak realms follow (docs/INTEGRATION.md).
+    await enqueueSync(tx, "company", companyId, companyId, "company created");
+    await enqueueSync(tx, "member", adminAccountId, companyId, "company administrator created");
 
     // Default company work schedule (Sat–Wed, 08:00–17:00).
     await tx`

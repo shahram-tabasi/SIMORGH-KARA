@@ -9,13 +9,14 @@ PLATFORM.md (tenants ↔ Keycloak organizations ↔ Odoo companies).
                 Kara (system of record: who, where, which apps, what the company knows)
                  │  every change = one row in the provisioning outbox (same transaction)
                  ▼
-        ┌──────── provisioner (kara-api) ────────┐   idempotent steps, retries, a status per item,
-        ▼                                         ▼   nightly reconciliation (desired vs actual)
-   Keycloak, realm kara                      Odoo (through erp-connector)
-   organization  = company                   res.company      = company
-   org group     = unit                      hr.department    = unit
-   user + org membership + group             hr.employee      = person (no Odoo login: Odoo stays hidden)
-   client roles  = app access                simorgh.knowledge = what the company knows
+        ┌──────────── provisioner (kara-api) ────────────┐  idempotent steps, retries, a status per item,
+        ▼                                                 ▼  nightly reconciliation (desired vs actual)
+   Keycloak — one realm per app, each its own login    Odoo (through erp-connector)
+     realm simorgh  → Design Suite                      res.company       = company
+     realm hr       → HR chatbot                        hr.department     = unit
+   in each realm the company has the app in:            hr.employee       = person (no Odoo login)
+     organization = company, group = unit,              simorgh.knowledge = what the company knows
+     user + realm roles = app access
         │                                         │   (products and their features, data sources,
         │  token: sub, email, organization,       │    orders and their impact, HR rules and orders)
         │  groups, roles                          │  erp.*.v1 events
@@ -27,9 +28,14 @@ Three kinds of "role" in the request, kept apart because they answer different q
 
 | The request says | It answers | Where it lives | In the token |
 |---|---|---|---|
-| **company role** (ekc) | *which data* the platform works with | Keycloak **organization** (alias = company slug) | `organization` claim |
-| **unit role** (engineering, offer…) | *where in the company* a person sits | **organization group** (or realm group `/companies/<slug>/<unit>` where org groups are missing) | `organization` claim with groups / `groups` |
-| **app role** (Design Suite offer / engineering, HR chatbot user) | *which tools* a person may open | **client roles** of `simorgh-design-suite` and `simorgh-hr-chatbot` | `resource_access.<client>.roles` |
+| **company role** (ekc) | *which data* the platform works with | Keycloak **organization** (alias = company slug) in the app's realm; the realm role of the same name too where one exists (`ekc` in realm simorgh, as today) | `organization` claim (and `realm_access.roles`) |
+| **unit role** (engineering, offer…) | *where in the company* a person sits | realm group `/companies/<slug>/<unit path>` in the app's realm | `groups` |
+| **app role** (Design Suite offer / engineering, HR chatbot user) | *which tools* a person may open | realm roles of the app's realm: `offer`, `simorgh-engineer` in realm simorgh; `hr-user` in realm hr | `realm_access.roles` |
+
+Each app has its own login, both on Keycloak: Design Suite signs in through realm **simorgh** (its realm
+today), the HR chatbot through a new realm **hr**. Kara writes a person into the realm of each app they are
+given — not into the others — so one app's accounts never mix with another's, and Kara's own sign-in stays in
+realm kara.
 
 And one switch per company, an **entitlement**: "Design Suite enabled", "HR chatbot enabled". An app role can
 only be given to a person whose company has the app enabled; turning an app off takes it from everyone in
@@ -44,8 +50,8 @@ Kara admin creates or edits a company with `apps: { designSuite, hrChatbot }`.
 | Step | Target | Action (idempotent: look up by Kara id first) |
 |---|---|---|
 | 1 | Odoo | `res.company` (name, currency, country); `simorgh_ref = kara:company:<id>`; Kara keeps `odoo_company_id` |
-| 2 | Keycloak | organization `alias = slug` (exists today), attributes `karaId`, `apps` |
-| 3 | Keycloak | apps turned off → remove that app's client roles from every member (a leaver step) |
+| 2 | Keycloak | in the realm of every app the company has: organization `alias = slug`, attribute `karaId`, group `/companies/<slug>` |
+| 3 | Keycloak | an app turned off → in that app's realm every member of the company loses the app's roles and is disabled (a leaver step) |
 | 4 | Events | `kara.company.v1` (CloudEvents, keyed by company id) |
 
 ### 2.2 Unit
@@ -55,7 +61,7 @@ Kara's `groups` tree (already there) is the unit.
 | Step | Target | Action |
 |---|---|---|
 | 1 | Odoo | `hr.department` (name, parent, company, manager → employee) |
-| 2 | Keycloak | organization group with the same path (parent → child); realm group `/companies/<slug>/<path>` when the server has no organization groups |
+| 2 | Keycloak | in each app realm of the company: group `/companies/<slug>/<unit path>` (parent → child) |
 | 3 | Events | `kara.unit.v1` |
 
 ### 2.3 Person (joiner / mover / leaver)
@@ -65,9 +71,9 @@ has enabled: Design Suite → `offer` and/or `engineering`; HR chatbot → `user
 
 | Event | Keycloak | Odoo |
 |---|---|---|
-| joiner | user (email verified by invite), org member, groups, client roles, required action set-password | `hr.employee` (company, department, work email, job title), `simorgh_ref = kara:member:<id>` |
-| mover (unit or app access changes) | group membership and client roles diffed: add the new, remove the old | department changed |
-| leaver (disabled or removed) | user disabled, sessions ended, roles removed | employee archived |
+| joiner | in each app realm they are given: user (invited to set a password), organization member, unit groups, the app's roles | `hr.employee` (company, department, work email, job title), `simorgh_ref = kara:member:<id>` |
+| mover (unit or app access changes) | groups and roles diffed per realm: add the new, remove the old; an app taken away → that realm's account disabled | department changed |
+| leaver (disabled or removed) | disabled in every app realm, roles removed | employee archived |
 
 Kara is the only writer. A change made in Keycloak or Odoo by hand is reported by reconciliation and undone
 (or adopted by an admin), never silently kept.
@@ -95,13 +101,12 @@ published as `erp.knowledge.v1`, read back into kara-api's read model like partn
 
 ### 3.1 Design Suite
 
-1. Login through Keycloak realm **kara**, client `simorgh-design-suite` (public client, PKCE), scopes
-   `openid organization`. Istio's RequestAuthentication accepts both issuers (realm simorgh stays for
-   service accounts and staff during the move).
-2. The token says who (sub, email), which company (`organization`), which units and which tools
-   (`resource_access.simorgh-design-suite.roles`: `offer`, `engineering`). The web app shows tabs from the
-   app roles as today (`web/src/auth/permissions.ts`); `ekc` becomes "organization ekc" instead of a role
-   (both read during the move).
+1. Login through its own realm, **simorgh**, client `simorgh-web` (as today), with the `organization` scope
+   added.
+2. The token says who (sub, email), which company (`organization`), which units (`groups`) and which tools
+   (realm roles `offer`, `simorgh-engineer`). The web app shows tabs from the roles as today
+   (`web/src/auth/permissions.ts`); the company is the organization claim, and the `ekc` role keeps working
+   because Kara grants the realm role named after the company where one exists.
 3. Right after login the web app asks projects-service `GET /api/v1/company/context`. projects-service
    calls kara-api `GET /v1/context` with the user's token (RFC 8693 token exchange to audience `kara-api`,
    so kara-api sees the person, not a service), and kara-api answers from its Odoo read model:
@@ -117,7 +122,7 @@ Two doors, two kinds of answer:
 
 | Signed in with | Company | Knowledge used |
 |---|---|---|
-| Keycloak (realm kara, client `simorgh-hr-chatbot`, app role `user`) | the token's organization | that company's `hr_rule` and `order` records |
+| Keycloak (its own realm **hr**, client `simorgh-hr-chatbot`, role `hr-user`) | the token's organization | that company's `hr_rule` and `order` records |
 | its own email/password or Google | **simorgh** (the default company) | Simorgh AI, its products and its own HR rules |
 
 - The knowledge base becomes per company: Qdrant collection `hr_<company>` (a missing collection fails
@@ -155,11 +160,61 @@ Two doors, two kinds of answer:
 
 | Phase | What | Repos |
 |---|---|---|
-| 1 | Kara: company apps switches, unit and person app access, provisioning outbox + worker + status; Keycloak adapter (organization, groups, user, client roles); clients `simorgh-design-suite`, `simorgh-hr-chatbot` in realm kara | simorgh-kara |
+| 1 | Kara: company apps switches, person app access, provisioning outbox + worker + status; Keycloak adapter per app realm (organization, groups, user, roles); realm hr and its client; organizations on in realm simorgh | simorgh-kara |
 | 2 | Odoo: `hr.department` and `simorgh.knowledge` in the connector and addon; Kara's Odoo adapter (company, department, employee); reconciliation | simorgh-odoo, simorgh-kara |
 | 3 | Kara "Company knowledge" screen; `GET /v1/context`; token exchange | simorgh-kara |
-| 4 | Design Suite: realm kara issuer, roles from client roles + organization, company context, `company.skill.md` | design-suite-cloud |
+| 4 | Design Suite: organization claim in realm simorgh, company context, `company.skill.md` | design-suite-cloud |
 | 5 | HR chatbot: Keycloak login, per-company collections and cache, ingestion from `erp.knowledge.v1`, default company simorgh for local and Google users, isolation test | simorgh-chatbot-ekc-deploy |
+
+## 6. Phase 1 as built (Kara → Keycloak)
+
+**In Kara.**
+- Platform admin → Companies: each company has app switches (Design Suite, HR chatbot) and a sync line
+  per target (Design Suite realm, HR realm), plus "sync again", which re-queues the company and all its
+  people.
+- Company → Members: each person has the app roles their company has (Design Suite: offer, engineering;
+  HR chatbot: user) and the same sync line.
+- Tables: `platform.companies.apps`, `<tenant>.member_apps`, `platform.provisioning_jobs` (the outbox: one
+  pending job per company or person, changes fold into it) and `platform.provisioning_state` (what each
+  target holds, the last error).
+- Every change to a company, unit, membership, manager or app role queues its job in the same transaction.
+
+**In kara-api.** `src/provisioning/` holds:
+- `plan.ts`, pure and tested: what should be;
+- `provisioner.service.ts`, the worker: it claims jobs with `FOR UPDATE SKIP LOCKED` (safe with two
+  replicas), retries with backoff from 20 s up to 1 h, and gives up after 8 tries.
+
+For each app realm the worker does this:
+
+| Job | What it does in the realm |
+|---|---|
+| Company | Makes the organization (alias = the company's slug). Makes the groups `/companies/<slug>/<unit>/…`, and deletes groups of units that are gone. |
+| Person, while they hold a role | Finds the account by attribute `karaId`, or else by email, and marks it as Kara's. If there is none, it creates the account and sends the "set your password" email (client `simorgh-web` / `simorgh-hr-chatbot`). Puts the person in the organization. Makes their unit groups and their roles match: the app's roles, plus the company role where the realm has one named by the slug (`ekc` in realm simorgh). Roles Kara does not manage are left alone. |
+| Person who leaves (no role, member or company disabled, app switched off) | For an account Kara manages, removes Kara's roles and the company's groups, disables the account and ends its sessions. Accounts without `karaId` are never touched. An account that was already there (a staff account, marked `karaAdopted`) only loses Kara's roles and groups: Kara never disables it or changes its name. |
+
+**Setting it up** (once; idempotent):
+- `deploy/keycloak/setup-realm.sh app-realms`
+  - Realm simorgh:
+    - organizations on;
+    - roles `offer` and `simorgh-engineer`;
+    - attributes `karaId` and `karaAdopted`, admin-only;
+    - on `simorgh-web`, the `groups` claim and the optional `organization` scope;
+    - client `kara-api` gets manage-users and manage-realm (Keycloak 26 changes organizations only with
+      manage-realm).
+  - Realm hr:
+    - settings and mail;
+    - role `hr-user`;
+    - attributes `karaId` and `karaAdopted`;
+    - client `simorgh-hr-chatbot`, whose secret goes to `hr-chatbot/hr-keycloak` `clientSecret`;
+    - client `kara-provisioner`, whose secret goes to `kara/kara-keycloak` `hrProvisionerSecret`.
+- Chart: `api.provision.enabled`. kara-api reads `PROVISION_HR_CLIENT_SECRET` from that secret, and
+  Design Suite's realm uses the existing `erpClientSecret`. A realm without a secret is skipped.
+
+**Not yet.** These come with phases 2 to 5:
+- the nightly reconciliation (for now, "sync again" re-runs everything);
+- Odoo as a target;
+- the knowledge screen;
+- the apps reading the organization claim.
 
 ## Sources
 
