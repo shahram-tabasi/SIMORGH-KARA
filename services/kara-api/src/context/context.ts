@@ -27,11 +27,12 @@ export interface CompanyContext {
 
 /**
  * Least privilege: each app sees the kinds it needs. Data-source addresses
- * only to Design Suite; HR rules only to the HR chatbot.
+ * only to Design Suite; HR rules only to the HR chatbot (which also answers
+ * about its company's products: Simorgh AI's, for its public sign-ins).
  */
 const KINDS: Record<ContextApp, Kind[]> = {
   designSuite: ['product', 'datasource', 'order', 'other'],
-  hrChatbot: ['order', 'hr_rule', 'other'],
+  hrChatbot: ['product', 'order', 'hr_rule', 'other'],
 };
 export const kindsFor = (app: ContextApp) => KINDS[app];
 

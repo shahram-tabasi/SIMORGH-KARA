@@ -292,9 +292,10 @@ GROUPS_MAPPER='{"name":"groups","protocol":"openid-connect","protocolMapper":"oi
 #            optional organization scope on simorgh-web, and its client
 #            kara-api allowed to manage users and organizations.
 #   hr       The HR chatbot's realm: role hr-user, client simorgh-hr-chatbot
-#            (browser login, secret into ns hr-chatbot Secret hr-keycloak key
-#            clientSecret) and kara-provisioner (secret into kara-keycloak
-#            hrProvisionerSecret). Mail copied from realm simorgh.
+#            (browser login, and its service account reads each company's
+#            knowledge from kara-api; secret into ns hr-chatbot Secret
+#            hr-keycloak key clientSecret) and kara-provisioner (secret into
+#            kara-keycloak hrProvisionerSecret). Mail copied from realm simorgh.
 app_realms() {
   local ds="$STAFF_REALM" hr="${HR_REALM:-hr}" hr_base="https://${HR_HOST:-hr.simorghai.com}" id
 
@@ -332,7 +333,7 @@ app_realms() {
   say "client simorgh-hr-chatbot (browser login)"
   id="$(printf '%s' "{\"clientId\":\"simorgh-hr-chatbot\",\"name\":\"Simorgh HR\",\"enabled\":true,\"publicClient\":false,
     \"clientAuthenticatorType\":\"client-secret\",\"standardFlowEnabled\":true,\"directAccessGrantsEnabled\":false,
-    \"implicitFlowEnabled\":false,\"serviceAccountsEnabled\":false,\"frontchannelLogout\":true,
+    \"implicitFlowEnabled\":false,\"serviceAccountsEnabled\":true,\"frontchannelLogout\":true,
     \"rootUrl\":\"$hr_base\",\"baseUrl\":\"/\",\"redirectUris\":[\"$hr_base/*\"],\"webOrigins\":[\"$hr_base\"],
     \"attributes\":{\"pkce.code.challenge.method\":\"S256\",\"post.logout.redirect.uris\":\"$hr_base/*\"}
     }" | upsert_client "$hr" simorgh-hr-chatbot)"

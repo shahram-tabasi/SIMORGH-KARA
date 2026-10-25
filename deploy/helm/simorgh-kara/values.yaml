@@ -83,7 +83,9 @@ api:
   # Service accounts (realm:client) that may read any company of their app
   # with ?company= (an app's ingestion job). simorgh:kara-api is Kara's own
   # client in realm simorgh (it manages that realm already): for checks.
-  contextServiceClients: "simorgh:kara-api"
+  # hr:simorgh-hr-chatbot copies each company's HR knowledge into its own
+  # collection (simorgh-chatbot-ekc-deploy, claude/hr-chatbot).
+  contextServiceClients: "simorgh:kara-api,hr:simorgh-hr-chatbot"
   erp:
     # Empty turns the Odoo part off (tenants show "not linked").
     connectorUrl: http://erp-connector.erp.svc.cluster.local:3000

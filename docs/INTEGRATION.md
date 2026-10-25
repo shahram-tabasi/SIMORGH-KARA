@@ -265,7 +265,7 @@ which the company admin role gets on migration).
 - Answer: `{ company, app, units, knowledge[], source, generatedAt }`, or Markdown with `?format=md` (for a
   model's prompt or `company.skill.md`). It is cached for 60 s.
 - Each app gets only its kinds: Design Suite gets products, data sources, orders and other; the HR chatbot
-  gets orders, HR rules and other. Data-source addresses never reach the HR chatbot.
+  gets products, orders, HR rules and other. Data-source addresses never reach the HR chatbot.
 - Knowledge is read from Odoo when the company is kept there, so it also includes what was entered in Odoo
   itself. If Odoo is unreachable, Kara's own copy is used (`source`).
 - Service accounts listed in `CONTEXT_SERVICE_CLIENTS` (realm:client) may name any company of their app with
@@ -277,11 +277,34 @@ against the app's realm. This gives the same guarantee (the company comes from a
 app) without a token-exchange client per app. Exchange stays possible if an app ever needs to call further
 on the user's behalf.
 
-**Next.**
-- Phase 4: Design Suite asks for scope `organization`, calls `/v1/context` after sign-in, and keeps
-  `company.skill.md` for its AI.
-- Phase 5: the HR chatbot signs in with realm hr, and answers each company from its own rules: a collection
-  per company, filled from `/v1/context` or `erp.knowledge.v1`. Its own and Google users get company simorgh.
+## 9. Phases 4 and 5 as built (the apps)
+
+**Design Suite** (simorgh-design-suite-cloud).
+- The web app signs in with scope `organization`.
+- documents-service `GET /documents/company-context` passes the person's token to `/v1/context`.
+- The skills sync writes `SMG/company.skill.md` beside the project's skills. Every analysis and the AI chat read
+  them.
+
+**HR chatbot** (simorgh-chatbot-ekc-deploy, branch claude/hr-chatbot).
+- **Sign-in.**
+  - "Sign in with your company account" uses realm hr, client simorgh-hr-chatbot (authorization code + PKCE).
+  - Role `hr-user` is required.
+  - The `organization` claim gives the company, which the session carries (and its refresh token too).
+- **Which knowledge answers whom.**
+  - Email/password and Google sessions answer for `DEFAULT_COMPANY` (simorgh): Simorgh AI and its products,
+    from what company simorgh keeps in Kara.
+  - A company session answers from that company only: its own documents (only Electrokavir has them, the
+    Human Capital files in `hr_general_kb`, kept with their cards and intent routes) and its Kara knowledge
+    (`hr_kara_<slug>`).
+  - The answer cache is per company (`general_chat_cache` stays Electrokavir's; others `hr_cache_<slug>`).
+  - The system prompt names the company.
+- **Copying Kara's knowledge.**
+  - The chatbot's service account (`CONTEXT_SERVICE_CLIENTS` hr:simorgh-hr-chatbot) reads `/v1/context?company=`
+    when a question for that company comes, at most every 5 minutes.
+  - Passages are keyed by a hash of their text: only new ones are embedded, and gone ones are removed.
+  - A company without the HR chatbot (403) has nothing left.
+- **Isolation.** Every collection name comes from the session's company, which the API sets at sign-in. Tests in
+  `apps/api/src/hr/company.spec.ts`.
 
 ## Sources
 
