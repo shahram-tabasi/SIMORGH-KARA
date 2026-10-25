@@ -77,10 +77,12 @@ Cluster (as root on the k8s master):
 
 ```bash
 cd ~/simorgh-kara && git pull --ff-only
-set -o pipefail; export TMPDIR=/home/buildah-tmp; VERSION=2.0.0
-buildah bud --target web     -t registry.simorghai.com/simorgh/kara-web:$VERSION     . 2>&1 | tee /root/kara-build.log \
- && buildah bud --target migrate -t registry.simorghai.com/simorgh/kara-migrate:$VERSION . 2>&1 | tee -a /root/kara-build.log \
- && buildah bud -t registry.simorghai.com/simorgh/kara-api:$VERSION services/kara-api 2>&1 | tee -a /root/kara-build.log \
+set -o pipefail; export TMPDIR=/home/buildah-tmp; VERSION=2.1.0
+# registry.npmjs.org is unreachable from the build host: npm through a mirror
+NPM=https://mirror-npm.runflare.com/
+buildah bud --layers --build-arg NPM_REGISTRY=$NPM --target web     -t registry.simorghai.com/simorgh/kara-web:$VERSION     . 2>&1 | tee /root/kara-build.log \
+ && buildah bud --layers --build-arg NPM_REGISTRY=$NPM --target migrate -t registry.simorghai.com/simorgh/kara-migrate:$VERSION . 2>&1 | tee -a /root/kara-build.log \
+ && buildah bud --layers --build-arg NPM_REGISTRY=$NPM -t registry.simorghai.com/simorgh/kara-api:$VERSION services/kara-api 2>&1 | tee -a /root/kara-build.log \
  && for i in kara-web kara-migrate kara-api; do buildah push registry.simorghai.com/simorgh/$i:$VERSION 2>&1 | tee -a /root/kara-build.log; done
 
 deploy/helm/simorgh-kara/scripts/setup.sh secrets

@@ -63,17 +63,17 @@ if [ -n "${KCADM:-}" ]; then
   logout() { rm -f "$CFG"; }
 else
   POD="$(kubectl -n "$KC_NS" get pod -l app.kubernetes.io/name=keycloak -o jsonpath='{.items[0].metadata.name}')"
-  kc() { kubectl -n "$KC_NS" exec -i "$POD" -- /opt/keycloak/bin/kcadm.sh "$@" --config "$CFG"; }
+  kc() { kubectl -n "$KC_NS" exec -i "$POD" -c keycloak -- /opt/keycloak/bin/kcadm.sh "$@" --config "$CFG"; }
   login() {
     local user pass
     user="$(secret_value "$KC_NS" keycloak-admin username 2>/dev/null || true)"
     pass="$(secret_value "$KC_NS" keycloak-admin password 2>/dev/null || true)"
     [ -n "$user" ] || read -rp "Keycloak admin user: " user
     [ -n "$pass" ] || { read -rsp "Keycloak admin password: " pass; echo; }
-    printf '%s\n' "$pass" | kubectl -n "$KC_NS" exec -i "$POD" -- sh -c \
+    printf '%s\n' "$pass" | kubectl -n "$KC_NS" exec -i "$POD" -c keycloak -- sh -c \
       "/opt/keycloak/bin/kcadm.sh config credentials --config $CFG --server http://localhost:8080 --realm master --user '$user' --password \"\$(cat)\"" >/dev/null
   }
-  logout() { kubectl -n "$KC_NS" exec "$POD" -- rm -f "$CFG"; }
+  logout() { kubectl -n "$KC_NS" exec "$POD" -c keycloak -- rm -f "$CFG"; }
 fi
 
 client_id() { kc get clients -r "$1" -q clientId="$2" --fields id --format csv --noquotes | head -1 | tr -d '\r'; }
