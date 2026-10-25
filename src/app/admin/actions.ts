@@ -11,6 +11,7 @@ import { karaApi, karaApiEnabled, syncIdentity } from "@/lib/kara-api";
 import { slugify, shortId } from "@/lib/utils";
 import { enqueueCompanyMembers, enqueueSync } from "@/lib/sync";
 import { APPS, type CompanyApps } from "@/lib/apps";
+import { looksSecret } from "@/lib/knowledge";
 
 /** The app switches of a company form: a checkbox per app (`app_<key>`). */
 const appsFrom = (formData: FormData): CompanyApps =>
@@ -175,6 +176,24 @@ export async function setCompanyAppsAction(formData: FormData) {
     await enqueueSync(tx, "company", id, id, `apps: ${APPS.filter((a) => apps[a.key]).map((a) => a.key).join(", ") || "none"}`);
     await enqueueCompanyMembers(tx, id, "company apps changed");
   });
+  revalidatePath("/admin/companies");
+}
+
+/**
+ * The company's technical services for Design Suite (docs/INTEGRATION.md
+ * §10): its TPMS API server (Design Suite's gateway sends the company's TPMS
+ * calls there; a server you run, as it receives the user's token) and its
+ * parts database's address. Empty: the platform's own.
+ */
+export async function setCompanyServicesAction(formData: FormData) {
+  await requirePlatformAdmin();
+  const id = String(formData.get("id"));
+  const tpmsApiUrl = String(formData.get("tpmsApiUrl") ?? "").trim();
+  const partsDatabase = String(formData.get("partsDatabase") ?? "").trim();
+  if (tpmsApiUrl && !/^https?:\/\/[^\s/@]+(:\d+)?(\/[^\s]*)?$/.test(tpmsApiUrl)) throw new Error("نشانی سرور TPMS باید http(s)://host[:port] باشد.");
+  if (partsDatabase && looksSecret(partsDatabase)) throw new Error("نشانی پایگاه قطعات نباید رمز عبور داشته باشد.");
+  const services = { ...(tpmsApiUrl ? { tpmsApiUrl } : {}), ...(partsDatabase ? { partsDatabase } : {}) };
+  await sql`UPDATE platform.companies SET services = ${sql.json(services)} WHERE id = ${id}`;
   revalidatePath("/admin/companies");
 }
 

@@ -20,7 +20,7 @@ test('each app sees only its kinds; Markdown for the model', () => {
   assert.equal(kindsFor('hrChatbot').includes('datasource'), false);
   assert.equal(kindsFor('designSuite').includes('hr_rule'), false);
   const c: CompanyContext = {
-    company: { slug: 'ekc', name: 'Electro Kavir' }, app: 'designSuite', units: ['Engineering'], source: 'kara', generatedAt: '2026-10-25T10:00:00Z',
+    company: { slug: 'ekc', name: 'Electro Kavir' }, app: 'designSuite', services: {}, units: ['Engineering'], source: 'kara', generatedAt: '2026-10-25T10:00:00Z',
     knowledge: [
       { kind: 'product', name: 'SIMOPRIME', code: null, summary: 'MV switchgear', body: null, attributes: { maxVoltageKv: 24 }, address: null, impact: null, effectiveDate: null },
       { kind: 'hr_rule', name: 'Leave', code: null, summary: 'secret to DS', body: null, attributes: {}, address: null, impact: null, effectiveDate: null },

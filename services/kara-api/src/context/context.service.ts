@@ -3,7 +3,7 @@ import { createRemoteJWKSet, decodeJwt, JWTPayload, jwtVerify } from 'jose';
 import { config } from '../config';
 import { ConnectorClient } from '../erp/connector.client';
 import { DbService } from '../infra/db.service';
-import { CompanyContext, ContextApp, KnowledgeItem, chooseOrg, kindsFor, orgsOf } from './context';
+import { CompanyContext, CompanyServices, ContextApp, KnowledgeItem, chooseOrg, kindsFor, orgsOf } from './context';
 
 interface AppToken extends JWTPayload { azp?: string; client_id?: string; organization?: unknown; preferred_username?: string }
 
@@ -62,8 +62,8 @@ export class ContextService {
     const hit = this.cache.get(key);
     if (hit && Date.now() - hit.at < config.context.cacheSeconds * 1000) return hit.value;
 
-    const [c] = await this.db.query<{ id: string; slug: string; name: string; status: string; apps: Record<string, boolean> | null; schema: string; odoo: number | null }>(
-      `SELECT id::text, slug, name, status, apps, schema_name AS schema, odoo_company_id AS odoo FROM platform.companies WHERE slug = $1`, [slug]);
+    const [c] = await this.db.query<{ id: string; slug: string; name: string; status: string; apps: Record<string, boolean> | null; schema: string; odoo: number | null; services: CompanyServices | null }>(
+      `SELECT id::text, slug, name, status, apps, schema_name AS schema, odoo_company_id AS odoo, services FROM platform.companies WHERE slug = $1`, [slug]);
     if (!c || c.status !== 'active') throw new NotFoundException(`no active company ${slug}`);
     if (!c.apps?.[app]) throw new ForbiddenException(`${slug} does not use ${app}`);
     if (!SCHEMA_RE.test(c.schema)) throw new Error(`unexpected schema name ${c.schema}`);
@@ -97,6 +97,8 @@ export class ContextService {
 
     const value: CompanyContext = {
       company: { slug: c.slug, name: c.name }, app, units,
+      // The company's servers: Design Suite's business only.
+      services: app === 'designSuite' ? (c.services ?? {}) : {},
       knowledge: knowledge.filter((k) => kinds.includes(k.kind)),
       source, generatedAt: new Date().toISOString(),
     };

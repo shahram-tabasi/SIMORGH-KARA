@@ -49,6 +49,10 @@ async function main() {
       -- Platform apps per company (docs/INTEGRATION.md)
       ALTER TABLE platform.companies
         ADD COLUMN IF NOT EXISTS apps jsonb NOT NULL DEFAULT '{}'::jsonb;
+      -- The company's own technical services for Design Suite: its TPMS API
+      -- server and its parts database (addresses only, never passwords).
+      ALTER TABLE platform.companies
+        ADD COLUMN IF NOT EXISTS services jsonb NOT NULL DEFAULT '{}'::jsonb;
     `);
     await sql.unsafe(SYNC_DDL);
 

@@ -15,9 +15,18 @@ export interface KnowledgeItem {
   effectiveDate: string | null;
 }
 
+/** The company's own technical services (Kara Admin → companies), for Design Suite only. */
+export interface CompanyServices {
+  /** Its TPMS API server: Design Suite's gateway sends the company's /tpms calls there. */
+  tpmsApiUrl?: string;
+  /** Its parts database's address. */
+  partsDatabase?: string;
+}
+
 export interface CompanyContext {
   company: { slug: string; name: string };
   app: ContextApp;
+  services: CompanyServices;
   units: string[];
   knowledge: KnowledgeItem[];
   /** Where the knowledge was read: Odoo (with what was entered there too) or Kara's own copy. */

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { sql } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
-import { linkOdooCompanyAction, resyncCompanyAction, setCompanyAppsAction, setCompanyStatusAction, updateCompanyAction } from "../actions";
+import { linkOdooCompanyAction, resyncCompanyAction, setCompanyAppsAction, setCompanyServicesAction, setCompanyStatusAction, updateCompanyAction } from "../actions";
 import { APPS, type CompanyApps } from "@/lib/apps";
 import { syncViews } from "@/lib/sync";
 import { SyncStatus } from "@/components/SyncStatus";
@@ -17,13 +17,14 @@ interface CompanyRow {
   max_users: number;
   odoo_company_id: number | null;
   apps: CompanyApps;
+  services: { tpmsApiUrl?: string; partsDatabase?: string } | null;
   user_count: number;
   created_at: string;
 }
 
 async function getCompanies(): Promise<CompanyRow[]> {
   return sql<CompanyRow[]>`
-    SELECT c.id, c.name, c.slug, c.status, c.plan, c.max_users, c.odoo_company_id, c.apps,
+    SELECT c.id, c.name, c.slug, c.status, c.plan, c.max_users, c.odoo_company_id, c.apps, c.services,
            c.created_at,
            (SELECT count(*) FROM platform.user_accounts u
               WHERE u.company_id = c.id)::int AS user_count
@@ -167,6 +168,24 @@ export default async function CompaniesPage({ searchParams }: { searchParams: { 
                   </label>
                 ))}
                 <button className="btn-ghost" title="خاموش کردن یک سامانه، دسترسی همه افراد شرکت به آن را می‌گیرد">ذخیره سامانه‌ها</button>
+              </form>
+
+              <form
+                action={setCompanyServicesAction}
+                className="mt-4 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-4"
+              >
+                <input type="hidden" name="id" value={c.id} />
+                <div className="min-w-[16rem] flex-1">
+                  <label className="label">سرور API فنی (TPMS) — برای Design Suite</label>
+                  <input name="tpmsApiUrl" defaultValue={c.services?.tpmsApiUrl ?? ""} dir="ltr" className="input text-left"
+                    placeholder="http://tpms-service-ekc.simorgh.svc.cluster.local:8080 (خالی: سرور پیش‌فرض)" />
+                </div>
+                <div className="min-w-[16rem] flex-1">
+                  <label className="label">پایگاه دادهٔ قطعات (نشانی، بدون رمز)</label>
+                  <input name="partsDatabase" defaultValue={c.services?.partsDatabase ?? ""} dir="ltr" className="input text-left"
+                    placeholder="sqlserver://192.168.1.40:1433/Eplan_n2" />
+                </div>
+                <button className="btn-ghost" title="فقط سرورهایی که خودتان اداره می‌کنید: درخواست‌های TPMS افراد شرکت با نشانهٔ ورودشان به آن فرستاده می‌شود">ذخیره سرویس‌ها</button>
               </form>
 
               {odooCompanies && (
