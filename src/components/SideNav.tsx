@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { NavIcon } from "./navIcons";
 
 export interface NavItem {
   href: string;
@@ -14,45 +15,59 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-export function SideNav({ groups }: { groups: NavGroup[] }) {
+/** Whether a nav item is the page being shown (or a page under it). */
+export function useActive() {
   const pathname = usePathname();
-
-  const isActive = (href: string) => {
+  return (href: string) => {
     if (pathname === href) return true;
     // The first item of each list is usually the "home" of a section; only
     // light it up on exact match, otherwise prefix-match deeper pages.
     const segments = href.split("/").filter(Boolean).length;
     return segments >= 3 && pathname.startsWith(href + "/");
   };
+}
+
+export function SideNav({
+  groups,
+  collapsed = false,
+  onNavigate,
+}: {
+  groups: NavGroup[];
+  /** Icons only (the rail); the label shows as a tooltip. */
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
+  const isActive = useActive();
 
   return (
-    <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+    <nav className={`flex-1 overflow-y-auto py-3 ${collapsed ? "px-2" : "px-3"}`} aria-label="منوی اصلی">
       {groups.map((g, gi) => (
-        <div key={gi}>
-          {g.title && (
-            <div className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              {g.title}
-            </div>
-          )}
-          <div className="space-y-0.5">
+        <div key={gi} className={gi ? "mt-4" : ""}>
+          {g.title &&
+            (collapsed ? (
+              <div className="mx-2 mb-2 border-t border-slate-200" />
+            ) : (
+              <div className="mb-1 truncate px-3 text-[11px] font-semibold text-slate-500">{g.title}</div>
+            ))}
+          <ul className="space-y-0.5">
             {g.items.map((item) => {
               const active = isActive(item.href);
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
-                    active
-                      ? "bg-brand-600 font-medium text-white shadow-sm"
-                      : "text-slate-600 hover:bg-brand-50 hover:text-brand-700 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-amber-300"
-                  }`}
-                >
-                  <span className="text-base">{item.icon}</span>
-                  <span>{item.label}</span>
-                </Link>
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    onClick={onNavigate}
+                    title={collapsed ? item.label : undefined}
+                    aria-current={active ? "page" : undefined}
+                    className={`nav-item ${collapsed ? "justify-center px-0" : "px-3"} ${active ? "nav-item-active" : ""}`}
+                  >
+                    <NavIcon code={item.icon} />
+                    {!collapsed && <span className="truncate">{item.label}</span>}
+                  </Link>
+                </li>
               );
             })}
-          </div>
+          </ul>
         </div>
       ))}
     </nav>

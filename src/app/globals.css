@@ -13,14 +13,18 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f1f5f9;
-  --fg: #0f172a;
+  /* Neutral surfaces, one blue accent: colour is kept for actions and status. */
+  --bg: #f3f5f8;
+  --fg: #1b2330;
+  --shell: #18212f;
+  --focus: #0a5fb4;
 }
 
 .dark {
-  /* deep purple-black to match the welcome / login scene */
-  --bg: #0a0712;
-  --fg: #e7e3ef;
+  --bg: #0e1117;
+  --fg: #e6eaf0;
+  --shell: #0a0d12;
+  --focus: #7eaee5;
 }
 
 html,
@@ -32,66 +36,136 @@ body {
 body {
   background: var(--bg);
   color: var(--fg);
+  font-feature-settings: "ss01";
+}
+
+/* A visible keyboard focus everywhere (WCAG 2.2, 2.4.7 / 2.4.11). */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 @layer components {
+  /* ── Shell bar ─────────────────────────────────────────────────────── */
+  .shellbar {
+    @apply sticky top-0 z-40 flex h-12 items-center gap-2 px-2 text-slate-100 shadow-sm sm:gap-3 sm:px-3;
+    background: var(--shell);
+  }
+  .shell-icon {
+    @apply flex h-9 w-9 items-center justify-center rounded-md text-slate-200 transition-colors hover:bg-white/10 hover:text-white;
+  }
+  .shell-icon:focus-visible {
+    outline-color: #fff;
+  }
+  .shell-search {
+    @apply ms-auto flex h-8 w-9 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.06] px-2.5 text-sm text-slate-300 transition-colors hover:bg-white/10 md:w-72 lg:w-96;
+  }
+  .skip-link {
+    @apply sr-only;
+  }
+  .skip-link:focus {
+    @apply not-sr-only fixed start-2 top-2 z-[70] rounded-md bg-white px-3 py-2 text-sm text-slate-900 shadow;
+  }
+  .kbd {
+    @apply rounded border border-slate-300 bg-slate-50 px-1.5 text-[10px] text-slate-600 dark:border-white/15 dark:bg-white/[0.04] dark:text-slate-400;
+  }
+
+  /* ── Side navigation ───────────────────────────────────────────────── */
+  .nav-item {
+    @apply relative flex h-9 items-center gap-3 rounded-md text-sm text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-white;
+  }
+  .nav-item-active {
+    @apply bg-brand-50 font-semibold text-brand-700 hover:bg-brand-50 hover:text-brand-700 dark:bg-brand-400/15 dark:text-brand-200 dark:hover:bg-brand-400/15 dark:hover:text-brand-200;
+  }
+  .nav-item-active::before {
+    content: "";
+    @apply absolute inset-y-1.5 start-0 w-[3px] rounded-full bg-brand-600 dark:bg-brand-300;
+  }
+  .menu-item {
+    @apply flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/[0.06];
+  }
+  .tb-icon {
+    @apply flex h-8 w-8 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/[0.06];
+  }
+
+  /* ── Controls (compact density: 36px rows) ────────────────────────── */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition;
+    @apply inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-brand-600 text-white hover:bg-brand-700 dark:bg-brand-600 dark:hover:bg-brand-500;
+    @apply btn bg-brand-600 text-white hover:bg-brand-700 dark:bg-brand-500 dark:hover:bg-brand-400;
   }
   .btn-ghost {
-    @apply btn bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 dark:bg-white/[0.04] dark:text-slate-200 dark:border-white/10 dark:hover:bg-white/[0.08];
+    @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/15 dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.08];
   }
   .btn-danger {
-    @apply btn bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/30 dark:hover:bg-red-500/20;
+    @apply btn border border-red-200 bg-white text-red-700 hover:bg-red-50 dark:border-red-500/30 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-500/10;
   }
   .input {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 dark:border-white/10 dark:bg-black/30 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-amber-400/50 dark:focus:ring-amber-400/20;
+    @apply h-9 w-full rounded-md border border-slate-400 bg-white px-3 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-500 hover:border-slate-500 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 disabled:bg-slate-100 dark:border-white/25 dark:bg-[#0e1117] dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-white/40 dark:focus:border-brand-300 dark:focus:ring-brand-300 dark:disabled:bg-white/[0.03];
+  }
+  textarea.input {
+    @apply h-auto py-2;
+  }
+  select.input[multiple] {
+    @apply h-auto;
   }
   .label {
-    @apply mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300;
+    @apply mb-1 block text-[13px] font-medium text-slate-700 dark:text-slate-300;
   }
   .card {
-    @apply rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.04] dark:shadow-black/40;
+    @apply rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] lg:p-5 dark:border-white/10 dark:bg-[#161b22] dark:shadow-none;
   }
   .badge {
-    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium;
+  }
+
+  /* ── Tables: opt in with .table on a <table> ───────────────────────── */
+  .table {
+    @apply w-full border-collapse text-sm;
+  }
+  .table th {
+    @apply border-b border-slate-200 bg-slate-50 px-3 py-2 text-start text-xs font-semibold text-slate-600 dark:border-white/10 dark:bg-[#1b212a] dark:text-slate-300;
+  }
+  .table td {
+    @apply border-b border-slate-100 px-3 py-2 text-slate-800 dark:border-white/[0.06] dark:text-slate-200;
+  }
+  .table tbody tr:hover {
+    @apply bg-slate-50 dark:bg-white/[0.03];
   }
 }
 
 /*
  * Global dark remap — flips raw utility classes used across the many pages
  * without editing every file. `.dark .x` (0,2,0) outranks `.x` (0,1,0),
- * so these win when the `dark` class is on <html>.
+ * so these win when the `dark` class is on <html>. Neutral greys, no tint.
  */
 .dark .bg-white {
-  background-color: #14101e;
+  background-color: #161b22;
 }
 .dark .bg-slate-50 {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: #1b212a;
 }
 .dark .bg-slate-100 {
-  background-color: #0a0712;
+  background-color: #0e1117;
 }
 .dark .bg-slate-200 {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: #262d38;
 }
 
 .dark .text-slate-900,
 .dark .text-slate-800 {
-  color: #e7e3ef;
+  color: #e6eaf0;
 }
 .dark .text-slate-700,
 .dark .text-slate-600 {
-  color: #c3bdd2;
+  color: #c2c9d3;
 }
 .dark .text-slate-500 {
-  color: #9d97ad;
+  color: #9aa3af;
 }
 .dark .text-slate-400 {
-  color: #79748a;
+  color: #8a93a0;
 }
 
 .dark .border-slate-100 {
@@ -101,7 +175,10 @@ body {
   border-color: rgba(255, 255, 255, 0.1);
 }
 .dark .border-slate-300 {
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.dark .border-slate-400 {
+  border-color: rgba(255, 255, 255, 0.24);
 }
 
 .dark .divide-slate-100 > * + *,
@@ -115,13 +192,22 @@ body {
 
 /* hover states for the common interactive surfaces */
 .dark .hover\:bg-slate-50:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: #222936;
 }
 .dark .hover\:bg-slate-100:hover {
-  background-color: rgba(255, 255, 255, 0.07);
+  background-color: #222936;
 }
 .dark .hover\:bg-white:hover {
-  background-color: rgba(255, 255, 255, 0.06);
+  background-color: #1b212a;
+}
+.dark .hover\:text-slate-900:hover {
+  color: #fff;
+}
+.dark .disabled\:bg-slate-100:disabled {
+  background-color: #1b212a;
+}
+.dark .placeholder\:text-slate-500::placeholder {
+  color: #8a93a0;
 }
 
 /*
@@ -150,8 +236,8 @@ body {
 .dark .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.16); }
 .dark .bg-purple-50 { background-color: rgba(168, 85, 247, 0.1); }
 .dark .bg-purple-100 { background-color: rgba(168, 85, 247, 0.16); }
-.dark .bg-brand-50 { background-color: rgba(99, 102, 241, 0.1); }
-.dark .bg-brand-100 { background-color: rgba(99, 102, 241, 0.18); }
+.dark .bg-brand-50, .dark .hover\:bg-brand-50:hover { background-color: rgba(75, 139, 216, 0.14); }
+.dark .bg-brand-100 { background-color: rgba(75, 139, 216, 0.22); }
 
 .dark .text-red-600, .dark .text-red-700, .dark .text-red-800 { color: #fca5a5; }
 .dark .text-rose-500, .dark .text-rose-600, .dark .text-rose-700 { color: #fda4af; }
@@ -163,7 +249,7 @@ body {
 .dark .text-sky-600, .dark .text-sky-700 { color: #7dd3fc; }
 .dark .text-indigo-600, .dark .text-indigo-700 { color: #a5b4fc; }
 .dark .text-purple-600, .dark .text-purple-700 { color: #d8b4fe; }
-.dark .text-brand-700 { color: #a5b4fc; }
+.dark .text-brand-600, .dark .text-brand-700, .dark .hover\:text-brand-700:hover { color: #9cc3f0; }
 
 .dark .border-red-100, .dark .border-red-200 { border-color: rgba(239, 68, 68, 0.25); }
 .dark .border-rose-100, .dark .border-rose-200 { border-color: rgba(244, 63, 94, 0.25); }
@@ -171,4 +257,4 @@ body {
 .dark .border-yellow-200, .dark .border-yellow-300 { border-color: rgba(234, 179, 8, 0.3); }
 .dark .border-amber-200 { border-color: rgba(245, 158, 11, 0.28); }
 .dark .border-blue-200 { border-color: rgba(59, 130, 246, 0.25); }
-.dark .border-brand-200 { border-color: rgba(99, 102, 241, 0.3); }
+.dark .border-brand-200 { border-color: rgba(75, 139, 216, 0.35); }

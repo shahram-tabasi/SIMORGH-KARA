@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { Bell, CheckSquare, Mail } from "lucide-react";
 
 interface Feed {
   tasks: { id: string; title: string; priority: string }[];
@@ -55,22 +56,23 @@ export function NotificationBell({ slug }: { slug: string }) {
     <div className="relative" ref={boxRef}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100"
-        aria-label="اعلان‌ها"
+        className="shell-icon relative"
+        aria-label={feed.count ? `اعلان‌ها (${feed.count} تازه)` : "اعلان‌ها"}
+        aria-expanded={open}
       >
-        <span className="text-lg">🔔</span>
+        <Bell className="h-5 w-5" />
         {feed.count > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+          <span className="absolute -end-0.5 -top-0.5 flex min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
             {feed.count}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute left-0 top-11 z-50 w-72 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+        <div className="absolute end-0 top-11 z-50 w-72 rounded-lg border border-slate-200 bg-white p-2 shadow-xl">
           <div className="px-2 py-1 text-xs font-semibold text-slate-500">اعلان‌ها</div>
           {feed.count === 0 ? (
-            <div className="px-2 py-3 text-center text-xs text-slate-400">اعلان جدیدی نیست.</div>
+            <div className="px-2 py-3 text-center text-xs text-slate-500">اعلان جدیدی نیست.</div>
           ) : (
             <div className="max-h-72 space-y-1 overflow-auto">
               {feed.approvals > 0 && (
@@ -79,7 +81,7 @@ export function NotificationBell({ slug }: { slug: string }) {
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50"
                 >
-                  <span className="text-indigo-500">✅</span>
+                  <CheckSquare className="h-4 w-4 shrink-0 text-brand-600" />
                   <span className="text-slate-700">
                     {feed.approvals} درخواست در انتظار تأیید شما
                   </span>
@@ -103,7 +105,7 @@ export function NotificationBell({ slug }: { slug: string }) {
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50"
                 >
-                  <span className="text-sky-500">✉️</span>
+                  <Mail className="h-4 w-4 shrink-0 text-brand-600" />
                   <span className="truncate text-slate-700">پیام جدید: {m.title}</span>
                 </Link>
               ))}

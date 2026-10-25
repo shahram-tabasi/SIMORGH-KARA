@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Moon, Sun } from "lucide-react";
 
 export function ThemeToggle() {
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState(false);
 
   useEffect(() => {
     setDark(document.documentElement.classList.contains("dark"));
@@ -24,11 +25,11 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      aria-label="تغییر تم"
+      aria-label={dark ? "حالت روشن" : "حالت تاریک"}
       title={dark ? "حالت روشن" : "حالت تاریک"}
-      className="flex h-7 w-7 items-center justify-center rounded-lg text-sm text-slate-500 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"
+      className="shell-icon"
     >
-      {dark ? "☀" : "☾"}
+      {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
     </button>
   );
 }

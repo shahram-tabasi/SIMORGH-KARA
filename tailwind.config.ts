@@ -10,12 +10,17 @@ const config: Config = {
       },
       colors: {
         brand: {
-          50: "#eef2ff",
-          100: "#e0e7ff",
-          500: "#6366f1",
-          600: "#4f46e5",
-          700: "#4338ca",
-          900: "#312e81",
+          // Enterprise blue (the logo's): white text on 600 is 6.4:1.
+          50: "#eef5fc",
+          100: "#d6e7f8",
+          200: "#aecdf0",
+          300: "#7eaee5",
+          400: "#4b8bd8",
+          500: "#2370cc",
+          600: "#0a5fb4",
+          700: "#084c91",
+          800: "#0a3d72",
+          900: "#0b2f55",
         },
       },
     },
