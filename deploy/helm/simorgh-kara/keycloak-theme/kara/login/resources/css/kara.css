@@ -158,8 +158,21 @@ a:hover { color: #ffffff !important; }
 
 /* ── Footer line ─────────────────────────────────────────── */
 
-#kc-login-footer-links { list-style: none; margin: .5rem 0 0; padding: 0; text-align: center; }
-#kc-login-footer-links li { color: rgba(255, 255, 255, 0.45); font-size: .75rem; }
+/* Room around the card's content and under its last line: the footer line
+   sat on the card's bottom edge. */
+.pf-v5-c-login__main-header { padding: 1.75rem 1.75rem .25rem !important; align-items: center; row-gap: .75rem; }
+.pf-v5-c-login__main-body { padding: 1.25rem 1.75rem 1.25rem !important; }
+.pf-v5-c-login__main-footer { padding: 0 1.75rem 1.75rem !important; }
+.pf-v5-c-form { gap: 1.1rem !important; }
+#kc-form-buttons { margin-top: .5rem; }
+#kc-login-footer-links {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 1rem 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+#kc-login-footer-links li { color: rgba(255, 255, 255, 0.55); font-size: .75rem; }
 
 /* ── Wide screens: the card on the left, Kara's heading and features on the
       right (built by js/kara.js), as on Kara's own page. ─────────────── */
@@ -201,3 +214,27 @@ a:hover { color: #ffffff !important; }
   #kc-header { padding-top: 1.5rem !important; }
   .kara-logo { width: 88px; height: 88px; }
 }
+
+/* keycloak.v2 renders an empty footer block for identity providers inside
+   the body even when there are none: no room for it. And the language
+   picker keeps a plain control's height, centred beside the title. */
+.pf-v5-c-login__main-footer:not(:has(*)),
+.pf-v5-c-login__main-body .pf-v5-c-login__main-footer:not(:has(a, button, li)) { display: none !important; }
+.pf-v5-c-login__main-header .pf-v5-c-form-control { min-height: 36px !important; align-self: center; }
+#login-select-toggle { height: 36px; padding-block: 0 !important; line-height: 36px; }
+
+/* Password field and its show/hide button as one control, in either
+   direction (Persian puts the button on the left). */
+.pf-v5-c-input-group > .pf-v5-c-input-group__item:first-child .pf-v5-c-form-control,
+.pf-v5-c-input-group > .pf-v5-c-input-group__item:first-child .pf-v5-c-form-control::before {
+  border-radius: .75rem !important;
+  border-start-end-radius: 0 !important;
+  border-end-end-radius: 0 !important;
+}
+.pf-v5-c-button.pf-m-control,
+.pf-v5-c-button.pf-m-control::after {
+  border-radius: .75rem !important;
+  border-start-start-radius: 0 !important;
+  border-end-start-radius: 0 !important;
+}
+.pf-v5-c-button.pf-m-control::after { border-inline-start: 0 !important; }

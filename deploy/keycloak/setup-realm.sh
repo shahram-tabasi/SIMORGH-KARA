@@ -8,6 +8,10 @@
 #   deploy/keycloak/setup-realm.sh theme          # Kara's login and email theme (chart's keycloak-theme/kara)
 #   deploy/keycloak/setup-realm.sh app-realms     # the apps' realms for Kara's provisioner:
 #                                                 # simorgh (Design Suite) and hr (HR chatbot)
+#   deploy/keycloak/setup-realm.sh login-form kara simorgh hr
+#                                                 # one form for email and password
+#                                                 # (not Keycloak's identity-first steps)
+#   deploy/keycloak/setup-realm.sh hr-theme       # realm hr's login theme simorgh-hr
 #   deploy/keycloak/setup-realm.sh staff-idp ORG  # Simorgh staff sign in with their
 #                                                 # realm-simorgh account (org alias ORG)
 #   KEEP_EMAILS="a@x b@y" deploy/keycloak/setup-realm.sh reset-identities
@@ -352,6 +356,54 @@ app_realms() {
   client_secret "$hr" "$id" | store_secret hrProvisionerSecret
 }
 
+# One sign-in form (email and password together) in REALM… instead of
+# Keycloak 26's identity-first steps: with organizations on, its built-in
+# browser flow asks for the email alone and the password on a second page.
+# A copy of that flow, "browser-one-form", has its Organization step
+# disabled and becomes the realm's browser flow; the rest (cookie, identity
+# provider redirect, password, OTP when a user has one) is Keycloak's own.
+# Organizations themselves stay on: membership, the organization claim and
+# Kara's provisioning do not depend on the login steps. An identity provider
+# linked to an organization is then not chosen by email domain; it is shown
+# on the form as a button instead (staff-idp's provider, if any).
+login_form() {
+  local flow=browser-one-form realm execs
+  for realm in "$@"; do
+    say "one sign-in form in realm $realm"
+    kc get "realms/$realm" --fields realm >/dev/null 2>&1 || { echo "no realm $realm, skipped"; continue; }
+    if ! kc get authentication/flows -r "$realm" --fields alias --format csv --noquotes | tr -d '\r' | grep -qx "$flow"; then
+      printf '{"newName":"%s"}' "$flow" | kc create authentication/flows/browser/copy -r "$realm" -f - >/dev/null && echo "flow $flow copied from browser"
+    fi
+    execs="$(kc get "authentication/flows/$flow/executions" -r "$realm")"
+    printf '%s' "$execs" | python3 -c '
+import json, sys
+for e in json.load(sys.stdin):
+    # The Organization sub-flow at the top level (its identity-first login is inside it).
+    if e.get("level") == 0 and e.get("authenticationFlow") and "organization" in e.get("displayName", "").lower() and e.get("requirement") != "DISABLED":
+        e["requirement"] = "DISABLED"
+        print(json.dumps(e))' | while IFS= read -r line; do
+      printf '%s' "$line" | kc update "authentication/flows/$flow/executions" -r "$realm" -f - >/dev/null && echo "organization identity-first step disabled"
+    done
+    printf '{"browserFlow":"%s"}' "$flow" | kc update "realms/$realm" -f - >/dev/null && echo "browser flow: $flow"
+    if kc get identity-provider/instances/simorgh -r "$realm" --fields alias >/dev/null 2>&1; then
+      kc get identity-provider/instances/simorgh -r "$realm" | python3 -c '
+import json, sys
+p = json.load(sys.stdin)
+p["hideOnLogin"] = False
+p["displayName"] = "Simorgh staff — ورود کارکنان سیمرغ"
+print(json.dumps(p))' | kc update identity-provider/instances/simorgh -r "$realm" -f - >/dev/null && echo "staff sign-in shown as a button"
+    fi
+  done
+}
+
+# Realm hr's login theme: simorgh-hr (published by the HR chatbot's chart,
+# mounted by simorgh-keycloak's extraThemes). Only once Keycloak has it.
+hr_theme() {
+  local hr="${HR_REALM:-hr}"
+  say "theme simorgh-hr in realm $hr"
+  printf '{"loginTheme":"simorgh-hr"}' | kc update "realms/$hr" -f - >/dev/null && echo "login theme: simorgh-hr"
+}
+
 # The one deleting command here, for deploy/scripts/reset-kara.sh: the realm's
 # organizations, and its users except the clients' service accounts and
 # KEEP_EMAILS. Settings, clients, theme, mail and identity providers stay.
@@ -380,6 +432,8 @@ case "${1:-}" in
   theme) theme ;;
   app-realms) app_realms ;;
   staff-idp) shift; staff_idp "$@" ;;
+  login-form) shift; login_form "${@:-$REALM}" ;;
+  hr-theme) hr_theme ;;
   reset-identities) reset_identities ;;
-  *) echo "usage: $0 realm | mail | theme | app-realms | staff-idp ORG_ALIAS | reset-identities"; exit 2 ;;
+  *) echo "usage: $0 realm | mail | theme | app-realms | staff-idp ORG_ALIAS | login-form [REALM…] | hr-theme | reset-identities"; exit 2 ;;
 esac
