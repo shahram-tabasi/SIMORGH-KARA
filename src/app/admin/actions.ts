@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { sql } from "@/lib/db";
+import { createSession } from "@/lib/auth";
 import { requirePlatformAdmin } from "@/lib/session";
 import { provisionCompany } from "@/lib/provision";
 import { initialPasswordField, initialPasswordHash } from "@/lib/identity";
@@ -231,4 +232,40 @@ export async function linkOdooCompanyAction(formData: FormData) {
   }
   revalidatePath("/admin/companies");
   if (error) redirect(`/admin/companies?erp_slug=${encodeURIComponent(slug)}&erp_error=${encodeURIComponent(error.slice(0, 300))}`);
+}
+
+/**
+ * Remove a company and all its data (kara-api CompanyDeleteService): its
+ * schema, its people's accounts, its Keycloak organizations and accounts;
+ * what Kara made in Odoo is archived. Confirmed by typing the slug.
+ */
+export async function deleteCompanyAction(formData: FormData) {
+  const { session } = await requirePlatformAdmin();
+  const slug = String(formData.get("slug") ?? "");
+  const confirm = String(formData.get("confirm") ?? "").trim();
+  const outside = formData.get("outside") === "on";
+  if (confirm !== slug) redirect(`/admin/companies?del_slug=${encodeURIComponent(slug)}&del_error=${encodeURIComponent("برای تأیید، نشانی شرکت را دقیق بنویسید.")}#company-${slug}`);
+  if (!karaApiEnabled()) redirect(`/admin/companies?del_slug=${encodeURIComponent(slug)}&del_error=${encodeURIComponent("kara-api در دسترس نیست.")}`);
+  let report: string[];
+  try {
+    ({ report } = await karaApi<{ report: string[] }>(session.sub, "DELETE", `/v1/admin/companies/${encodeURIComponent(slug)}`, { body: { confirm, outside } }));
+  } catch (e) {
+    redirect(`/admin/companies?del_slug=${encodeURIComponent(slug)}&del_error=${encodeURIComponent((e as Error).message)}#company-${slug}`);
+  }
+  revalidatePath("/admin/companies");
+  revalidatePath("/admin");
+  redirect(`/admin/companies?deleted=${encodeURIComponent(slug)}&report=${encodeURIComponent(report.join("\n"))}`);
+}
+
+/** A platform administrator who is also a member of a company opens it as that member. */
+export async function enterCompanyAction(formData: FormData) {
+  const { session } = await requirePlatformAdmin();
+  const id = String(formData.get("id"));
+  const [c] = await sql<{ slug: string; schema_name: string; status: string }[]>`
+    SELECT slug, schema_name, status FROM platform.companies WHERE id = ${id}`;
+  if (!c) redirect("/admin/companies");
+  const [m] = await sql.unsafe<{ id: string }[]>(`SELECT id::text FROM "${c.schema_name.replace(/"/g, "")}".members WHERE account_id = $1 AND status = 'active'`, [session.sub]);
+  if (!m) redirect(`/admin/companies?del_slug=${encodeURIComponent(c.slug)}&del_error=${encodeURIComponent("شما عضو این شرکت نیستید.")}`);
+  await createSession({ sub: session.sub, email: session.email, name: session.name, kind: "tenant", companyId: id, schema: c.schema_name, slug: c.slug });
+  redirect(`/app/${c.slug}`);
 }

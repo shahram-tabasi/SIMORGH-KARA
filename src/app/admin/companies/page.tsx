@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { sql } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
-import { linkOdooCompanyAction, resyncCompanyAction, setCompanyAppsAction, setCompanyServicesAction, setCompanyStatusAction, updateCompanyAction } from "../actions";
+import { deleteCompanyAction, enterCompanyAction, linkOdooCompanyAction, resyncCompanyAction, setCompanyAppsAction, setCompanyServicesAction, setCompanyStatusAction, updateCompanyAction } from "../actions";
 import { APPS, type CompanyApps } from "@/lib/apps";
 import { syncViews } from "@/lib/sync";
 import { SyncStatus } from "@/components/SyncStatus";
@@ -59,9 +59,24 @@ async function getOdooCompanies(accountId: string): Promise<OdooCompanies> {
 
 export const dynamic = "force-dynamic";
 
-export default async function CompaniesPage({ searchParams }: { searchParams: { erp_slug?: string; erp_error?: string } }) {
+/** The companies this platform administrator is also a member of (they may open them as that member). */
+async function memberOf(accountId: string, companies: CompanyRow[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  for (const c of companies) {
+    const [{ schema_name: schema }] = await sql<{ schema_name: string }[]>`SELECT schema_name FROM platform.companies WHERE id = ${c.id}`;
+    if (!/^tenant_[a-z0-9_]{1,50}$/.test(schema)) continue;
+    const rows = await sql.unsafe(`SELECT 1 FROM "${schema}".members WHERE account_id = $1 AND status = 'active'`, [accountId]).catch(() => []);
+    if (rows.length) out.add(c.id);
+  }
+  return out;
+}
+
+export default async function CompaniesPage({ searchParams }: {
+  searchParams: { erp_slug?: string; erp_error?: string; del_slug?: string; del_error?: string; deleted?: string; report?: string };
+}) {
   const { session } = await requirePlatformAdmin();
   const [companies, odoo] = await Promise.all([getCompanies(), getOdooCompanies(session.sub)]);
+  const mine = await memberOf(session.sub, companies);
   const sync = await syncViews("company", companies.map((c) => c.id));
   const odooCompanies = odoo && "items" in odoo ? odoo.items : null;
 
@@ -77,6 +92,13 @@ export default async function CompaniesPage({ searchParams }: { searchParams: { 
         }
       />
 
+      {searchParams.deleted && (
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          <div className="font-semibold">شرکت «{searchParams.deleted}» و همهٔ داده‌هایش حذف شد.</div>
+          {searchParams.report && <pre className="mt-1 whitespace-pre-wrap text-xs" dir="ltr">{searchParams.report}</pre>}
+        </div>
+      )}
+
       {odoo && "error" in odoo && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           اتصال به Odoo برقرار نشد، پس فهرست شرکت‌های Odoo در دسترس نیست: {odoo.error}
@@ -90,7 +112,7 @@ export default async function CompaniesPage({ searchParams }: { searchParams: { 
       ) : (
         <div className="space-y-4">
           {companies.map((c) => (
-            <div key={c.id} className="card">
+            <div key={c.id} id={`company-${c.slug}`} className="card">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
@@ -108,6 +130,12 @@ export default async function CompaniesPage({ searchParams }: { searchParams: { 
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {mine.has(c.id) && (
+                    <form action={enterCompanyAction}>
+                      <input type="hidden" name="id" value={c.id} />
+                      <button className="btn-primary" title="باز کردن شرکت با عضویت خودتان در آن">ورود به شرکت</button>
+                    </form>
+                  )}
                   <form action={resyncCompanyAction}>
                     <input type="hidden" name="id" value={c.id} />
                     <button className="btn-ghost" title="شرکت و همه افرادش دوباره به Keycloak و Odoo فرستاده می‌شوند">همگام‌سازی دوباره</button>
@@ -209,6 +237,29 @@ export default async function CompaniesPage({ searchParams }: { searchParams: { 
                   <button className="btn-ghost">ذخیره اتصال</button>
                 </form>
               )}
+              <details className="mt-4 border-t border-slate-100 pt-4">
+                <summary className="cursor-pointer text-sm font-medium text-red-700">حذف شرکت و همهٔ داده‌هایش…</summary>
+                <form action={deleteCompanyAction} className="mt-3 space-y-3 rounded-lg border border-red-200 bg-red-50 p-3">
+                  <input type="hidden" name="slug" value={c.slug} />
+                  <p className="text-sm text-red-800">
+                    این کار برگشت‌پذیر نیست. همهٔ اعضا، واحدها، حضور و غیاب، مرخصی، کارتابل، دانش شرکت و حساب‌های کاربری افراد این شرکت
+                    از کارا پاک می‌شود. مدیران پلتفرم و هولدینگ حذف نمی‌شوند و فقط از شرکت جدا می‌شوند.
+                  </p>
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input type="checkbox" name="outside" defaultChecked className="h-4 w-4" />
+                    از Keycloak هم پاک شود (سازمان، گروه‌ها و حساب‌هایی که کارا ساخته) و آنچه کارا در Odoo ساخته بایگانی شود
+                  </label>
+                  <div>
+                    <label className="label">برای تأیید، نشانی شرکت را بنویسید: <span dir="ltr" className="font-mono">{c.slug}</span></label>
+                    <input name="confirm" dir="ltr" autoComplete="off" className="input max-w-xs text-left font-mono" />
+                  </div>
+                  <button className="btn-danger">حذف همیشگی شرکت</button>
+                </form>
+                {searchParams.del_slug === c.slug && searchParams.del_error && (
+                  <div className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{searchParams.del_error}</div>
+                )}
+              </details>
+
               {searchParams.erp_slug === c.slug && searchParams.erp_error && (
                 <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{searchParams.erp_error}</div>
               )}

@@ -14,11 +14,12 @@
 //                    domain), their app roles. Verified, enabled users only.
 //                    Then import-identities gives them their Kara sign-in.
 //
-//   … cli.js seed-org ekc [--dry-run]
+//   … cli.js seed-org ekc [--dry-run] [--prune] [--place email=Unit/Sub-unit …]
 //
-// seed-org           a company's starting units and products (EKC: an LV/MV
-//                    switchgear builder); only what is missing is added, and
-//                    its provisioning job takes them to Odoo.
+// seed-org           a company's prepared organisation (EKC: its chart, where
+//                    its people sit, the platform owners, its HR rules and
+//                    products) laid onto what it has (provisioning/seed-org.ts);
+//                    its provisioning jobs take it to Odoo and the realms.
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -35,7 +36,7 @@ async function main() {
   if (cmd === 'import-app-users') return importApp(flags);
   if (cmd === 'seed-org') return seed(flags);
   if (cmd !== 'import-identities') {
-    console.error('usage: cli.js import-identities [--invite] | import-app-users [--app designSuite] --domains a.com=slug,… [--dry-run] | seed-org <company slug> [--dry-run]');
+    console.error('usage: cli.js import-identities [--invite] | import-app-users [--app designSuite] --domains a.com=slug,… [--dry-run] | seed-org <company slug> [--dry-run] [--prune] [--place email=Unit/Sub-unit]');
     process.exit(2);
   }
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
@@ -69,11 +70,18 @@ async function importApp(flags: string[]) {
 
 
 async function seed(flags: string[]) {
-  const slug = flags.find((f) => !f.startsWith('--'));
-  if (!slug) { console.error('usage: cli.js seed-org <company slug> [--dry-run]'); process.exit(2); }
+  const slug = flags.find((f, i) => !f.startsWith('--') && flags[i - 1] !== '--place');
+  if (!slug) { console.error('usage: cli.js seed-org <company slug> [--dry-run] [--prune] [--place email=Unit/Sub-unit …]'); process.exit(2); }
+  const place: Record<string, string[]> = {};
+  flags.forEach((f, i) => {
+    if (f !== '--place' || !flags[i + 1]?.includes('=')) return;
+    const [email, path] = flags[i + 1].split('=');
+    place[email.trim().toLowerCase()] = path.split('/').map((x) => x.trim()).filter(Boolean);
+  });
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
   try {
-    for (const l of await seedOrg(app.get(DbService), slug, { dryRun: flags.includes('--dry-run') })) console.log(l);
+    const lines = await seedOrg(app.get(DbService), slug, { dryRun: flags.includes('--dry-run'), prune: flags.includes('--prune'), place });
+    for (const l of lines) console.log(l);
   } finally {
     await app.close();
   }

@@ -74,3 +74,24 @@ export function relevantPassages(question: string, items: { name: string; body: 
   }
   return out;
 }
+
+export interface UnitOption { id: string; path: string }
+
+/** The company's units as "A / B / C" paths, for choosing whom a rule is for. */
+export const UNIT_PATHS_SQL = `
+  WITH RECURSIVE t AS (
+    SELECT id, name::text AS path, manager_id FROM groups WHERE parent_id IS NULL
+    UNION ALL SELECT g.id, t.path || ' / ' || g.name, g.manager_id FROM groups g JOIN t ON g.parent_id = t.id
+  ) SELECT id::text, path, manager_id::text AS manager FROM t ORDER BY path`;
+
+/**
+ * The units a member may keep rules for without knowledge.manage: the ones
+ * they manage and every unit under them.
+ */
+export function managedUnits(all: (UnitOption & { manager: string | null })[], memberId: string): UnitOption[] {
+  const roots = all.filter((u) => u.manager === memberId).map((u) => u.path);
+  return all.filter((u) => roots.some((r) => u.path === r || u.path.startsWith(`${r} / `))).map(({ id, path }) => ({ id, path }));
+}
+
+/** Kinds a unit may have of its own: orders, rules and other notes (not products or data sources). */
+export const UNIT_KINDS = ["order", "hr_rule", "other"] as const;

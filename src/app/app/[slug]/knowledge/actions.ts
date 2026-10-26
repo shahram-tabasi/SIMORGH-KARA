@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { withTenant } from "@/lib/db";
-import { ensurePermission, requireTenant } from "@/lib/session";
+import { requireTenant } from "@/lib/session";
 import { enqueueSync } from "@/lib/sync";
-import { isKind, looksSecret, parseFeatures } from "@/lib/knowledge";
+import { isKind, looksSecret, managedUnits, parseFeatures, UNIT_KINDS, UNIT_PATHS_SQL, type UnitOption } from "@/lib/knowledge";
 import { extractText } from "@/lib/extract";
 
 const MAX_FILE = 20 * 1024 * 1024;
@@ -12,6 +12,28 @@ const MAX_FILE = 20 * 1024 * 1024;
 const MAX_BODY = 200_000;
 
 export interface KnowledgeState { error?: string; ok?: boolean }
+
+type Tenant = Awaited<ReturnType<typeof requireTenant>>;
+
+/**
+ * Who may change what: knowledge.manage — anything; the manager of a unit —
+ * orders, rules and notes of that unit and the units under it. Returns the
+ * units the person may choose (null: any, the whole company included).
+ */
+async function access(ctx: Tenant): Promise<UnitOption[] | null> {
+  if (ctx.member.permissions.has("knowledge.manage")) return null;
+  const all = await withTenant(ctx.company.schema, (tx) => tx.unsafe<(UnitOption & { manager: string | null })[]>(UNIT_PATHS_SQL));
+  const mine = managedUnits(all, ctx.member.memberId);
+  if (!mine.length) throw new Error("شما مجوز ویرایش دانش شرکت را ندارید.");
+  return mine;
+}
+
+/** An existing item one may change: any for knowledge.manage, else one of one's own units. */
+async function mayChange(ctx: Tenant, allowed: UnitOption[] | null, id: string) {
+  if (!allowed) return;
+  const [row] = await withTenant(ctx.company.schema, (tx) => tx<{ unit_id: string | null }[]>`SELECT unit_id::text FROM knowledge WHERE id = ${id}`);
+  if (!row?.unit_id || !allowed.some((u) => u.id === row.unit_id)) throw new Error("این مورد متعلق به واحد شما نیست.");
+}
 
 const text = (fd: FormData, key: string, max: number) => {
   const v = String(fd.get(key) ?? "").trim();
@@ -25,11 +47,24 @@ const text = (fd: FormData, key: string, max: number) => {
 export async function saveKnowledgeAction(_prev: KnowledgeState, fd: FormData): Promise<KnowledgeState> {
   const slug = String(fd.get("slug"));
   const ctx = await requireTenant(slug);
-  ensurePermission(ctx, "knowledge.manage");
+  let allowed: UnitOption[] | null;
+  try {
+    allowed = await access(ctx);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
 
   const id = text(fd, "id", 40);
   const kind = String(fd.get("kind") ?? "");
   if (!isKind(kind)) return { error: "نوع را انتخاب کنید." };
+  // Whom it is for: the whole company (empty) or one unit and the units under it.
+  const unitId = (UNIT_KINDS as readonly string[]).includes(kind) ? text(fd, "unitId", 40) : null;
+  if (allowed) {
+    if (!unitId || !allowed.some((u) => u.id === unitId)) return { error: "واحد را انتخاب کنید: فقط برای واحدهای زیر مدیریت خود می‌توانید ثبت کنید." };
+    if (id) {
+      try { await mayChange(ctx, allowed, id); } catch (e) { return { error: (e as Error).message }; }
+    }
+  }
   const name = text(fd, "name", 200);
   if (!name) return { error: "نام را وارد کنید." };
   const features = parseFeatures(String(fd.get("features") ?? ""));
@@ -65,6 +100,7 @@ export async function saveKnowledgeAction(_prev: KnowledgeState, fd: FormData): 
     impact: kind === "order" || kind === "hr_rule" ? text(fd, "impact", 20_000) : null,
     effective_date: kind === "order" || kind === "hr_rule" ? date : null,
     sequence: Number.isFinite(sequence) ? Math.round(sequence) : 10,
+    unit_id: unitId,
   };
 
   await withTenant(ctx.company.schema, async (tx) => {
@@ -74,7 +110,7 @@ export async function saveKnowledgeAction(_prev: KnowledgeState, fd: FormData): 
           kind = ${values.kind}, name = ${values.name}, code = ${values.code}, summary = ${values.summary},
           body = ${values.body}, attributes = ${tx.json(features.value)}, address = ${values.address},
           impact = ${values.impact}, effective_date = ${values.effective_date}, sequence = ${values.sequence},
-          updated_by = ${ctx.member.memberId}, updated_at = now()
+          unit_id = ${values.unit_id}, updated_by = ${ctx.member.memberId}, updated_at = now()
         WHERE id = ${id} RETURNING id`;
       if (row && file) {
         await tx`UPDATE knowledge SET file_name = ${file.name}, file_mime = ${file.mime}, file_size = ${file.data.length}, file_data = ${file.data} WHERE id = ${id}`;
@@ -82,10 +118,10 @@ export async function saveKnowledgeAction(_prev: KnowledgeState, fd: FormData): 
       if (!row) throw new Error("این مورد پیدا نشد.");
     } else {
       await tx`
-        INSERT INTO knowledge (kind, name, code, summary, body, attributes, address, impact, effective_date, sequence, updated_by,
+        INSERT INTO knowledge (kind, name, code, summary, body, attributes, address, impact, effective_date, sequence, unit_id, updated_by,
                                file_name, file_mime, file_size, file_data)
         VALUES (${values.kind}, ${values.name}, ${values.code}, ${values.summary}, ${values.body}, ${tx.json(features.value)},
-                ${values.address}, ${values.impact}, ${values.effective_date}, ${values.sequence}, ${ctx.member.memberId},
+                ${values.address}, ${values.impact}, ${values.effective_date}, ${values.sequence}, ${values.unit_id}, ${ctx.member.memberId},
                 ${file?.name ?? null}, ${file?.mime ?? null}, ${file?.data.length ?? null}, ${file?.data ?? null})`;
     }
     await enqueueSync(tx, "company", ctx.company.id, ctx.company.id, `knowledge ${id ? "changed" : "added"}: ${name}`);
@@ -98,8 +134,8 @@ export async function saveKnowledgeAction(_prev: KnowledgeState, fd: FormData): 
 export async function setKnowledgeActiveAction(fd: FormData) {
   const slug = String(fd.get("slug"));
   const ctx = await requireTenant(slug);
-  ensurePermission(ctx, "knowledge.manage");
   const id = String(fd.get("id"));
+  await mayChange(ctx, await access(ctx), id);
   const active = fd.get("active") === "true";
   await withTenant(ctx.company.schema, async (tx) => {
     await tx`UPDATE knowledge SET active = ${active}, updated_by = ${ctx.member.memberId}, updated_at = now() WHERE id = ${id}`;
@@ -112,8 +148,8 @@ export async function setKnowledgeActiveAction(fd: FormData) {
 export async function deleteKnowledgeAction(fd: FormData) {
   const slug = String(fd.get("slug"));
   const ctx = await requireTenant(slug);
-  ensurePermission(ctx, "knowledge.manage");
   const id = String(fd.get("id"));
+  await mayChange(ctx, await access(ctx), id);
   await withTenant(ctx.company.schema, async (tx) => {
     await tx`DELETE FROM knowledge WHERE id = ${id}`;
     await enqueueSync(tx, "company", ctx.company.id, ctx.company.id, "knowledge deleted");

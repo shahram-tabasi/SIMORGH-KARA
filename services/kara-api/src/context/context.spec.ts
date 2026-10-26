@@ -22,8 +22,8 @@ test('each app sees only its kinds; Markdown for the model', () => {
   const c: CompanyContext = {
     company: { slug: 'ekc', name: 'Electro Kavir' }, app: 'designSuite', services: {}, units: ['Engineering'], source: 'kara', generatedAt: '2026-10-25T10:00:00Z',
     knowledge: [
-      { kind: 'product', name: 'SIMOPRIME', code: null, summary: 'MV switchgear', body: null, attributes: { maxVoltageKv: 24 }, address: null, impact: null, effectiveDate: null },
-      { kind: 'hr_rule', name: 'Leave', code: null, summary: 'secret to DS', body: null, attributes: {}, address: null, impact: null, effectiveDate: null },
+      { kind: 'product', name: 'SIMOPRIME', code: null, summary: 'MV switchgear', body: null, attributes: { maxVoltageKv: 24 }, address: null, impact: null, effectiveDate: null, unit: null },
+      { kind: 'hr_rule', name: 'Leave', code: null, summary: 'secret to DS', body: null, attributes: {}, address: null, impact: null, effectiveDate: null, unit: null },
     ],
   };
   const md = renderMarkdown(c);

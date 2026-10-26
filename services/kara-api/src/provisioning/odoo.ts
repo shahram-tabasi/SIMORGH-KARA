@@ -186,6 +186,24 @@ export class OdooSync {
       .filter(Boolean).join(', ');
   }
 
+  /**
+   * A company deleted in Kara: what Kara made in its Odoo company — the
+   * departments, employees and knowledge carrying a kara: reference — is
+   * archived. Odoo keeps the company itself and its accounting (records a
+   * business must keep); deleting those is a decision for Odoo, not Kara.
+   */
+  async archiveCompany(odooCompanyId: number): Promise<string> {
+    const company = String(odooCompanyId);
+    const counts: string[] = [];
+    for (const [collection, prefix] of [['employees', 'member:'], ['departments', 'unit:'], ['knowledge', 'knowledge:']] as const) {
+      const items = await this.all<{ id: number; active: boolean }>(collection, { companyId: company, externalIdPrefix: prefix });
+      const live = items.filter((x) => x.active);
+      for (const x of live) await this.connector.call('POST', `/v1/${collection}/${x.id}/archive`);
+      counts.push(`${live.length} ${collection}`);
+    }
+    return `Odoo company #${odooCompanyId}: archived ${counts.join(', ')} (the company and its accounting stay in Odoo)`;
+  }
+
   // ── A person: their employee ──────────────────────────────────────────────
 
   async member(c: OdooCompany, m: OdooMember | null, accountId: string): Promise<Outcome> {

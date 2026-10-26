@@ -1,23 +1,6 @@
-import { requireTenant } from "@/lib/session";
-import { PageHeader } from "@/components/Shell";
-import { isAIConfigured } from "@/lib/ai";
-import { Assistant } from "./Assistant";
+import { redirect } from "next/navigation";
 
-export default async function AssistantPage({
-  params,
-}: {
-  params: { slug: string };
-}) {
-  await requireTenant(params.slug);
-  const enabled = isAIConfigured();
-
-  return (
-    <>
-      <PageHeader
-        title="دستیار هوشمند مرخصی"
-        description="پرسش‌وپاسخ دربارهٔ مرخصی بر اساس مانده شما و قوانین شرکت"
-      />
-      <Assistant slug={params.slug} enabled={enabled} />
-    </>
-  );
+/** The leave assistant became the AI assistant (the HR chatbot, one click away). */
+export default function LeaveAssistantPage({ params }: { params: { slug: string } }) {
+  redirect(`/app/${params.slug}/assistant`);
 }

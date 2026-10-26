@@ -16,6 +16,8 @@ import { DbService } from './infra/db.service';
 import { logger } from './infra/json-logger';
 import { MetricsController } from './infra/metrics';
 import { TenantsService } from './tenants/tenants.service';
+import { AdminController } from './provisioning/admin.controller';
+import { CompanyDeleteService } from './provisioning/company-delete.service';
 import { ProvisionerService } from './provisioning/provisioner.service';
 import { ContextController } from './context/context.controller';
 import { ContextService } from './context/context.service';
@@ -37,8 +39,8 @@ function requestLog(req: Request & { actor?: { email: string; via: string } }, r
 }
 
 @Module({
-  controllers: [ErpController, IdentityController, CommsController, ContextController, HealthController, MetricsController],
-  providers: [DbService, TenantsService, ActorGuard, ConnectorClient, ReadModelService, ErpConsumer, IdentityService, LiveService, CallsService, ProvisionerService, ContextService],
+  controllers: [AdminController, ErpController, IdentityController, CommsController, ContextController, HealthController, MetricsController],
+  providers: [DbService, TenantsService, ActorGuard, ConnectorClient, ReadModelService, ErpConsumer, IdentityService, LiveService, CallsService, ProvisionerService, ContextService, CompanyDeleteService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

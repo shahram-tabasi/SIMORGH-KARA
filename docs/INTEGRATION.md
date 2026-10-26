@@ -323,6 +323,35 @@ on the user's behalf.
   `http://tpms-service-ekc.simorgh.svc.cluster.local:8080`. Outside the namespace, the gateway's network policy
   must allow it.
 
+## 11. One click into the HR assistant, rules of one unit, deleting a company
+
+**«دستیار هوش مصنوعی» (the HR assistant from Kara).**
+- Kara's page `/app/<slug>/assistant` explains what the assistant does and opens it. Its button goes to `/app/<slug>/assistant/open`.
+- That route signs a token with `HR_HANDOFF_SECRET`, a secret Kara and the HR chatbot share (`scripts/setup.sh hr-handoff` writes it into `kara/kara-app` key `hrHandoffSecret` and `hr-chatbot/hr-handoff`; it is never printed).
+  - HS256, `iss kara`, `aud simorgh-hr`, two minutes, one-time `jti`.
+  - It carries the person: account id, email, name, position (`members.title`), company, and units as paths.
+- The browser is sent to `https://hr.simorghai.com/auth/kara#token=…`. In the URL fragment the token never reaches a server log.
+- The HR chatbot checks the token, signs the person in, and answers for their company, knowing their position and units. No Keycloak step: Kara has already authenticated and authorized them.
+- The company must have the HR chatbot switched on.
+
+**Rules and orders of one unit.**
+- A knowledge item of kind order, HR rule or other can be for one unit (`knowledge.unit_id`) and the units under it. Empty means the whole company.
+- People with `knowledge.manage` set it on any item. The manager of a unit (`groups.manager_id`) may add, change and archive the items of their unit and the units below it, without `knowledge.manage`.
+- `/v1/context` gives each item's `unit` as a path; for Odoo's copies it is found by their `kara:knowledge:<id>` reference.
+- The HR chatbot keeps the path on the item's passages and searches, for a person, only the company-wide passages and those of their units and the units above them.
+- An answer that used a unit's rule is not put into the company's shared answer cache.
+
+**Deleting a company.**
+- Admin → Companies → «حذف شرکت و همهٔ داده‌هایش» (delete the company and all its data). It is confirmed by typing the slug.
+- This calls kara-api `DELETE /v1/admin/companies/:slug` (`provisioning/company-delete.service.ts`):
+  - **Keycloak:** in realm kara and each app realm, removes the organization, the group tree, the company role and the accounts Kara made. Older accounts are only signed out.
+  - **Odoo:** archives what Kara made in its Odoo company. The company and its accounting stay in Odoo.
+  - **Kara:** drops the tenant schema, the company's accounts, its jobs and the company row.
+- Platform and holding administrators are never deleted; they lose only the link to the company.
+- Each step's outcome is shown afterwards.
+
+**Platform owners in a company.** A platform administrator who is also a member of a company opens it from Admin → Companies («ورود به شرکت», enter the company). Back in the company, the user menu leads back to the platform panel. `cli.js seed-org ekc` makes the platform's owners such members of EKC (unit AI, role «مدیر سامانه», system administrator).
+
 ## Sources
 
 - Keycloak organizations and their mappers: [Server Administration Guide](https://www.keycloak.org/docs/latest/server_admin/index.html),

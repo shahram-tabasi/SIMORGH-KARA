@@ -74,25 +74,38 @@ export class ContextService {
         UNION ALL SELECT g.id, t.path || ' / ' || g.name FROM "${c.schema}".groups g JOIN t ON g.parent_id = t.id
       ) SELECT path FROM t ORDER BY path`)).map((r) => r.path);
 
+    // Each Kara item's unit (a rule or order of one unit), as a path; Odoo's
+    // copies are matched by their kara:knowledge:<id> reference.
+    const hasTable = (await this.db.query<{ t: string | null }>(`SELECT to_regclass('"${c.schema}".knowledge')::text AS t`))[0]?.t;
+    const hasUnit = hasTable && (await this.db.query(`SELECT 1 FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'knowledge' AND column_name = 'unit_id'`, [c.schema])).length > 0;
+    const unitOf = new Map<string, string>();
+    if (hasUnit) {
+      for (const r of await this.db.query<{ id: string; path: string }>(`
+        WITH RECURSIVE t AS (
+          SELECT id, name::text AS path FROM "${c.schema}".groups WHERE parent_id IS NULL
+          UNION ALL SELECT g.id, t.path || ' / ' || g.name FROM "${c.schema}".groups g JOIN t ON g.parent_id = t.id
+        ) SELECT k.id::text, t.path FROM "${c.schema}".knowledge k JOIN t ON t.id = k.unit_id`)) unitOf.set(r.id, r.path);
+    }
+
     const kinds = kindsFor(app);
     let knowledge: KnowledgeItem[] | undefined;
     let source: CompanyContext['source'] = 'kara';
     // Odoo first when the company is kept there: it also has what was entered in Odoo itself.
     if (c.apps.erp && c.odoo && this.connector.configured) {
       try {
-        const page = await this.connector.call<{ items: (KnowledgeItem & { active: boolean })[] }>(
+        const page = await this.connector.call<{ items: (KnowledgeItem & { active: boolean; ref?: string | null })[] }>(
           'GET', `/v1/knowledge?companyId=${c.odoo}&limit=500`);
-        knowledge = page.items.filter((k) => k.active !== false).map(pick);
+        knowledge = page.items.filter((k) => k.active !== false)
+          .map((k) => pick({ ...k, unit: unitOf.get((k.ref ?? '').replace(/^kara:knowledge:/, '')) ?? null }));
         source = 'odoo';
       } catch (e) {
         this.log.warn(`context ${slug}: Odoo unavailable, Kara's copy instead: ${(e as Error).message}`);
       }
     }
     if (!knowledge) {
-      const has = (await this.db.query<{ t: string | null }>(`SELECT to_regclass('"${c.schema}".knowledge')::text AS t`))[0]?.t;
-      knowledge = has ? (await this.db.query<KnowledgeItem>(`
-        SELECT kind, name, code, summary, body, attributes, address, impact, to_char(effective_date, 'YYYY-MM-DD') AS "effectiveDate"
-        FROM "${c.schema}".knowledge WHERE active ORDER BY sequence, name`)).map(pick) : [];
+      knowledge = hasTable ? (await this.db.query<KnowledgeItem & { id: string }>(`
+        SELECT id::text, kind, name, code, summary, body, attributes, address, impact, to_char(effective_date, 'YYYY-MM-DD') AS "effectiveDate"
+        FROM "${c.schema}".knowledge WHERE active ORDER BY sequence, name`)).map((k) => pick({ ...k, unit: unitOf.get(k.id) ?? null })) : [];
     }
 
     const value: CompanyContext = {
@@ -112,5 +125,6 @@ function pick(k: KnowledgeItem): KnowledgeItem {
   return {
     kind: k.kind, name: k.name, code: k.code ?? null, summary: k.summary ?? null, body: k.body ?? null,
     attributes: k.attributes ?? {}, address: k.address ?? null, impact: k.impact ?? null, effectiveDate: k.effectiveDate ?? null,
+    unit: k.unit ?? null,
   };
 }

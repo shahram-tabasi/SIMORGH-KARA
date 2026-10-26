@@ -8,6 +8,9 @@
 #   deploy/helm/simorgh-kara/scripts/setup.sh mail       # realm kara's SMTP again (from realm simorgh)
 #   deploy/helm/simorgh-kara/scripts/setup.sh theme      # realm kara uses Kara's login and email theme
 #   deploy/helm/simorgh-kara/scripts/setup.sh llm-key    # the office LLM key (llm-api-key.sh create kara) → kara-app
+#   deploy/helm/simorgh-kara/scripts/setup.sh hr-handoff # a new secret Kara and the HR chatbot share for the
+#                                                        # one-click sign-in (kara-app hrHandoffSecret,
+#                                                        # hr-chatbot/hr-handoff secret); never printed
 #   helm upgrade --install kara deploy/helm/simorgh-kara -n kara
 #
 # keycloak runs deploy/keycloak/setup-realm.sh realm (read its header): it
@@ -68,11 +71,31 @@ print(json.dumps(s))' | kubectl apply -f - >/dev/null && echo "stored llmApiKey 
   kubectl -n "$NS" rollout restart deploy/kara-web >/dev/null && echo "kara-web restarting"
 }
 
+# The secret behind «دستیار هوش مصنوعی»: Kara signs a two-minute token with
+# it, the HR chatbot checks it. A new one each run (the old one stops working).
+hr_handoff() {
+  local hr_ns="${HR_NAMESPACE:-hr-chatbot}" secret
+  secret="$(rand 64)"
+  kubectl -n "$NS" get secret kara-app -o json | KEY="$secret" python3 -c '
+import base64, json, os, sys
+s = json.load(sys.stdin)
+s["data"]["hrHandoffSecret"] = base64.b64encode(os.environ["KEY"].encode()).decode()
+for k in ("resourceVersion", "uid", "creationTimestamp", "managedFields"): s["metadata"].pop(k, None)
+print(json.dumps(s))' | kubectl apply -f - >/dev/null && echo "stored hrHandoffSecret in $NS/kara-app"
+  kubectl get ns "$hr_ns" >/dev/null 2>&1 || { echo "no namespace $hr_ns"; exit 1; }
+  printf '%s' "$secret" | kubectl -n "$hr_ns" create secret generic hr-handoff --from-file=secret=/dev/stdin \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null && echo "stored secret in $hr_ns/hr-handoff"
+  unset secret
+  kubectl -n "$NS" rollout restart deploy/kara-web >/dev/null && echo "kara-web restarting"
+  kubectl -n "$hr_ns" rollout restart deploy/hr-api >/dev/null 2>&1 && echo "hr-api restarting" || true
+}
+
 case "${1:-}" in
   secrets) secrets ;;
   keycloak) namespace; KARA_NAMESPACE="$NS" "$HERE/../../../keycloak/setup-realm.sh" realm ;;
   mail) KARA_NAMESPACE="$NS" "$HERE/../../../keycloak/setup-realm.sh" mail ;;
   theme) KARA_NAMESPACE="$NS" "$HERE/../../../keycloak/setup-realm.sh" theme ;;
   llm-key) llm_key ;;
-  *) echo "usage: $0 secrets | keycloak | mail | theme | llm-key"; exit 2 ;;
+  hr-handoff) hr_handoff ;;
+  *) echo "usage: $0 secrets | keycloak | mail | theme | llm-key | hr-handoff"; exit 2 ;;
 esac

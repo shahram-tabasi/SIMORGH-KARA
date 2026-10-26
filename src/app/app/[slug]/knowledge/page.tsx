@@ -3,7 +3,7 @@ import { sql, withTenant } from "@/lib/db";
 import { PageHeader } from "@/components/Shell";
 import { SyncStatus } from "@/components/SyncStatus";
 import { syncViews } from "@/lib/sync";
-import { KINDS, featuresText, type KnowledgeKind } from "@/lib/knowledge";
+import { KINDS, featuresText, managedUnits, UNIT_PATHS_SQL, type KnowledgeKind, type UnitOption } from "@/lib/knowledge";
 import type { CompanyApps } from "@/lib/apps";
 import { KnowledgeForm } from "./KnowledgeForm";
 import { deleteKnowledgeAction, setKnowledgeActiveAction } from "./actions";
@@ -24,6 +24,7 @@ interface Row {
   updated_at: Date;
   file_name: string | null;
   file_size: number | null;
+  unit_id: string | null;
 }
 
 /**
@@ -32,13 +33,20 @@ interface Row {
  */
 export default async function KnowledgePage({ params }: { params: { slug: string } }) {
   const ctx = await requireTenant(params.slug);
-  const canView = ctx.member.permissions.has("knowledge.view") || ctx.member.permissions.has("knowledge.manage");
-  if (!canView) throw new Error("شما مجوز مشاهدهٔ این بخش را ندارید.");
   const canManage = ctx.member.permissions.has("knowledge.manage");
+  const allUnits = await withTenant(ctx.company.schema, (tx) => tx.unsafe<(UnitOption & { manager: string | null })[]>(UNIT_PATHS_SQL));
+  const units: UnitOption[] = allUnits.map(({ id, path }) => ({ id, path }));
+  const pathOf = new Map(units.map((u) => [u.id, u.path]));
+  // A unit's manager keeps the orders and rules of their units here.
+  const mine = canManage ? [] : managedUnits(allUnits, ctx.member.memberId);
+  const canView = ctx.member.permissions.has("knowledge.view") || canManage || mine.length > 0;
+  if (!canView) throw new Error("شما مجوز مشاهدهٔ این بخش را ندارید.");
+  const canAdd = canManage || mine.length > 0;
+  const canEdit = (r: Row) => canManage || (!!r.unit_id && mine.some((u) => u.id === r.unit_id));
 
   const rows = await withTenant(ctx.company.schema, (tx) => tx<Row[]>`
     SELECT id, kind, name, code, summary, body, attributes, address, impact,
-           to_char(effective_date, 'YYYY-MM-DD') AS effective_date, sequence, active, updated_at, file_name, file_size
+           to_char(effective_date, 'YYYY-MM-DD') AS effective_date, sequence, active, updated_at, file_name, file_size, unit_id::text
     FROM knowledge ORDER BY active DESC, sequence, name`);
   const [company] = await sql<{ apps: CompanyApps }[]>`SELECT apps FROM platform.companies WHERE id = ${ctx.company.id}`;
   const sync = company?.apps?.erp ? (await syncViews("company", [ctx.company.id]))[ctx.company.id] : undefined;
@@ -47,17 +55,19 @@ export default async function KnowledgePage({ params }: { params: { slug: string
     <>
       <PageHeader
         title="دانش شرکت"
-        description="محصولات و ویژگی‌هایشان، منابع داده، بخشنامه‌ها و آیین‌نامه‌ها (متن یا سند PDF/Word) — Design Suite، دستیار منابع انسانی و دستیار مرخصی کارا با همین‌ها به افراد این شرکت پاسخ می‌دهند"
+        description="محصولات و ویژگی‌هایشان، منابع داده، بخشنامه‌ها و آیین‌نامه‌ها (متن یا سند PDF/Word) — Design Suite، و دستیار هوش مصنوعی (منابع انسانی) با همین‌ها به افراد این شرکت پاسخ می‌دهند"
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
         {company?.apps?.erp ? <>نسخهٔ Odoo: <SyncStatus view={sync} /></> : <>فقط در کارا نگه داشته می‌شود (Odoo برای این شرکت روشن نیست).</>}
       </div>
 
-      {canManage && (
+      {canAdd && (
         <details className="card mb-6">
-          <summary className="cursor-pointer text-sm font-semibold text-slate-700">＋ افزودن</summary>
-          <div className="mt-4"><KnowledgeForm slug={params.slug} /></div>
+          <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+            {canManage ? "＋ افزودن" : "＋ افزودن قانون یا دستور ویژهٔ واحد شما"}
+          </summary>
+          <div className="mt-4"><KnowledgeForm slug={params.slug} units={canManage ? units : mine} unitOnly={!canManage} /></div>
         </details>
       )}
 
@@ -84,6 +94,7 @@ export default async function KnowledgePage({ params }: { params: { slug: string
                             {r.code && <span className="ml-2 font-mono text-xs text-slate-500" dir="ltr">{r.code}</span>}
                             {r.name}
                             {!r.active && <span className="badge mr-2 bg-slate-100 text-slate-600">بایگانی</span>}
+                            {r.unit_id && <span className="badge mr-2 bg-brand-50 text-brand-700">فقط واحد: {pathOf.get(r.unit_id) ?? "—"}</span>}
                           </div>
                           {r.summary && <div className="text-sm text-slate-600">{r.summary}</div>}
                           {r.file_name && (
@@ -103,7 +114,7 @@ export default async function KnowledgePage({ params }: { params: { slug: string
                             </div>
                           )}
                         </div>
-                        {canManage && (
+                        {canEdit(r) && (
                           <div className="flex gap-2">
                             <form action={setKnowledgeActiveAction}>
                               <input type="hidden" name="slug" value={params.slug} />
@@ -119,16 +130,19 @@ export default async function KnowledgePage({ params }: { params: { slug: string
                           </div>
                         )}
                       </div>
-                      {canManage && (
+                      {canEdit(r) && (
                         <details className="mt-2">
                           <summary className="cursor-pointer text-xs text-slate-500">ویرایش</summary>
                           <div className="mt-3">
                             <KnowledgeForm
                               slug={params.slug}
+                              units={canManage ? units : mine}
+                              unitOnly={!canManage}
                               initial={{
                                 id: r.id, kind: r.kind, name: r.name, code: r.code ?? "", summary: r.summary ?? "", body: r.body ?? "",
                                 features: featuresText(r.attributes), address: r.address ?? "", impact: r.impact ?? "",
                                 effectiveDate: r.effective_date ?? "", sequence: r.sequence, fileName: r.file_name,
+                                unitId: r.unit_id ?? "",
                               }}
                             />
                           </div>

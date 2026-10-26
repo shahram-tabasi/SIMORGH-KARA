@@ -13,6 +13,11 @@ export interface KnowledgeItem {
   address: string | null;
   impact: string | null;
   effectiveDate: string | null;
+  /**
+   * Whom it is for: null for the whole company, else a unit's path
+   * ("A / B / C") — that unit and the units under it.
+   */
+  unit: string | null;
 }
 
 /** The company's own technical services (Kara Admin → companies), for Design Suite only. */
@@ -88,6 +93,7 @@ export function renderMarkdown(c: CompanyContext): string {
     out.push('', `## ${TITLES[kind]}`);
     for (const k of items) {
       out.push('', `### ${k.code ? `${k.code} — ` : ''}${k.name}`);
+      if (k.unit) out.push('', `For unit ${k.unit} (and the units under it) only.`);
       if (k.summary) out.push('', k.summary);
       if (k.effectiveDate) out.push('', `In force from ${k.effectiveDate}.`);
       if (k.address) out.push('', `Address: \`${k.address}\``);

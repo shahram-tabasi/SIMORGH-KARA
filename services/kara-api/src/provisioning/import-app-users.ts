@@ -21,7 +21,8 @@ const SCHEMA_RE = /^tenant_[a-z0-9_]{1,50}$/;
 const BCRYPT = './ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
 /** A well-formed bcrypt hash nothing matches: these people sign in through Keycloak. */
-function unusableHash(): string {
+/** A bcrypt-shaped hash no password matches: the person signs in with Keycloak. */
+export function unusableHash(): string {
   const b = randomBytes(53);
   return '$2a$10$' + [...b].map((x) => BCRYPT[x % 64]).join('');
 }

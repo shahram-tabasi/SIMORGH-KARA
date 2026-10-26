@@ -1,4 +1,5 @@
 import { requireTenant } from "@/lib/session";
+import { sql } from "@/lib/db";
 import { withTenant } from "@/lib/db";
 import { Shell, type NavGroup, type NavItem } from "@/components/Shell";
 import { ReminderWatcher } from "@/components/ReminderWatcher";
@@ -21,6 +22,10 @@ export default async function TenantLayout({
     return m?.avatar_url ?? null;
   });
   const can = (k: string) => ctx.member.permissions.has(k);
+  // A unit's manager keeps their units' own rules and orders (knowledge page).
+  const managesUnit = await withTenant(ctx.company.schema, async (tx) =>
+    (await tx`SELECT 1 FROM groups WHERE manager_id = ${ctx.member.memberId} LIMIT 1`).length > 0);
+  const [acc] = await sql<{ is_platform_admin: boolean }[]>`SELECT is_platform_admin FROM platform.user_accounts WHERE id = ${ctx.session.sub}`;
   // Calls and meetings only when kara-api has Jitsi configured.
   const comms = karaApiEnabled()
     ? await karaApi<{ calls: boolean; meetings: boolean }>(ctx.session.sub, "GET", `/v1/tenants/${encodeURIComponent(params.slug)}/comms`).catch(() => null)
@@ -29,7 +34,10 @@ export default async function TenantLayout({
   const push = (cond: boolean, item: NavItem) => (cond ? [item] : []);
 
   const groups: NavGroup[] = [
-    { items: [{ href: base, label: "داشبورد", icon: "▣" }] },
+    { items: [
+      { href: base, label: "داشبورد", icon: "▣" },
+      { href: `${base}/assistant`, label: "دستیار هوش مصنوعی", icon: "🤖" },
+    ] },
     {
       title: "سازمان",
       items: [
@@ -80,7 +88,6 @@ export default async function TenantLayout({
       title: "مرخصی",
       items: [
         { href: `${base}/leave`, label: "مرخصی و مأموریت", icon: "🏖️" },
-        { href: `${base}/leave/assistant`, label: "دستیار مرخصی", icon: "🤖" },
         ...push(
           can("leave.approve") || can("leave.approve.hr") || can("leave.approve.l3"),
           { href: `${base}/leave/manage`, label: "کارتابل مرخصی", icon: "✅" }
@@ -99,7 +106,7 @@ export default async function TenantLayout({
       title: "داده‌های سازمان (Odoo)",
       items: [
         ...push(karaApiEnabled() && can("erp.view"), { href: `${base}/erp`, label: "طرف‌حساب‌ها، کالاها، کارکنان", icon: "🗃️" }),
-        ...push(can("knowledge.view") || can("knowledge.manage"), { href: `${base}/knowledge`, label: "دانش شرکت", icon: "📚" }),
+        ...push(can("knowledge.view") || can("knowledge.manage") || managesUnit, { href: `${base}/knowledge`, label: "دانش شرکت", icon: "📚" }),
       ],
     },
     {
@@ -123,6 +130,7 @@ export default async function TenantLayout({
       slug={params.slug}
       avatarUrl={avatarUrl}
       profileHref={`${base}/profile`}
+      platformAdmin={!!acc?.is_platform_admin}
     >
       <CallProvider slug={params.slug} enabled={callsOn}>
         {children}

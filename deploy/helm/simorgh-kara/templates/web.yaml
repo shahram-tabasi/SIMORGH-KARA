@@ -72,6 +72,13 @@ spec:
             - name: LLM_API_KEY
               valueFrom:
                 secretKeyRef: { name: {{ .Values.kara.existingSecret }}, key: llmApiKey, optional: true }
+            # One click into the HR assistant (src/lib/hr-handoff.ts): the secret it
+            # shares with the HR chatbot, from setup.sh hr-handoff.
+            - name: HR_APP_URL
+              value: {{ .Values.web.hrAppUrl | default "https://hr.simorghai.com" | quote }}
+            - name: HR_HANDOFF_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.kara.existingSecret }}, key: hrHandoffSecret, optional: true }
             - name: SESSION_SECRET
               valueFrom:
                 secretKeyRef: { name: {{ .Values.kara.existingSecret }}, key: sessionSecret }

@@ -1,7 +1,8 @@
-import { AppFrame, LogoutButton } from "./AppFrame";
+import { AppFrame, LogoutButton, PlatformPanelButton } from "./AppFrame";
 import { type NavGroup, type NavItem } from "./SideNav";
 import { NotificationBell } from "./NotificationBell";
 import { logoutAction } from "@/app/logout/actions";
+import { openPlatformPanelAction } from "@/app/switch/actions";
 
 export type { NavItem, NavGroup };
 
@@ -13,6 +14,7 @@ export function Shell({
   slug,
   avatarUrl,
   profileHref,
+  platformAdmin,
   children,
 }: {
   brand: string;
@@ -22,6 +24,8 @@ export function Shell({
   slug?: string;
   avatarUrl?: string | null;
   profileHref?: string;
+  /** A platform administrator in a company: the user menu leads back to the platform panel. */
+  platformAdmin?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -34,9 +38,16 @@ export function Shell({
       profileHref={profileHref}
       bell={slug ? <NotificationBell slug={slug} /> : null}
       logout={
-        <form action={logoutAction}>
-          <LogoutButton />
-        </form>
+        <>
+          {platformAdmin && (
+            <form action={openPlatformPanelAction}>
+              <PlatformPanelButton />
+            </form>
+          )}
+          <form action={logoutAction}>
+            <LogoutButton />
+          </form>
+        </>
       }
     >
       {children}

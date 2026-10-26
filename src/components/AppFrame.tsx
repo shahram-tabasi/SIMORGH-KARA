@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, LogOut, Menu, PanelRightClose, PanelRightOpen, Search, UserCircle, X } from "lucide-react";
+import { ChevronDown, LayoutGrid, LogOut, Menu, PanelRightClose, PanelRightOpen, Search, UserCircle, X } from "lucide-react";
 import { SideNav, type NavGroup } from "./SideNav";
 import { CommandPalette } from "./CommandPalette";
 import { ThemeToggle } from "./ThemeToggle";
@@ -206,6 +206,15 @@ export function LogoutButton() {
   return (
     <button type="submit" role="menuitem" className="menu-item w-full text-red-700">
       <LogOut className="h-4 w-4" /> خروج
+    </button>
+  );
+}
+
+/** Back to the platform panel (a platform administrator inside a company). */
+export function PlatformPanelButton() {
+  return (
+    <button type="submit" role="menuitem" className="menu-item w-full">
+      <LayoutGrid className="h-4 w-4" /> پنل مدیریت پلتفرم
     </button>
   );
 }

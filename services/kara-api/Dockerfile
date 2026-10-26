@@ -24,6 +24,8 @@ ENV NODE_ENV=production PORT=3001 NODE_OPTIONS="--enable-source-maps"
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# Prepared organisations for `cli.js seed-org` (EKC's chart, HR rule documents).
+COPY seed ./seed
 USER nonroot
 EXPOSE 3001
 CMD ["dist/main.js"]

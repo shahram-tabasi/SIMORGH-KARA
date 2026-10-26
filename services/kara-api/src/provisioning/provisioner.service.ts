@@ -50,7 +50,7 @@ export class ProvisionerService implements OnModuleInit, OnModuleDestroy {
       }),
     }));
 
-  private readonly odoo: OdooSync;
+  readonly odoo: OdooSync;
 
   constructor(private readonly db: DbService, connector: ConnectorClient) {
     this.odoo = new OdooSync(connector, async (companyId, odooCompanyId) => {

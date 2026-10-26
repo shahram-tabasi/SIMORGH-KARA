@@ -112,6 +112,9 @@ async function main() {
         ALTER TABLE "${schema_name}".knowledge ADD COLUMN IF NOT EXISTS file_mime text;
         ALTER TABLE "${schema_name}".knowledge ADD COLUMN IF NOT EXISTS file_size integer;
         ALTER TABLE "${schema_name}".knowledge ADD COLUMN IF NOT EXISTS file_data bytea;
+        -- A rule or order of one unit (and the units under it); empty: the whole company.
+        ALTER TABLE "${schema_name}".knowledge ADD COLUMN IF NOT EXISTS unit_id uuid
+          REFERENCES "${schema_name}".groups(id) ON DELETE SET NULL;
       `);
 
       // HR / Calendar module (stage 1)

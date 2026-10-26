@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
-import { KINDS, type KnowledgeKind } from "@/lib/knowledge";
+import { KINDS, UNIT_KINDS, type KnowledgeKind, type UnitOption } from "@/lib/knowledge";
 import { saveKnowledgeAction, type KnowledgeState } from "./actions";
 
 export interface KnowledgeValues {
@@ -19,6 +19,8 @@ export interface KnowledgeValues {
   sequence: number;
   /** An uploaded document, if any. */
   fileName?: string | null;
+  /** Empty: the whole company; else the unit (and those under it) it is for. */
+  unitId?: string;
 }
 
 const EMPTY: KnowledgeValues = {
@@ -31,8 +33,14 @@ function Submit({ editing }: { editing: boolean }) {
 }
 
 /** One piece of knowledge: new (no initial) or an edit. The fields follow the kind. */
-export function KnowledgeForm({ slug, initial, defaultKind }: { slug: string; initial?: KnowledgeValues; defaultKind?: KnowledgeKind }) {
-  const v = initial ?? { ...EMPTY, kind: defaultKind ?? EMPTY.kind };
+export function KnowledgeForm({ slug, initial, defaultKind, units = [], unitOnly = false }: {
+  slug: string; initial?: KnowledgeValues; defaultKind?: KnowledgeKind;
+  /** The units it may be for. */
+  units?: UnitOption[];
+  /** A unit manager: only their units, only the kinds a unit has. */
+  unitOnly?: boolean;
+}) {
+  const v = initial ?? { ...EMPTY, kind: defaultKind ?? (unitOnly ? "order" : EMPTY.kind) };
   const [kind, setKind] = useState<KnowledgeKind>(v.kind);
   const [state, action] = useFormState<KnowledgeState, FormData>(saveKnowledgeAction, {});
   const ref = useRef<HTMLFormElement>(null);
@@ -40,6 +48,8 @@ export function KnowledgeForm({ slug, initial, defaultKind }: { slug: string; in
     if (state.ok && !initial) ref.current?.reset();
   }, [state.ok, initial]);
   const dated = kind === "order" || kind === "hr_rule";
+  const scoped = (UNIT_KINDS as readonly string[]).includes(kind);
+  const kinds = unitOnly ? KINDS.filter((k) => (UNIT_KINDS as readonly string[]).includes(k.key)) : KINDS;
 
   return (
     <form ref={ref} action={action} className="space-y-3">
@@ -51,7 +61,7 @@ export function KnowledgeForm({ slug, initial, defaultKind }: { slug: string; in
         <div>
           <label className="label">نوع</label>
           <select name="kind" className="input" value={kind} onChange={(e) => setKind(e.target.value as KnowledgeKind)}>
-            {KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
+            {kinds.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
           </select>
         </div>
         <div>
@@ -63,6 +73,17 @@ export function KnowledgeForm({ slug, initial, defaultKind }: { slug: string; in
           <input name="code" defaultValue={v.code} className="input" dir="ltr" />
         </div>
       </div>
+      {scoped && (
+        <div>
+          <label className="label">برای چه کسانی</label>
+          <select name="unitId" defaultValue={v.unitId ?? ""} className="input" required={unitOnly}>
+            {!unitOnly && <option value="">کل شرکت</option>}
+            {unitOnly && <option value="" disabled>— واحد را انتخاب کنید —</option>}
+            {units.map((u) => <option key={u.id} value={u.id}>فقط واحد: {u.path}</option>)}
+          </select>
+          <p className="mt-1 text-xs text-slate-500">قانون یا دستور یک واحد برای همان واحد و واحدهای زیرمجموعهٔ آن است؛ دستیار هوش مصنوعی آن را فقط به افراد همان واحدها می‌گوید.</p>
+        </div>
+      )}
       <div>
         <label className="label">خلاصه</label>
         <input name="summary" defaultValue={v.summary} className="input" placeholder="در یک یا دو جمله: چیست" />

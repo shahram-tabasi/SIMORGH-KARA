@@ -73,3 +73,5 @@ hs_err_pid*
 .next/
 .nuxt/
 ```
+# local test drivers
+seedtest.local.ts
