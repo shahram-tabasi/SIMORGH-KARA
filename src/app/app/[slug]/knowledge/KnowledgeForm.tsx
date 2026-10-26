@@ -19,6 +19,8 @@ export interface KnowledgeValues {
   sequence: number;
   /** An uploaded document, if any. */
   fileName?: string | null;
+  /** A product has a picture. */
+  hasImage?: boolean;
   /** Empty: the whole company; else the unit (and those under it) it is for. */
   unitId?: string;
 }
@@ -104,6 +106,13 @@ export function KnowledgeForm({ slug, initial, defaultKind, units = [], unitOnly
             <label className="label">اثر (چه چیزی و برای چه کسانی تغییر می‌کند)</label>
             <textarea name="impact" defaultValue={v.impact} rows={2} className="input" />
           </div>
+        </div>
+      )}
+      {kind === "product" && (
+        <div>
+          <label className="label">تصویر محصول (JPEG، PNG یا WebP، حداکثر ۳ مگابایت)</label>
+          <input type="file" name="image" accept="image/jpeg,image/png,image/webp" className="input" />
+          {initial?.hasImage && <p className="mt-1 text-xs text-slate-500">تصویر فعلی نگه داشته می‌شود؛ تصویر تازه جای آن را می‌گیرد.</p>}
         </div>
       )}
       <div>

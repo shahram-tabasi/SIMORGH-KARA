@@ -24,6 +24,7 @@ interface Row {
   updated_at: Date;
   file_name: string | null;
   file_size: number | null;
+  has_image: boolean;
   unit_id: string | null;
 }
 
@@ -46,7 +47,8 @@ export default async function KnowledgePage({ params }: { params: { slug: string
 
   const rows = await withTenant(ctx.company.schema, (tx) => tx<Row[]>`
     SELECT id, kind, name, code, summary, body, attributes, address, impact,
-           to_char(effective_date, 'YYYY-MM-DD') AS effective_date, sequence, active, updated_at, file_name, file_size, unit_id::text
+           to_char(effective_date, 'YYYY-MM-DD') AS effective_date, sequence, active, updated_at, file_name, file_size, unit_id::text,
+           image_data IS NOT NULL AS has_image
     FROM knowledge ORDER BY active DESC, sequence, name`);
   const [company] = await sql<{ apps: CompanyApps }[]>`SELECT apps FROM platform.companies WHERE id = ${ctx.company.id}`;
   const sync = company?.apps?.erp ? (await syncViews("company", [ctx.company.id]))[ctx.company.id] : undefined;
@@ -89,7 +91,12 @@ export default async function KnowledgePage({ params }: { params: { slug: string
                   {items.map((r) => (
                     <li key={r.id} className={`py-3 ${r.active ? "" : "opacity-60"}`}>
                       <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="min-w-0">
+                        {r.has_image && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={`/app/${params.slug}/knowledge/image/${r.id}?v=${new Date(r.updated_at).getTime()}`} alt={r.name} loading="lazy"
+                            className="h-20 w-20 shrink-0 rounded-md border border-slate-200 bg-white object-contain p-1" />
+                        )}
+                        <div className="min-w-0 flex-1">
                           <div className="font-medium text-slate-800">
                             {r.code && <span className="ml-2 font-mono text-xs text-slate-500" dir="ltr">{r.code}</span>}
                             {r.name}
@@ -141,7 +148,7 @@ export default async function KnowledgePage({ params }: { params: { slug: string
                               initial={{
                                 id: r.id, kind: r.kind, name: r.name, code: r.code ?? "", summary: r.summary ?? "", body: r.body ?? "",
                                 features: featuresText(r.attributes), address: r.address ?? "", impact: r.impact ?? "",
-                                effectiveDate: r.effective_date ?? "", sequence: r.sequence, fileName: r.file_name,
+                                effectiveDate: r.effective_date ?? "", sequence: r.sequence, fileName: r.file_name, hasImage: r.has_image,
                                 unitId: r.unit_id ?? "",
                               }}
                             />

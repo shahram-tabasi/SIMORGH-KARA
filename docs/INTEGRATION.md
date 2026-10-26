@@ -94,6 +94,10 @@ Products also stay real Odoo products (`product.template`, per company) so sales
 knowledge record holds the engineering description and structured features the AI reads. Each record carries
 a `version` and `updatedAt`; edits are new versions, so an answer can cite which version it used.
 
+A product in Kara may also carry a picture (`knowledge.image_mime` / `image_data`, served at
+`/app/<slug>/knowledge/image/<id>` to the company's members, shown in the list). The picture stays in Kara;
+Odoo's product templates have their own (EKC's: simorgh-odoo `deploy/scripts/ekc-product-images.py`).
+
 Entered in Kara (new screen "Company knowledge", Persian / English), written to Odoo by the provisioner,
 published as `erp.knowledge.v1`, read back into kara-api's read model like partners and products today.
 

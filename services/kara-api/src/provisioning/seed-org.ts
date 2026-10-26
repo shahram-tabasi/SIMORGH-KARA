@@ -34,7 +34,7 @@ const SEED_DIR = join(__dirname, '..', '..', 'seed');
 
 export interface UnitNode { name: string; children: UnitNode[] }
 type Path = string[];
-interface Product { code: string; name: string; summary: string; features: Record<string, string | number> }
+interface Product { code: string; name: string; summary: string; body?: string; image?: string; features: Record<string, string | number> }
 interface HrRule { code: string; name: string; summary: string; body: string; effectiveDate: string | null; attributes: Record<string, string>; file: string }
 
 export interface OrgSet {
@@ -45,6 +45,8 @@ export interface OrgSet {
   owners: { email: string; name: string; unit: Path }[];
   hrRules?: string;
   products: Product[];
+  /** Product codes an earlier version had: archived. */
+  retiredProducts?: string[];
 }
 
 const SETS: Record<string, OrgSet> = { ekc: EKC };
@@ -57,6 +59,9 @@ export const norm = (s: string) => s.toLowerCase().normalize('NFKC')
   .replace(/[‌‏\s._\-()]/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه');
 
 interface Group { id: string; name: string; parent: string | null }
+
+/** Features compared regardless of key order (jsonb keeps its own). */
+const canon = (o: Record<string, unknown>) => JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
 
 export async function seedOrg(db: DbService, slug: string, o: { dryRun: boolean; prune: boolean; place: Record<string, Path> }): Promise<string[]> {
   const set = SETS[slug];
@@ -239,13 +244,34 @@ export async function seedOrg(db: DbService, slug: string, o: { dryRun: boolean;
         }
       }
       for (const [i, p] of set.products.entries()) {
-        const [have] = await q(`SELECT 1 FROM "${s}".knowledge WHERE kind = 'product' AND code = $1`, [p.code]);
-        if (have) continue;
-        say(`product  ${p.code} ${p.name}`);
-        if (!o.dryRun) {
-          await c.query(`INSERT INTO "${s}".knowledge (kind, name, code, summary, attributes, sequence) VALUES ('product', $1, $2, $3, $4, $5)`,
-            [p.name, p.code, p.summary, JSON.stringify(p.features), (i + 1) * 10]);
+        const image = p.image ? readFileSync(join(SEED_DIR, p.image)) : null;
+        const mime = p.image ? (p.image.endsWith('.png') ? 'image/png' : 'image/jpeg') : null;
+        const want = { name: p.name, summary: p.summary, body: p.body ?? null, attributes: p.features, sequence: (i + 1) * 10 };
+        const [have] = await q<{ id: string; name: string; summary: string | null; body: string | null; attributes: Record<string, unknown>; active: boolean; sequence: number; image: Buffer | null }>(
+          `SELECT id::text, name, summary, body, attributes, active, sequence, image_data AS image FROM "${s}".knowledge WHERE kind = 'product' AND code = $1`, [p.code]);
+        if (!have) {
+          say(`product  ${p.code} ${p.name}`);
+          if (!o.dryRun) {
+            await c.query(`INSERT INTO "${s}".knowledge (kind, name, code, summary, body, attributes, sequence, image_mime, image_data) VALUES ('product', $1, $2, $3, $4, $5, $6, $7, $8)`,
+              [p.name, p.code, p.summary, want.body, JSON.stringify(p.features), want.sequence, mime, image]);
+          }
+          continue;
         }
+        const same = have.name === want.name && have.summary === want.summary && (have.body ?? null) === want.body && have.active && have.sequence === want.sequence
+          && canon(have.attributes ?? {}) === canon(want.attributes) && (!image || (have.image && image.equals(have.image)));
+        if (same) continue;
+        say(`product  ${p.code} ${p.name} (updated)`);
+        if (!o.dryRun) {
+          await c.query(`UPDATE "${s}".knowledge SET name = $2, summary = $3, body = $4, attributes = $5, active = true, updated_at = now(),
+              image_mime = COALESCE($6, image_mime), image_data = COALESCE($7, image_data), sequence = $8 WHERE id = $1`,
+            [have.id, p.name, p.summary, want.body, JSON.stringify(p.features), mime, image, want.sequence]);
+        }
+      }
+      for (const code of set.retiredProducts ?? []) {
+        const [old] = await q<{ id: string; name: string }>(`SELECT id::text, name FROM "${s}".knowledge WHERE kind = 'product' AND code = $1 AND active`, [code]);
+        if (!old) continue;
+        say(`product  ${code} ${old.name} archived (replaced)`);
+        if (!o.dryRun) await c.query(`UPDATE "${s}".knowledge SET active = false, updated_at = now() WHERE id = $1`, [old.id]);
       }
     }
 

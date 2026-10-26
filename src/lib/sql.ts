@@ -195,6 +195,9 @@ ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS file_name text;
 ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS file_mime text;
 ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS file_size integer;
 ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS file_data bytea;
+-- A product's picture (shown in the knowledge list, served by knowledge/image/<id>).
+ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS image_mime text;
+ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS image_data bytea;
 -- A rule or order of one unit (and the units under it); empty: the whole company.
 ALTER TABLE knowledge ADD COLUMN IF NOT EXISTS unit_id uuid REFERENCES groups(id) ON DELETE SET NULL;
 

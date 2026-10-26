@@ -8,6 +8,8 @@ import { isKind, looksSecret, managedUnits, parseFeatures, UNIT_KINDS, UNIT_PATH
 import { extractText } from "@/lib/extract";
 
 const MAX_FILE = 20 * 1024 * 1024;
+const MAX_IMAGE = 3 * 1024 * 1024;
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 /** What Odoo's copy and the assistants take of one item's text. */
 const MAX_BODY = 200_000;
 
@@ -91,6 +93,15 @@ export async function saveKnowledgeAction(_prev: KnowledgeState, fd: FormData): 
     if (extracted.length > MAX_BODY) extracted = extracted.slice(0, MAX_BODY) + "\n\n[… ادامهٔ متن به‌خاطر حجم آورده نشد]";
   }
 
+  // A product's picture.
+  let image: { mime: string; data: Buffer } | null = null;
+  const pic = fd.get("image");
+  if (kind === "product" && pic instanceof File && pic.size > 0) {
+    if (pic.size > MAX_IMAGE) return { error: "حجم تصویر حداکثر ۳ مگابایت است." };
+    if (!IMAGE_TYPES.includes(pic.type)) return { error: "تصویر باید JPEG، PNG یا WebP باشد." };
+    image = { mime: pic.type, data: Buffer.from(await pic.arrayBuffer()) };
+  }
+
   const values = {
     kind, name,
     code: text(fd, "code", 100),
@@ -115,14 +126,16 @@ export async function saveKnowledgeAction(_prev: KnowledgeState, fd: FormData): 
       if (row && file) {
         await tx`UPDATE knowledge SET file_name = ${file.name}, file_mime = ${file.mime}, file_size = ${file.data.length}, file_data = ${file.data} WHERE id = ${id}`;
       }
+      if (row && image) await tx`UPDATE knowledge SET image_mime = ${image.mime}, image_data = ${image.data} WHERE id = ${id}`;
       if (!row) throw new Error("این مورد پیدا نشد.");
     } else {
       await tx`
         INSERT INTO knowledge (kind, name, code, summary, body, attributes, address, impact, effective_date, sequence, unit_id, updated_by,
-                               file_name, file_mime, file_size, file_data)
+                               file_name, file_mime, file_size, file_data, image_mime, image_data)
         VALUES (${values.kind}, ${values.name}, ${values.code}, ${values.summary}, ${values.body}, ${tx.json(features.value)},
                 ${values.address}, ${values.impact}, ${values.effective_date}, ${values.sequence}, ${values.unit_id}, ${ctx.member.memberId},
-                ${file?.name ?? null}, ${file?.mime ?? null}, ${file?.data.length ?? null}, ${file?.data ?? null})`;
+                ${file?.name ?? null}, ${file?.mime ?? null}, ${file?.data.length ?? null}, ${file?.data ?? null},
+                ${image?.mime ?? null}, ${image?.data ?? null})`;
     }
     await enqueueSync(tx, "company", ctx.company.id, ctx.company.id, `knowledge ${id ? "changed" : "added"}: ${name}`);
   });
