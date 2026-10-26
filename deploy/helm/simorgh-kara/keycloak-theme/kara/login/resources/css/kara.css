@@ -238,3 +238,15 @@ a:hover { color: #ffffff !important; }
   border-end-start-radius: 0 !important;
 }
 .pf-v5-c-button.pf-m-control::after { border-inline-start: 0 !important; }
+
+/* PatternFly's wide-screen grid puts the card in a column of its own, off
+   the header's centre line: one centred column instead. */
+.pf-v5-c-login__container {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  padding-inline: 0 !important;
+}
+@media (max-width: 480px) { .pf-v5-c-login__container { padding-inline: .75rem !important; } }
+.pf-v5-c-login__header, #kc-header { width: 100%; }
+.pf-v5-c-login__main { width: 100% !important; margin-inline: auto !important; grid-column: auto !important; }
