@@ -350,7 +350,7 @@ on the user's behalf.
 - Platform and holding administrators are never deleted; they lose only the link to the company.
 - Each step's outcome is shown afterwards.
 
-**Platform owners in a company.** A platform administrator who is also a member of a company opens it from Admin → Companies («ورود به شرکت», enter the company). Back in the company, the user menu leads back to the platform panel. `cli.js seed-org ekc` makes the platform's owners such members of EKC (unit AI, role «مدیر سامانه», system administrator).
+**Platform owners in a company.** A platform administrator who is also a member of a company opens it from Admin → Companies («ورود به شرکت», enter the company). Back in the company, the user menu leads back to the platform panel. Applying EKC's prepared organisation (Admin → Companies → ekc → «ساختار سازمانی آماده»: preview, then apply; or `cli.js seed-org ekc`) makes the platform's owners such members of EKC (unit AI, role «مدیر سامانه», system administrator).
 
 ## Sources
 

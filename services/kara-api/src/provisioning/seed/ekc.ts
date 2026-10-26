@@ -61,6 +61,9 @@ export const EKC: OrgSet = {
     'مالی و حسابداری': ['هیئت مدیره', 'مدیر عامل', 'امور مالی'],
     'منابع انسانی و امور اداری': ['هیئت مدیره', 'مدیر عامل', 'سرمایه انسانی'],
     'فناوری اطلاعات': ['هیئت مدیره', 'مدیر عامل', 'سرمایه انسانی', 'IT'],
+    // The unit EKC's people came in with from Simorgh Design Suite.
+    'Engineering': TECH,
+    'مهندسی': TECH,
   },
   // Everyone already in EKC who is not yet in a unit of the chart goes to
   // technical & engineering; these people are named.

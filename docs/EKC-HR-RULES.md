@@ -2,8 +2,11 @@
 
 The eight HR rule documents of Electrokavir (EKC), in
 `services/kara-api/seed/ekc/hr-rules/`, are in Kara as knowledge items of kind
-**آیین‌نامه منابع انسانی** (HR rule). `cli.js seed-org ekc` loads them, and
-they appear under ekc → **دانش شرکت** (company knowledge). Each item has:
+**آیین‌نامه منابع انسانی** (HR rule). A platform administrator loads them with
+the rest of EKC's prepared organisation: Admin → شرکت‌ها → ekc → **ساختار
+سازمانی آماده** → پیش‌نمایش تغییرات, then اعمال ساختار (or `cli.js seed-org ekc`
+in the kara-api pod). They then appear under ekc → **دانش شرکت** (company
+knowledge) and on **دستیار هوش مصنوعی**. Each item has:
 
 - the original Word file, downloadable;
 - the document's whole text from «هدف» (purpose) on: this is what the HR assistant reads;
@@ -14,9 +17,9 @@ The HR assistant (hr.simorghai.com, and **دستیار هوش مصنوعی** in 
 answers EKC's people from these, alongside the HR documents it already had.
 
 When a document changes, replace the `.docx` in the folder and run
-`python3 services/kara-api/seed/ekc/build-hr-rules.py`. Then run
-`cli.js seed-org ekc` again: a new revision of the same document number
-replaces the old one. Alternatively, upload the new file over the old item in
+`python3 services/kara-api/seed/ekc/build-hr-rules.py`. Then, after the new
+kara-api is deployed, apply the prepared organisation again: a new revision of
+the same document number replaces the old one. Alternatively, upload the new file over the old item in
 Kara.
 
 | Number | Title | Created | This revision signed |

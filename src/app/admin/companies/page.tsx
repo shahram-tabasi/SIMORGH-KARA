@@ -7,6 +7,7 @@ import { syncViews } from "@/lib/sync";
 import { SyncStatus } from "@/components/SyncStatus";
 import { karaApi, karaApiEnabled } from "@/lib/kara-api";
 import { requirePlatformAdmin } from "@/lib/session";
+import { OrgSeedPanel } from "./OrgSeedPanel";
 
 interface CompanyRow {
   id: string;
@@ -79,6 +80,9 @@ export default async function CompaniesPage({ searchParams }: {
   const mine = await memberOf(session.sub, companies);
   const sync = await syncViews("company", companies.map((c) => c.id));
   const odooCompanies = odoo && "items" in odoo ? odoo.items : null;
+  const prepared = new Set(karaApiEnabled()
+    ? await karaApi<{ items: string[] }>(session.sub, "GET", "/v1/admin/org-sets").then((r) => r.items).catch(() => [])
+    : []);
 
   return (
     <>
@@ -237,6 +241,7 @@ export default async function CompaniesPage({ searchParams }: {
                   <button className="btn-ghost">ذخیره اتصال</button>
                 </form>
               )}
+              {prepared.has(c.slug) && <OrgSeedPanel slug={c.slug} />}
               <details className="mt-4 border-t border-slate-100 pt-4">
                 <summary className="cursor-pointer text-sm font-medium text-red-700">حذف شرکت و همهٔ داده‌هایش…</summary>
                 <form action={deleteCompanyAction} className="mt-3 space-y-3 rounded-lg border border-red-200 bg-red-50 p-3">

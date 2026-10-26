@@ -269,3 +269,24 @@ export async function enterCompanyAction(formData: FormData) {
   await createSession({ sub: session.sub, email: session.email, name: session.name, kind: "tenant", companyId: id, schema: c.schema_name, slug: c.slug });
   redirect(`/app/${c.slug}`);
 }
+
+export type SeedOrgState = { report?: string[]; dryRun?: boolean; error?: string };
+
+/** A company's prepared organisation (kara-api seed-org): a preview first, then applied. */
+export async function seedOrgAction(_prev: SeedOrgState, formData: FormData): Promise<SeedOrgState> {
+  const { session } = await requirePlatformAdmin();
+  const slug = String(formData.get("slug") ?? "");
+  const dryRun = formData.get("mode") !== "apply";
+  const prune = formData.get("prune") === "on";
+  if (!karaApiEnabled()) return { error: "kara-api در دسترس نیست." };
+  try {
+    const r = await karaApi<{ report: string[]; dryRun: boolean }>(session.sub, "POST", `/v1/admin/companies/${encodeURIComponent(slug)}/seed-org`, { body: { dryRun, prune } });
+    if (!dryRun) {
+      revalidatePath("/admin/companies");
+      revalidatePath(`/app/${slug}`, "layout");
+    }
+    return r;
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}

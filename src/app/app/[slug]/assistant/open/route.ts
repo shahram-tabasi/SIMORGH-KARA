@@ -30,5 +30,7 @@ export async function GET(_req: Request, { params }: { params: { slug: string } 
     accountId: ctx.session.sub, email: ctx.session.email, fullName: ctx.member.fullName, title: person.title,
     company: { slug: ctx.company.slug, name: ctx.company.name }, units: person.units,
   });
-  return NextResponse.redirect(`${hrAppUrl()}/auth/kara#token=${encodeURIComponent(token)}`, 303);
+  // A question picked on the assistant page rides along and is asked at once.
+  const q = new URL(_req.url).searchParams.get("q")?.trim().slice(0, 500);
+  return NextResponse.redirect(`${hrAppUrl()}/auth/kara#token=${encodeURIComponent(token)}${q ? `&q=${encodeURIComponent(q)}` : ""}`, 303);
 }

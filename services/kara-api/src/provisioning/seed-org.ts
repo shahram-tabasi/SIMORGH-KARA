@@ -49,6 +49,9 @@ export interface OrgSet {
 
 const SETS: Record<string, OrgSet> = { ekc: EKC };
 
+/** The companies (slugs) that have a prepared organisation. */
+export const orgSets = () => Object.keys(SETS);
+
 /** Names compared as people write them: ZWNJ, spaces, Arabic letter forms, case. */
 export const norm = (s: string) => s.toLowerCase().normalize('NFKC')
   .replace(/[‌‏\s._\-()]/g, '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه');
