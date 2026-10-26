@@ -356,6 +356,21 @@ on the user's behalf.
 
 **Platform owners in a company.** A platform administrator who is also a member of a company opens it from Admin → Companies («ورود به شرکت», enter the company). Back in the company, the user menu leads back to the platform panel. Applying EKC's prepared organisation (Admin → Companies → ekc → «ساختار سازمانی آماده»: preview, then apply; or `cli.js seed-org ekc`) makes the platform's owners such members of EKC (unit AI, role «مدیر سامانه», system administrator).
 
+## 12. Design Suite → PLM (engineering changes)
+
+Engineering designs in Design Suite; Odoo's PLM (simorgh-odoo `addons/simorgh_plm`, docs/PLM.md there)
+approves each design and makes it the panel's BoM revision. In Design Suite, Reports › MTO › «Send to PLM»
+sends one engineering change per panel (its MTO codes as lines, its product the EKC panel type), through
+documents-service to kara-api:
+
+- `POST /v1/engineering-changes` `{changes: [{externalId, title, type, reason, productCode, design, lines}]}`
+- `GET /v1/engineering-changes?project=<name>` (their stage and revision, for «PLM status»)
+
+The person's own Design Suite token goes along, as for `/v1/context`: Kara takes the company from it,
+needs the company's Odoo link (`odoo_company_id`, app `erp` on), and writes through the erp-connector as
+caller `kara` (collection `engineering-changes`, reference `kara:<slug>:eco:<externalId>`). The answer
+links each change in Odoo (`ODOO_PUBLIC_URL`, default https://erp.simorghai.com).
+
 ## Sources
 
 - Keycloak organizations and their mappers: [Server Administration Guide](https://www.keycloak.org/docs/latest/server_admin/index.html),

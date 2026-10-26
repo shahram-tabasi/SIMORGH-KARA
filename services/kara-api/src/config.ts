@@ -74,6 +74,8 @@ export const config = {
     /** … or a static token (STATIC_TOKENS on the connector), for a quick start. */
     staticToken: str('ERP_STATIC_TOKEN', ''),
     timeoutMs: num('ERP_TIMEOUT_MS', 30_000),
+    /** Odoo as people open it: links to the engineering changes Design Suite sends. */
+    publicUrl: trim(str('ODOO_PUBLIC_URL', 'https://erp.simorghai.com')),
   },
 
   /**
