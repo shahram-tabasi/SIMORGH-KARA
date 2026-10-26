@@ -246,7 +246,12 @@ a:hover { color: #ffffff !important; }
   flex-direction: column;
   align-items: center;
   padding-inline: 0 !important;
+  row-gap: 0 !important;
 }
+/* The card right under the logo's subtitle, not a grid row away. */
+#kc-header { margin-bottom: 1.25rem !important; }
+.pf-v5-c-login__header { margin-top: 1.5rem !important; padding-bottom: 0 !important; }
+#kc-header-wrapper { margin-bottom: 0 !important; }
 @media (max-width: 480px) { .pf-v5-c-login__container { padding-inline: .75rem !important; } }
 .pf-v5-c-login__header, #kc-header { width: 100%; }
 .pf-v5-c-login__main { width: 100% !important; margin-inline: auto !important; grid-column: auto !important; }
