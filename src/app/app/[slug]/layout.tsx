@@ -103,6 +103,13 @@ export default async function TenantLayout({
       ],
     },
     {
+      title: "تولید و خدمات",
+      items: [
+        ...push(karaApiEnabled() && can("shopfloor.use"), { href: `${base}/shopfloor`, label: "کارگاه", icon: "🏭" }),
+        ...push(karaApiEnabled() && can("service.report"), { href: `${base}/service`, label: "گزارش خدمات در محل", icon: "🧰" }),
+      ],
+    },
+    {
       title: "داده‌های سازمان (Odoo)",
       items: [
         ...push(karaApiEnabled() && can("erp.view"), { href: `${base}/erp`, label: "طرف‌حساب‌ها، کالاها، کارکنان", icon: "🗃️" }),

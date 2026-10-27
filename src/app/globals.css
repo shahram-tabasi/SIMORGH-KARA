@@ -120,6 +120,13 @@ body {
     @apply inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium;
   }
 
+  /* HTML written in Odoo (work instructions, service orders): lists and tables readable. */
+  .odoo-html ol { @apply list-decimal ps-5; }
+  .odoo-html ul { @apply list-disc ps-5; }
+  .odoo-html p { @apply my-1; }
+  .odoo-html table { @apply my-2 w-full border-collapse text-xs; }
+  .odoo-html th, .odoo-html td { @apply border border-slate-300 px-2 py-1 dark:border-white/15; }
+
   /* ── Tables: opt in with .table on a <table> ───────────────────────── */
   .table {
     @apply w-full border-collapse text-sm;

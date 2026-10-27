@@ -396,3 +396,23 @@ links each change in Odoo (`ODOO_PUBLIC_URL`, default https://erp.simorghai.com)
   [The Neural Base — metadata filtering for tenant isolation](https://theneuralbase.com/rag-fundamentals/learn/advanced/metadata-filtering-for-tenant-isolation-in-multi-tenant-rag/),
   [Data Engineer Things — one vs many vector databases](https://blog.dataengineerthings.org/architecting-multi-tenant-rag-solution-the-one-vs-many-vector-database-dilemma-f52b7556cdba)
 - Odoo multi-company: [Odoo 19 multi-company guidelines](https://www.odoo.com/documentation/19.0/fr/developer/howtos/company.html)
+
+
+## 13. The shop floor and service reports (Kara → Odoo)
+
+Two pages under «تولید و خدمات», for a company linked to Odoo:
+
+- **کارگاه** (permission `shopfloor.use`): open work orders, by work centre or
+  by a barcode scanned with the phone's camera (or typed); start, pause and
+  finish; the work instructions; a component's actual quantity; scrap with
+  its reason.
+- **گزارش خدمات در محل** (permission `service.report`): field service orders,
+  the person's own first; the report, the customer's signature on the screen,
+  and the order is completed.
+
+kara-web → kara-api `/v1/tenants/:slug/shop-floor/…` (the permission, the
+person as operator: email and name from their account, never from the body) →
+erp-connector `/v1/shop-floor/…` in the tenant's Odoo company → the named
+methods of simorgh-odoo `addons/simorgh_shopfloor`. Odoo puts the time log on
+the person's Odoo user when there is one (same email) and writes who did it in
+the order's chatter. Nothing is cached in Kara: each page reads Odoo live.

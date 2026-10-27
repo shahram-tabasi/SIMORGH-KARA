@@ -22,6 +22,7 @@ import { ProvisionerService } from './provisioning/provisioner.service';
 import { ContextController } from './context/context.controller';
 import { ContextService } from './context/context.service';
 import { PlmController } from './plm/plm.controller';
+import { ShopFloorController } from './shopfloor/shopfloor.controller';
 
 /** X-Request-Id in (or made here) and out, and one log line per request. */
 function requestLog(req: Request & { actor?: { email: string; via: string } }, res: Response, next: NextFunction) {
@@ -40,7 +41,7 @@ function requestLog(req: Request & { actor?: { email: string; via: string } }, r
 }
 
 @Module({
-  controllers: [AdminController, ErpController, IdentityController, CommsController, ContextController, PlmController, HealthController, MetricsController],
+  controllers: [AdminController, ErpController, IdentityController, CommsController, ContextController, PlmController, ShopFloorController, HealthController, MetricsController],
   providers: [DbService, TenantsService, ActorGuard, ConnectorClient, ReadModelService, ErpConsumer, IdentityService, LiveService, CallsService, ProvisionerService, ContextService, CompanyDeleteService],
 })
 export class AppModule implements NestModule {
