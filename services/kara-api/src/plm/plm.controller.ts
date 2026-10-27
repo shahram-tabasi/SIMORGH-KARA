@@ -9,7 +9,7 @@ interface Eco { id: number; number: string; state: string | null; stage: string 
 
 /**
  * Design Suite → Odoo's PLM (simorgh-odoo addons/simorgh_plm, docs/PLM.md):
- *   POST /v1/engineering-changes   {changes: [{externalId, title, type, reason, productCode, design, lines}]}
+ *   POST /v1/engineering-changes   {changes: [{externalId, title, type, reason, productCode, design, lines, documents}]}
  *   GET  /v1/engineering-changes?project=<name>
  * Authorization: the person's Design Suite token (realm simorgh), as for
  * /v1/context: the company is theirs (its organization claim), its Odoo
