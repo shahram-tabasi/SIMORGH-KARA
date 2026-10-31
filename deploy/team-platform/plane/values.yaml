@@ -1,0 +1,132 @@
+# Plane Community Edition on the Simorgh cluster — values for the official
+# chart plane-ce 1.8.6 (https://helm.plane.so), Plane v1.4.3.
+#
+#   helm upgrade --install plane plane/plane-ce --version 1.8.6 -n plane \
+#     -f deploy/team-platform/plane/values.yaml \
+#     -f /root/team-platform-secrets/plane-values-secrets.yaml
+#
+# Runbook: deploy/team-platform/README.md. The way in (IP .133, Gateway,
+# routes, the /plane-uploads route to Ceph RGW) is plane/edge.yaml, not the
+# chart: the chart only knows Ingress/Traefik, this cluster uses Gateway API.
+
+planeVersion: v1.4.3
+
+# Pulls through Harbor's Docker Hub proxy; the chart's ServiceAccount carries
+# the pull secret (copied into the namespace by make-secrets.sh).
+dockerRegistry:
+  enabled: true
+  host: registry.simorghai.com
+  existingSecret: harbor-registry
+
+ingress:
+  enabled: false                 # edge.yaml: Gateway + HTTPRoutes
+  appHost: plane.simorghai.com   # still used for WEB_URL and CORS
+
+ssl:
+  # TLS ends at the Istio Gateway (wildcard-simorghai-tls); this makes the
+  # chart write https:// URLs.
+  externalTermination: true
+
+# ── Data services: the chart's own, one pod each (a small team's size) ──────
+postgres:
+  local_setup: true
+  image: registry.simorghai.com/docker-proxy/library/postgres:15.7-alpine
+  storageClass: ceph-rbd-simorgh
+  volumeSize: 20Gi
+  assign_cluster_ip: true
+
+redis:
+  local_setup: true
+  image: registry.simorghai.com/docker-proxy/valkey/valkey:7.2.11-alpine
+  storageClass: ceph-rbd-simorgh
+  volumeSize: 1Gi
+  assign_cluster_ip: true
+
+rabbitmq:
+  local_setup: true
+  image: registry.simorghai.com/docker-proxy/library/rabbitmq:3.13.6-management-alpine
+  storageClass: ceph-rbd-simorgh
+  volumeSize: 2Gi
+  default_user: plane
+  # default_password: in plane-values-secrets.yaml
+  assign_cluster_ip: true
+
+# Files go to Ceph RGW (bucket plane-uploads), not to a MinIO of the chart's.
+# The storage Secret is ours (plane-doc-store, make-secrets.sh) because it must
+# say USE_MINIO=1: then Plane signs browser upload/download links for
+# https://plane.simorghai.com/plane-uploads/… (the page's own host, which the
+# Gateway routes to RGW) instead of the LAN-only http://192.168.1.92:8080.
+minio:
+  local_setup: false
+  env:
+    minio_endpoint_ssl: true     # MINIO_ENDPOINT_SSL=1: signed links use https
+
+external_secrets:
+  app_keys_existingSecret: plane-app-keys      # SECRET_KEY, LIVE_SERVER_SECRET_KEY
+  doc_store_existingSecret: plane-doc-store    # USE_MINIO, AWS_* , bucket, size limit
+
+env:
+  requireExplicitSecrets: true   # never fall back to the chart's public example keys
+  pgdb_username: plane
+  pgdb_name: plane
+  # pgdb_password: in plane-values-secrets.yaml
+  docstore_bucket: plane-uploads
+  doc_upload_size_limit: "52428800"   # 50 MB
+
+# ── Plane itself: images through Harbor, real requests (the chart's 50Mi is a
+# placeholder) with limits at most 1.5x requests (decision 8: the nodes'
+# limits are already over-committed), ClusterIP Services for the Gateway ──
+web:
+  image: registry.simorghai.com/docker-proxy/makeplane/plane-frontend
+  pullPolicy: IfNotPresent
+  assign_cluster_ip: true
+  memoryRequest: 384Mi
+  memoryLimit: 512Mi
+  cpuRequest: 50m
+  cpuLimit: 500m
+space:
+  image: registry.simorghai.com/docker-proxy/makeplane/plane-space
+  pullPolicy: IfNotPresent
+  assign_cluster_ip: true
+  memoryRequest: 256Mi
+  memoryLimit: 384Mi
+  cpuRequest: 25m
+  cpuLimit: 300m
+admin:
+  image: registry.simorghai.com/docker-proxy/makeplane/plane-admin
+  pullPolicy: IfNotPresent
+  assign_cluster_ip: true
+  memoryRequest: 256Mi
+  memoryLimit: 384Mi
+  cpuRequest: 25m
+  cpuLimit: 300m
+live:
+  image: registry.simorghai.com/docker-proxy/makeplane/plane-live
+  pullPolicy: IfNotPresent
+  assign_cluster_ip: true
+  memoryRequest: 384Mi
+  memoryLimit: 512Mi
+  cpuRequest: 25m
+  cpuLimit: 300m
+api:
+  image: registry.simorghai.com/docker-proxy/makeplane/plane-backend
+  pullPolicy: IfNotPresent
+  assign_cluster_ip: true
+  memoryRequest: 768Mi
+  memoryLimit: 1Gi
+  cpuRequest: 100m
+  cpuLimit: "1"
+worker:
+  image: registry.simorghai.com/docker-proxy/makeplane/plane-backend
+  pullPolicy: IfNotPresent
+  memoryRequest: 768Mi
+  memoryLimit: 1Gi
+  cpuRequest: 100m
+  cpuLimit: "1"
+beatworker:
+  image: registry.simorghai.com/docker-proxy/makeplane/plane-backend
+  pullPolicy: IfNotPresent
+  memoryRequest: 192Mi
+  memoryLimit: 256Mi
+  cpuRequest: 25m
+  cpuLimit: 250m

@@ -1,0 +1,154 @@
+# The way in to Plane: namespace, LoadBalancer IP 192.168.1.133, Gateway,
+# routes (the same path map as the chart's own Ingress), and the route that
+# sends /plane-uploads to Ceph RGW. Same pattern as every other app here
+# (one pool + one L2 policy per app on worker1/worker2, ^ens34$).
+#
+#   kubectl apply -f deploy/team-platform/plane/edge.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: plane
+  labels:
+    app.kubernetes.io/part-of: simorgh-team-platform
+    istio.io/dataplane-mode: ambient
+    # istiod's Gateway pod has no seccompProfile: baseline, as n8n/keycloak.
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: simorgh-lb-pool-plane
+spec:
+  blocks:
+    - start: 192.168.1.133
+      stop: 192.168.1.133
+  serviceSelector:
+    matchLabels:
+      simorgh.io/lb-pool: plane
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: simorgh-plane-l2
+spec:
+  serviceSelector:
+    matchLabels:
+      simorgh.io/lb-pool: plane
+  interfaces: ["^ens34$"]
+  nodeSelector:
+    matchExpressions:
+      - key: kubernetes.io/hostname
+        operator: In
+        values: [worker1, worker2]
+  externalIPs: true
+  loadBalancerIPs: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: plane
+  namespace: plane
+spec:
+  gatewayClassName: istio
+  infrastructure:
+    labels:
+      simorgh.io/lb-pool: plane
+    annotations:
+      lbipam.cilium.io/ips: "192.168.1.133"
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: plane.simorghai.com
+      allowedRoutes: { namespaces: { from: Same } }
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: plane.simorghai.com
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: wildcard-simorghai-tls   # sync-wildcard-cert.sh plane
+      allowedRoutes: { namespaces: { from: Same } }
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: plane-https-redirect
+  namespace: plane
+spec:
+  parentRefs: [{ name: plane, sectionName: http }]
+  hostnames: [plane.simorghai.com]
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect: { scheme: https, statusCode: 301 }
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: plane
+  namespace: plane
+spec:
+  parentRefs: [{ name: plane, sectionName: https }]
+  hostnames: [plane.simorghai.com]
+  rules:
+    - matches:
+        - path: { type: PathPrefix, value: /api }
+        - path: { type: PathPrefix, value: /auth }
+        - path: { type: PathPrefix, value: /static/ }
+      backendRefs: [{ name: plane-api, port: 8000 }]
+      timeouts: { request: 300s }
+    - matches:
+        - path: { type: PathPrefix, value: /live/ }
+      backendRefs: [{ name: plane-live, port: 3000 }]
+      timeouts: { request: 0s }          # collaborative editing keeps a websocket open
+    - matches:
+        - path: { type: PathPrefix, value: /spaces }
+      backendRefs: [{ name: plane-space, port: 3000 }]
+    - matches:
+        - path: { type: PathPrefix, value: /god-mode }
+      backendRefs: [{ name: plane-admin, port: 3000 }]
+    # Signed upload/download links (USE_MINIO=1, values.yaml) point here; the
+    # Host header stays plane.simorghai.com, which is the host the link was
+    # signed for, so RGW accepts the signature.
+    - matches:
+        - path: { type: PathPrefix, value: /plane-uploads }
+      backendRefs: [{ name: plane-rgw, port: 8080 }]
+      timeouts: { request: 300s }
+    - matches:
+        - path: { type: PathPrefix, value: / }
+      backendRefs: [{ name: plane-web, port: 3000 }]
+---
+# Ceph RGW lives on the Ceph hosts, not in the cluster (simorgh chart:
+# objectStore.endpoint http://192.168.1.92:8080). A Service without a selector
+# plus an EndpointSlice gives the Gateway something to route to.
+apiVersion: v1
+kind: Service
+metadata:
+  name: plane-rgw
+  namespace: plane
+spec:
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: plane-rgw-1
+  namespace: plane
+  labels:
+    kubernetes.io/service-name: plane-rgw
+addressType: IPv4
+ports:
+  - name: http
+    port: 8080
+    protocol: TCP
+endpoints:
+  - addresses: ["192.168.1.92"]

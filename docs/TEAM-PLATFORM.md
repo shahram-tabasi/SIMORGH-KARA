@@ -110,7 +110,7 @@ to be sized from Phase 0 free space.
 | Phase | What | Exit check |
 |---|---|---|
 | 0 | `phase0-discovery.sh`, this plan, versions pinned, IPs/DNS chosen | your approval |
-| 1 | Plane + Mattermost (namespaces, PG, S3 buckets, Gateways, DNS, GitLab OAuth) | login via Keycloak; a project and a channel created |
+| 1 | Plane + Mattermost (namespaces, PG, S3 buckets, Gateways, network policies, DNS) — runbook `deploy/team-platform/README.md` | local login (decision 10); a project and a channel created; a file uploaded to each |
 | 2 | n8n: credentials, webhook auth; queue mode only if needed | test workflow runs and survives a restart |
 | 3 | Kara provisioning + identity map; bot `simorgh-assistant`; read-only assistant (A, B, C) | fa/en questions answered from real data, with Plane links |
 | 4 | Daily digest, weekly report, Plane notifications (E, F, G) | messages arrive on schedule; no duplicates on webhook retry |
@@ -150,7 +150,7 @@ The master's root disk is 70 GB; `/home` has 400 GB free. Image builds
 | 2 | Names (PowerDNS now; ArvanCloud + edge nginx later) | `plane.simorghai.com` → .133, `team.simorghai.com` → .134 |
 | 3 | TLS | `wildcard-simorghai-tls` copied into `plane` and `mattermost` (sync-wildcard-cert.sh) |
 | 4 | Plane | chart `plane-ce` 1.8.6, `planeVersion: v1.4.3`; ingress off (our Gateway + HTTPRoute); bundled PostgreSQL 15.7, Valkey 7.2.11, RabbitMQ 3.13.6 on `ceph-rbd-simorgh` with real requests (not the chart's 50 Mi); uploads to **Ceph RGW S3** (bucket `plane-uploads`) — the chart's MinIO only if RGW is not reachable |
-| 5 | Plane images | Harbor proxy project **`plane-proxy` → `https://artifacts.plane.so`** (new, Harbor admin UI): plane-frontend, plane-space, plane-admin, plane-live, plane-backend at v1.4.3; postgres/valkey/rabbitmq via `docker-proxy` |
+| 5 | Plane images | *Superseded by the Phase 0 check: all five v1.4.3 images are on Docker Hub (amd64), so they come through the existing `docker-proxy`; no new Harbor project.* Originally: Harbor proxy project `plane-proxy` → `https://artifacts.plane.so` (new, Harbor admin UI): plane-frontend, plane-space, plane-admin, plane-live, plane-backend at v1.4.3; postgres/valkey/rabbitmq via `docker-proxy` |
 | 6 | Mattermost | **(A, recommended)** our own small chart `simorgh-mattermost` like `simorgh-n8n` (Deployment + PostgreSQL 17.5 StatefulSet + Gateway), image `docker-proxy/mattermost/mattermost-team-edition:11.7.x` — fewest moving parts, no operator v2 migration ahead; **(B)** Mattermost Operator 1.13 (official; adds cluster-wide CRDs, v2.0 with breaking changes announced) |
 | 7 | Mattermost files | Ceph RGW S3 bucket `mattermost-files` (or a 50 Gi `ceph-rbd-simorgh` PVC) |
 | 8 | Memory | requests ~4 Gi (Plane) + ~2.5 Gi (Mattermost), limits ≤ 1.5× requests — nodes are at 47–54% requested, limits already over-committed (108–171%) |

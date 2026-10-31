@@ -1,0 +1,118 @@
+# Mattermost Team Edition — team chat and the Team Assistant's front door
+# (docs/TEAM-PLATFORM.md). Install and secrets: deploy/team-platform/README.md.
+#
+#   mattermost (one server; Team Edition does not cluster) ── PostgreSQL (Ceph RBD)
+#     │ config in the database (MM_CONFIG), files in Ceph RGW S3
+#   Gateway team.simorghai.com → 192.168.1.134 (LAN; the edge nginx later)
+
+namespace:
+  name: mattermost
+  # Created by deploy/team-platform/make-secrets.sh (the Secrets must exist
+  # before the first install); set true only for a namespace-less first try.
+  create: false
+  istioDataplaneMode: ambient
+  podSecurity:
+    enforce: baseline
+    audit: restricted
+    warn: restricted
+
+registry:
+  host: registry.simorghai.com
+  pullSecret: harbor-registry        # copied in by make-secrets.sh
+
+image:
+  # The official image through Harbor's Docker Hub proxy. 11.7 is the ESR
+  # (supported to 2027-05-15); pinned to the patch, upgraded on purpose.
+  repository: docker-proxy/mattermost/mattermost-team-edition
+  tag: "11.7.14"
+  pullPolicy: IfNotPresent
+
+mattermost:
+  siteUrl: https://team.simorghai.com
+  host: team.simorghai.com
+  timezone: Asia/Tehran
+  # The bot simorgh-assistant uses a bot token; bots and access tokens on,
+  # integrations made by admins only.
+  enableBots: true
+  enableUserAccessTokens: true
+  onlyAdminIntegrations: true
+  # Slash commands and the assistant's webhooks call n8n inside the office.
+  # Mattermost refuses internal addresses unless listed here.
+  allowedUntrustedInternalConnections: "n8n.n8n.svc.cluster.local n8n.simorghai.com 192.168.1.129"
+  # Who may join: invitations only (Kara sends them), from these domains.
+  openServer: false
+  restrictCreationToDomains: "simorghai.com,electrokavir.com"
+  # No internet from the nodes: no marketplace, no telemetry, no push yet.
+  marketplace: false
+  diagnostics: false
+  push:
+    enabled: false                   # the free push service is on the internet
+    contents: generic_no_channel     # if turned on: no message text leaves
+  files:
+    driver: amazons3
+    endpoint: "192.168.1.92:8080"    # Ceph RGW (simorgh chart objectStore)
+    ssl: false
+    bucket: mattermost-files
+    region: us-east-1
+    existingSecret: mattermost-s3    # accessKeyId, secretAccessKey
+    maxFileSizeMB: 100
+  smtp:
+    enabled: true
+    host: mail.simorghai.com
+    port: "587"
+    security: STARTTLS
+    user: team@simorghai.com
+    from: team@simorghai.com
+    fromName: "Simorgh Team"
+    existingSecret: mattermost-smtp  # password (optional until the mailbox exists)
+  # mail.simorghai.com is mailcow on .68; inside a pod it resolves to the
+  # public address, so pin it to the LAN (as the website does).
+  hostAliases:
+    - ip: 192.168.1.68
+      hostnames: [mail.simorghai.com]
+  extraEnv: {}
+  # Limits at most 1.5x requests (decision 8, docs/TEAM-PLATFORM.md).
+  resources:
+    requests: { cpu: 200m, memory: 1Gi }
+    limits:   { memory: 1536Mi }
+
+postgresql:
+  image:
+    repository: docker-proxy/library/postgres
+    tag: "17.5-alpine"
+  database: mattermost
+  existingSecret: mattermost-db      # username, password (hex, URL-safe)
+  storage:
+    size: 20Gi
+    className: ceph-rbd-simorgh
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits:   { memory: 768Mi }
+
+gateway:
+  enabled: true
+  name: mattermost
+  className: istio
+  loadBalancerIP: 192.168.1.134
+  poolLabel: { key: simorgh.io/lb-pool, value: mattermost }
+  ipPool:
+    enabled: true
+    name: simorgh-lb-pool-mattermost
+  l2Announcement:
+    enabled: true
+    interfaces: ["^ens34$"]
+    nodes: ["worker1", "worker2"]
+  # The office's Let's Encrypt wildcard, copied in by
+  # ~/simorgh-technical-chatbot-cloud/deploy/scripts/sync-wildcard-cert.sh mattermost
+  tlsSecret: wildcard-simorghai-tls
+
+# Who may talk to whom (decision 9): default-deny; in from the Gateway only;
+# out to DNS, istiod, Ceph RGW and mailcow 587. Phase 3 adds n8n here.
+networkPolicy:
+  enabled: true
+  egress:
+    - { cidr: 192.168.1.92/32, port: 8080 }   # Ceph RGW (files)
+    - { cidr: 192.168.1.68/32, port: 587 }    # mailcow submission only
+  # Extra in-cluster destinations, e.g. n8n's Gateway (Phase 3):
+  #   - { namespace: n8n, podLabels: { gateway.networking.k8s.io/gateway-name: n8n }, ports: [443] }
+  egressToPods: []

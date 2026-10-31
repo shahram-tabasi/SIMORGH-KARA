@@ -1,0 +1,8 @@
+Mattermost {{ .Values.image.tag }} in namespace {{ include "mm.namespace" . }}.
+
+  kubectl -n {{ include "mm.namespace" . }} rollout status deploy/mattermost --timeout=10m
+  curl -sk https://{{ .Values.mattermost.host }}/api/v4/system/ping    # {"status":"OK",...}
+
+Open {{ .Values.mattermost.siteUrl }}: the first account created becomes the
+system admin. Then the steps in deploy/team-platform/README.md (team, bot,
+invites).

@@ -1,0 +1,17 @@
+{{- if .Values.namespace.create }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "mm.namespace" . }}
+  annotations:
+    # Kept through `helm uninstall` and a failed `--atomic` install, with the
+    # Secrets and PostgreSQL's volume in it.
+    "helm.sh/resource-policy": keep
+  labels:
+    {{- include "mm.labels" . | nindent 4 }}
+    istio.io/dataplane-mode: {{ .Values.namespace.istioDataplaneMode }}
+    pod-security.kubernetes.io/enforce: {{ .Values.namespace.podSecurity.enforce }}
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: {{ .Values.namespace.podSecurity.audit }}
+    pod-security.kubernetes.io/warn: {{ .Values.namespace.podSecurity.warn }}
+{{- end }}

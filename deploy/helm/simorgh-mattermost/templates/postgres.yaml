@@ -1,0 +1,99 @@
+{{- $ns := include "mm.namespace" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: mattermost-postgresql
+  namespace: {{ $ns }}
+  labels:
+    {{- include "mm.labels" . | nindent 4 }}
+    app.kubernetes.io/name: mattermost-postgresql
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: mattermost-postgresql
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mattermost-postgresql
+  namespace: {{ $ns }}
+  labels:
+    {{- include "mm.labels" . | nindent 4 }}
+    app.kubernetes.io/name: mattermost-postgresql
+    app.kubernetes.io/component: database
+spec:
+  serviceName: mattermost-postgresql
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mattermost-postgresql
+  template:
+    metadata:
+      labels:
+        {{- include "mm.labels" . | nindent 8 }}
+        app.kubernetes.io/name: mattermost-postgresql
+    spec:
+      {{- include "mm.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70          # postgres, in the alpine image
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: postgresql
+          image: {{ include "mm.pgImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.database | quote }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.postgresql.existingSecret }}, key: username }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Values.postgresql.existingSecret }}, key: password }
+            # A fresh RBD volume has lost+found at its root; initdb wants an empty dir.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          livenessProbe:
+            exec: { command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\""] }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+          readinessProbe:
+            exec: { command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\""] }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: run, mountPath: /var/run/postgresql }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: run
+          emptyDir: { sizeLimit: 32Mi }
+        - name: tmp
+          emptyDir: { sizeLimit: 128Mi }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ .Values.postgresql.storage.className }}
+        resources:
+          requests:
+            storage: {{ .Values.postgresql.storage.size }}

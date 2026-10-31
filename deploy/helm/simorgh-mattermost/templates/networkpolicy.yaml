@@ -1,0 +1,156 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $ns := include "mm.namespace" . -}}
+{{- $gw := .Values.gateway.name -}}
+# The simorgh-website pattern: default-deny, then each path named.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny, namespace: {{ $ns }} }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-dns, namespace: {{ $ns }} }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+          podSelector: { matchLabels: { k8s-app: kube-dns } }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+# istiod: the Gateway's configuration and the workload certificates.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-istio-control-plane, namespace: {{ $ns }} }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: istio-system } }
+      ports:
+        - { protocol: TCP, port: 15012 }
+        - { protocol: TCP, port: 15010 }
+        - { protocol: TCP, port: 15014 }
+        - { protocol: TCP, port: 443 }
+---
+# Browsers reaching the Gateway; 15021 is its readiness port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-ingress-to-gateway, namespace: {{ $ns }} }
+spec:
+  podSelector:
+    matchLabels: { gateway.networking.k8s.io/gateway-name: {{ $gw }} }
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - { protocol: TCP, port: 80 }
+        - { protocol: TCP, port: 443 }
+        - { protocol: TCP, port: 15021 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-gateway-to-mattermost, namespace: {{ $ns }} }
+spec:
+  podSelector:
+    matchLabels: { gateway.networking.k8s.io/gateway-name: {{ $gw }} }
+  policyTypes: [Egress]
+  egress:
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: mattermost } } }]
+      ports:
+        - { protocol: TCP, port: 8065 }
+        - { protocol: TCP, port: 15008 }
+---
+# Mattermost's inbound: the Gateway, and kubelet's probes, which come from the
+# node SNAT'd by istio-cni (169.254.7.127) — no selector names them, so the
+# port is open at L3/L4 and the AuthorizationPolicy below does the refusing.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-ingress-to-mattermost, namespace: {{ $ns }} }
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: mattermost }
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - { protocol: TCP, port: 8065 }
+        - { protocol: TCP, port: 15008 }
+---
+# Mattermost ↔ its PostgreSQL, nobody else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-mattermost-to-postgresql, namespace: {{ $ns }} }
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: mattermost }
+  policyTypes: [Egress]
+  egress:
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: mattermost-postgresql } } }]
+      ports:
+        - { protocol: TCP, port: 5432 }
+        - { protocol: TCP, port: 15008 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-ingress-to-postgresql, namespace: {{ $ns }} }
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: mattermost-postgresql }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: mattermost } } }]
+      ports:
+        - { protocol: TCP, port: 5432 }
+        - { protocol: TCP, port: 15008 }
+---
+# Mattermost's outbound beyond the cluster: Ceph RGW and mailcow 587 (values).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-mattermost-egress, namespace: {{ $ns }} }
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: mattermost }
+  policyTypes: [Egress]
+  egress:
+    {{- range .Values.networkPolicy.egress }}
+    - to: [{ ipBlock: { cidr: {{ .cidr }} } }]
+      ports: [{ protocol: TCP, port: {{ .port }} }]
+    {{- end }}
+    {{- range .Values.networkPolicy.egressToPods }}
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .namespace }} } }
+          podSelector: { matchLabels: {{ toJson .podLabels }} }
+      ports:
+        {{- range .ports }}
+        - { protocol: TCP, port: {{ . }} }
+        {{- end }}
+        - { protocol: TCP, port: 15008 }
+    {{- end }}
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata: { name: default, namespace: {{ $ns }} }
+spec:
+  mtls: { mode: STRICT }
+---
+# Only the Gateway may call Mattermost (istiod names its service account
+# <gateway>-istio); kubelet's probes are exempt in ambient.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata: { name: mattermost-from-gateway-only, namespace: {{ $ns }} }
+spec:
+  selector:
+    matchLabels: { app.kubernetes.io/name: mattermost }
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/{{ $ns }}/sa/{{ $gw }}-istio"]
+      to:
+        - operation: { ports: ["8065"] }
+{{- end }}

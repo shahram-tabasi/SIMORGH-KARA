@@ -1,0 +1,17 @@
+apiVersion: v2
+name: simorgh-mattermost
+description: Mattermost Team Edition for the Simorgh Team Platform — official image, PostgreSQL on Ceph, files in Ceph RGW S3, Gateway API at 192.168.1.134 (team.simorghai.com).
+type: application
+version: 1.0.0
+appVersion: "11.7.14"
+kubeVersion: ">=1.33.0-0"
+annotations:
+  simorghai.com/requires: |
+    istio 1.25 (ambient) with the gateway-api CRDs · cilium LB-IPAM + L2 announcements
+    the ceph-rbd-simorgh StorageClass · Ceph RGW at 192.168.1.92:8080 · harbor-registry pull secret
+  simorghai.com/why-not-upstream: |
+    Mattermost's own Kubernetes route is its Operator (cluster-wide CRDs, a v2
+    with breaking changes announced); the team-edition chart is marked for
+    migration to it. Team Edition is a single server anyway (no clustering),
+    so one Deployment + one PostgreSQL, written like simorgh-n8n, is the
+    smallest thing that is still fully ours to upgrade.
