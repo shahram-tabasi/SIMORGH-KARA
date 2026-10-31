@@ -96,6 +96,24 @@ spec:
   parentRefs: [{ name: plane, sectionName: https }]
   hostnames: [plane.simorghai.com]
   rules:
+    # The admin and space apps are static sites behind nginx on :3000. Asked
+    # for /god-mode (no slash), nginx answers with its own absolute redirect,
+    # http://plane.simorghai.com:3000/god-mode/, which no browser can reach.
+    # Add the slash here, before the request gets to nginx.
+    - matches:
+        - path: { type: Exact, value: /god-mode }
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            statusCode: 301
+            path: { type: ReplaceFullPath, replaceFullPath: /god-mode/ }
+    - matches:
+        - path: { type: Exact, value: /spaces }
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            statusCode: 301
+            path: { type: ReplaceFullPath, replaceFullPath: /spaces/ }
     - matches:
         - path: { type: PathPrefix, value: /api }
         - path: { type: PathPrefix, value: /auth }
