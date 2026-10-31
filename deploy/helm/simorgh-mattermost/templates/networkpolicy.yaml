@@ -169,4 +169,11 @@ spec:
             principals: ["cluster.local/ns/{{ $ns }}/sa/{{ $gw }}-istio"]
       to:
         - operation: { ports: ["8065"] }
+    {{- with .Values.networkPolicy.apiCallerNamespaces }}
+    - from:
+        - source:
+            namespaces: {{ toJson . }}
+      to:
+        - operation: { ports: ["8065"] }
+    {{- end }}
 {{- end }}

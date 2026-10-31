@@ -110,6 +110,24 @@ spec:
             - name: JITSI_JWT_SECRET
               valueFrom:
                 secretKeyRef: { name: {{ $a.jitsi.existingSecret }}, key: jwtSecret, optional: true }
+            # Team Platform (docs/TEAM-PLATFORM.md): Plane and Mattermost. The
+            # credentials are in Secret kara-team (deploy/team-platform/phase2/
+            # setup.sh); each part stays off while its key is missing.
+            - name: PLANE_URL
+              value: {{ $a.team.plane.url | quote }}
+            - name: PLANE_PUBLIC_URL
+              value: {{ $a.team.plane.publicUrl | quote }}
+            - name: PLANE_WORKSPACE
+              value: {{ $a.team.plane.workspace | quote }}
+            - name: MATTERMOST_URL
+              value: {{ $a.team.mattermost.url | quote }}
+            - name: MATTERMOST_PUBLIC_URL
+              value: {{ $a.team.mattermost.publicUrl | quote }}
+            {{- range $env, $key := dict "PLANE_API_KEY" "planeApiKey" "PLANE_WEBHOOK_SECRET" "planeWebhookSecret" "MATTERMOST_ADMIN_TOKEN" "mattermostAdminToken" "MATTERMOST_BOT_TOKEN" "mattermostBotToken" "MATTERMOST_COMMAND_TOKENS" "mattermostCommandTokens" "ASSISTANT_SERVICE_TOKEN" "assistantServiceToken" "SSO_PLANE_CLIENT_SECRET" "ssoPlaneSecret" "SSO_MATTERMOST_CLIENT_SECRET" "ssoMattermostSecret" "SSO_KEYCLOAK_CLIENT_SECRET" "ssoKeycloakSecret" "LLM_API_KEY" "llmApiKey" }}
+            - name: {{ $env }}
+              valueFrom:
+                secretKeyRef: { name: {{ $a.team.existingSecret }}, key: {{ $key }}, optional: true }
+            {{- end }}
           resources:
             {{- toYaml $a.resources | nindent 12 }}
           securityContext:

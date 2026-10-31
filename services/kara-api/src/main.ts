@@ -6,9 +6,11 @@ import { config } from './config';
 import { logger } from './infra/json-logger';
 
 async function main() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger, rawBody: true });
   app.set('trust proxy', true);
   app.useBodyParser('json', { limit: '1mb' });
+  // Mattermost's slash commands post forms (Phase 3); raw bodies stay for signatures.
+  app.useBodyParser('urlencoded', { limit: '256kb', extended: false });
   app.enableShutdownHooks();
   await app.listen(config.port, '0.0.0.0');
   logger.log(

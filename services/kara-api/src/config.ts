@@ -156,6 +156,40 @@ export const config = {
     cacheSeconds: num('CONTEXT_CACHE_SECONDS', 60),
   },
 
+  /**
+   * The Team Platform (docs/TEAM-PLATFORM.md): Plane for project work,
+   * Mattermost for team chat. Each part is off while its credentials are empty.
+   */
+  team: {
+    plane: {
+      /** Plane's API inside the cluster; the public address for links people open. */
+      url: trim(str('PLANE_URL', 'http://plane-api.plane.svc.cluster.local:8000')),
+      publicUrl: trim(str('PLANE_PUBLIC_URL', 'https://plane.simorghai.com')),
+      /** The workspace Kara manages (its slug in Plane's URLs). */
+      workspace: str('PLANE_WORKSPACE', 'simorgh'),
+      /** A workspace admin's API token (Plane → Profile → Personal access tokens). Empty: Plane off. */
+      apiKey: str('PLANE_API_KEY', ''),
+      /** The secret Plane shows for the webhook to Kara: deliveries without its signature are refused. */
+      webhookSecret: str('PLANE_WEBHOOK_SECRET', ''),
+      /** Every issue loaded again from the API this often (hours; 0: only on start). */
+      backfillHours: num('PLANE_BACKFILL_HOURS', 6),
+      timeoutMs: num('PLANE_TIMEOUT_MS', 20_000),
+    },
+    mattermost: {
+      url: trim(str('MATTERMOST_URL', 'http://mattermost.mattermost.svc.cluster.local:8065')),
+      publicUrl: trim(str('MATTERMOST_PUBLIC_URL', 'https://team.simorghai.com')),
+      /** Token of the system-admin bot kara-provisioner (accounts, teams). Empty: Mattermost off. */
+      adminToken: str('MATTERMOST_ADMIN_TOKEN', ''),
+      /** Token of the bot simorgh-assistant (direct messages, the assistant's answers). */
+      botToken: str('MATTERMOST_BOT_TOKEN', ''),
+      /** Slash-command tokens Mattermost sends with /ask, /mytasks … (comma-separated). */
+      commandTokens: list('MATTERMOST_COMMAND_TOKENS'),
+      timeoutMs: num('MATTERMOST_TIMEOUT_MS', 15_000),
+    },
+    /** Kafka topic for Plane's issue events (others may follow them). */
+    planeTopic: str('PLANE_KAFKA_TOPIC', 'plane.issue.v1'),
+  },
+
   kafka: {
     /** Empty: no events; read models only from the backfill. */
     brokers: list('KAFKA_BROKERS'),

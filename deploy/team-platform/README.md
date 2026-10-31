@@ -7,7 +7,8 @@ Every command runs **on the k8s master as root**, from a checkout of
 | Phase | What | Files |
 |---|---|---|
 | 0 | Discovery (read-only) | `phase0-discovery.sh` |
-| 1 | Plane CE (`plane.simorghai.com`, .133) and Mattermost Team Edition (`team.simorghai.com`, .134), LAN only | `make-secrets.sh`, `plane/{values,edge,policies}.yaml`, `../helm/simorgh-mattermost/` |
+| 1 | Plane CE (`plane.simorghai.com`, .133) and Mattermost Team Edition (`team.simorghai.com`, .134); published through 1.68 | `make-secrets.sh`, `plane/{values,edge,policies}.yaml`, `../helm/simorgh-mattermost/` |
+| 2 | Plane → Kara (signed webhooks, read model `kara_team`, Kafka `plane.issue.v1`); Kara's credentials for Plane and Mattermost | `phase2/setup.sh`, kara-api `src/team/` |
 
 ## Phase 1 — Plane and Mattermost
 
@@ -145,3 +146,74 @@ kubectl delete ciliuml2announcementpolicy simorgh-plane-l2
 
 The PVCs (the databases) stay until deleted on purpose:
 `kubectl -n plane get pvc; kubectl -n mattermost get pvc`.
+
+## Phase 2 — Plane and Mattermost talk to Kara
+
+What it adds: kara-api receives Plane's workspace webhook (each delivery
+checked against Plane's HMAC signature and applied once), keeps every Plane
+project and issue in `kara_team.plane_projects` / `kara_team.plane_issues`
+(also reloaded from Plane's API at start and every 6 h), and publishes each
+issue change to Kafka `plane.issue.v1` (key: the issue id; `id` = Plane's
+delivery id for de-duplication). Two Mattermost bots: `kara-provisioner`
+(system admin: accounts and teams, Phase 3) and `simorgh-assistant` (what
+people read). Nothing reaches the internet.
+
+```
+Plane worker ──webhook (signed)──► kara-api /v1/team/plane/webhook ──► kara_team.plane_issues
+                                                                    └─► Kafka plane.issue.v1
+kara-api ──X-Api-Key──► plane-api:8000      kara-api ──bot tokens──► mattermost:8065
+```
+
+### 1. Network paths and Plane's webhook allow-list
+
+```bash
+cd /root/simorgh-kara && git pull
+bash deploy/team-platform/make-secrets.sh            # adds WEBHOOK_ALLOWED_HOSTS to plane-doc-store
+kubectl -n plane rollout restart deploy/plane-api-wl deploy/plane-worker-wl
+kubectl apply -f deploy/team-platform/plane/policies.yaml
+helm upgrade mattermost deploy/helm/simorgh-mattermost -n mattermost
+```
+
+### 2. Credentials (asks for two values from Plane's screens)
+
+In Plane first: **Profile → Settings → Personal access tokens → Add** (name
+`kara`), and **Workspace settings → Webhooks → Add webhook** with URL
+`http://kara-api.kara.svc.cluster.local:3001/v1/team/plane/webhook`, events
+Projects + Work items + Work item comments. Keep both values for the prompt:
+
+```bash
+bash deploy/team-platform/phase2/setup.sh
+```
+
+### 3. kara-api with the Team Platform module (a new image tag)
+
+```bash
+kubectl -n kara get deploy kara-api -o jsonpath='{.spec.template.spec.containers[0].image}'; echo   # the tag running now
+cd /root/simorgh-kara && set -o pipefail; export TMPDIR=/home/buildah-tmp; VERSION=<next tag>
+NPM=http://5.161.149.228:4873/
+buildah bud --layers --build-arg NPM_REGISTRY=$NPM -t registry.simorghai.com/simorgh/kara-api:$VERSION services/kara-api 2>&1 | tee /root/kara-build.log \
+ && buildah bud --layers --build-arg NPM_REGISTRY=$NPM --target web -t registry.simorghai.com/simorgh/kara-web:$VERSION . 2>&1 | tee -a /root/kara-build.log \
+ && buildah bud --layers --build-arg NPM_REGISTRY=$NPM --target migrate -t registry.simorghai.com/simorgh/kara-migrate:$VERSION . 2>&1 | tee -a /root/kara-build.log \
+ && for i in kara-web kara-migrate kara-api; do buildah push registry.simorghai.com/simorgh/$i:$VERSION 2>&1 | tee -a /root/kara-build.log; done \
+ && helm upgrade kara deploy/helm/simorgh-kara -n kara --reset-then-reuse-values --set image.tag=$VERSION --wait --timeout 15m
+```
+
+### 4. Check
+
+```bash
+kubectl -n kara logs deploy/kara-api | grep -iE 'plane backfill|Plane off|plane'
+# In Plane: create or edit an issue, then:
+kubectl -n kara logs deploy/kara-api --since=2m | grep -i 'team/plane/webhook'
+kubectl -n kara exec sts/kara-postgresql -- sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "select project_key, sequence_id, name, state_group, synced_at from kara_team.plane_issues order by synced_at desc limit 5"'
+K=$(kubectl -n kafka get pods -o name | grep -m1 -E 'kafka-[a-z-]*[0-9]+$')   # a broker pod
+kubectl -n kafka exec "$K" -- bin/kafka-console-consumer.sh --bootstrap-server localhost:9093 \
+  --topic plane.issue.v1 --from-beginning --max-messages 1 --timeout-ms 10000
+```
+
+A `403 bad signature` in the log means the secret in `kara-team` is not the
+webhook's: `RESET_PLANE_WEBHOOK=1 bash deploy/team-platform/phase2/setup.sh`.
+If topic auto-creation is off on the cluster, create `plane.issue.v1` once
+(KafkaTopic, 3 partitions) — kara-api logs a warning and keeps the read model
+current either way.
+

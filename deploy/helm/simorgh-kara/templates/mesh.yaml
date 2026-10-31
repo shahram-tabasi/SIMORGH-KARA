@@ -21,7 +21,7 @@ spec:
   rules:
     - from:
         - source:
-            namespaces: [{{ $ns | quote }}, "monitoring"{{ range .Values.api.contextCallers }}, {{ . | quote }}{{ end }}]
+            namespaces: [{{ $ns | quote }}, "monitoring"{{ range .Values.api.contextCallers }}, {{ . | quote }}{{ end }}{{ range .Values.api.team.callers }}, {{ . | quote }}{{ end }}]
 ---
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy

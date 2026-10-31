@@ -117,3 +117,35 @@ spec:
     - toEntities: [host, remote-node]
       toPorts:
         - ports: [{ port: "8080", protocol: TCP }]
+---
+# Kara (Phase 2, docs/TEAM-PLATFORM.md): Plane's worker posts the workspace
+# webhook to kara-api (signed), and kara-api reads Plane's API (backfill,
+# invitations, the assistant). 15008 is the ambient tunnel.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-egress-to-kara-api, namespace: plane }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kara } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: kara-api } }
+      ports:
+        - { protocol: TCP, port: 3001 }
+        - { protocol: TCP, port: 15008 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-kara-to-api, namespace: plane }
+spec:
+  podSelector:
+    matchLabels: { app.name: plane-plane-api }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kara } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: kara-api } }
+      ports:
+        - { protocol: TCP, port: 8000 }
+        - { protocol: TCP, port: 15008 }

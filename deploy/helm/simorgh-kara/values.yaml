@@ -105,6 +105,22 @@ api:
     # Jitsi's XMPP domain (the chart's xmpp.domain): the tokens' `sub`.
     subject: meet.jitsi
     existingSecret: kara-jitsi
+  # Team Platform (docs/TEAM-PLATFORM.md, deploy/team-platform/): Plane and
+  # Mattermost behind Kara. Credentials in Secret kara-team, made by
+  # deploy/team-platform/phase2/setup.sh; each part is off until its key is there.
+  team:
+    existingSecret: kara-team
+    plane:
+      url: http://plane-api.plane.svc.cluster.local:8000
+      publicUrl: https://plane.simorghai.com
+      workspace: simorgh
+    mattermost:
+      url: http://mattermost.mattermost.svc.cluster.local:8065
+      publicUrl: https://team.simorghai.com
+    # Namespaces that call kara-api for the Team Platform: Plane's webhooks
+    # (signed), Mattermost's slash commands and the "GitLab" sign-in adapter
+    # (Phase 3), n8n's assistant workflows (service token).
+    callers: [plane, mattermost, n8n]
   kafka:
     # 9093 is the plain listener on this cluster (9092 is TLS).
     brokers: simorgh-kafka-kafka-bootstrap.kafka.svc.cluster.local:9093

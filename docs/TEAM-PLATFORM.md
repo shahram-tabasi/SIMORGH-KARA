@@ -1,8 +1,14 @@
 # Simorgh Team Platform — Plane, Mattermost, n8n and the Team Assistant, inside Kara
 
-Status: **Phase 0 done (findings in §8), waiting for approval.** Nothing here is deployed. Phase 0 is
-`deploy/team-platform/phase0-discovery.sh` (read-only) and this document;
-infrastructure changes wait for approval.
+Status (2026-10-31): **Phase 1 live** (Plane .133, Mattermost .134, published through
+1.68); **Phase 2 written** (kara-api `src/team/`, `deploy/team-platform/phase2/`).
+Runbook: `deploy/team-platform/README.md`.
+
+Implementation note, Phase 2: Plane's webhooks go **straight to kara-api**, not
+through n8n. The signature check and the de-duplication belong where the data
+lands, and it is one hop fewer to fail; kara-api then publishes `plane.issue.v1`
+to Kafka for every other consumer (n8n included). n8n keeps the scheduled and
+conversational workflows (Phases 3–4).
 
 ## 1. The rule that keeps it one platform
 

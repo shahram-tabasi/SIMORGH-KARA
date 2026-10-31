@@ -73,3 +73,48 @@ CREATE TABLE IF NOT EXISTS kara_comms.call_parties (
 );
 CREATE INDEX IF NOT EXISTS call_parties_account ON kara_comms.call_parties (account_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS call_parties_ringing ON kara_comms.call_parties (updated_at) WHERE state = 'ringing';
+
+-- ── Team Platform (docs/TEAM-PLATFORM.md): Plane and Mattermost ────────────
+CREATE SCHEMA IF NOT EXISTS kara_team;
+
+-- Every Plane webhook delivery once (X-Plane-Delivery): a retry is answered
+-- 200 and not applied twice.
+CREATE TABLE IF NOT EXISTS kara_team.plane_deliveries (
+  delivery_id text        PRIMARY KEY,
+  event       text        NOT NULL,
+  action      text        NOT NULL,
+  received_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Plane's issues as the webhooks and the backfill last described them: what
+-- "my work" and the assistant read without asking Plane each time.
+CREATE TABLE IF NOT EXISTS kara_team.plane_issues (
+  id           uuid        PRIMARY KEY,
+  workspace    text        NOT NULL,
+  project_id   uuid        NOT NULL,
+  project_key  text,                              -- identifier, e.g. ERP
+  sequence_id  integer,
+  name         text        NOT NULL,
+  state_name   text,
+  state_group  text,                              -- backlog | unstarted | started | completed | cancelled
+  priority     text,                              -- urgent | high | medium | low | none
+  assignees    uuid[]      NOT NULL DEFAULT '{}', -- Plane user ids
+  start_date   date,
+  target_date  date,
+  deleted      boolean     NOT NULL DEFAULT false,
+  updated_at   timestamptz,                       -- Plane's
+  synced_at    timestamptz NOT NULL DEFAULT now(),
+  data         jsonb       NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS plane_issues_assignees ON kara_team.plane_issues USING gin (assignees) WHERE NOT deleted;
+CREATE INDEX IF NOT EXISTS plane_issues_project ON kara_team.plane_issues (project_id) WHERE NOT deleted;
+
+-- Plane's projects (id → identifier and name), for links and reports.
+CREATE TABLE IF NOT EXISTS kara_team.plane_projects (
+  id          uuid        PRIMARY KEY,
+  workspace   text        NOT NULL,
+  identifier  text        NOT NULL,
+  name        text        NOT NULL,
+  archived    boolean     NOT NULL DEFAULT false,
+  synced_at   timestamptz NOT NULL DEFAULT now()
+);

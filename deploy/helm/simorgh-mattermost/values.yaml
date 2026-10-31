@@ -50,7 +50,7 @@ mattermost:
   onlyAdminIntegrations: true
   # Slash commands and the assistant's webhooks call n8n inside the office.
   # Mattermost refuses internal addresses unless listed here.
-  allowedUntrustedInternalConnections: "n8n.n8n.svc.cluster.local n8n.simorghai.com 192.168.1.129"
+  allowedUntrustedInternalConnections: "n8n.n8n.svc.cluster.local n8n.simorghai.com 192.168.1.129 kara-api.kara.svc.cluster.local"
   # Who may join: invitations only (Kara sends them), from these domains.
   openServer: false
   restrictCreationToDomains: "simorghai.com,electrokavir.com"
@@ -128,7 +128,13 @@ networkPolicy:
     - { cidr: 192.168.1.68/32, port: 587 }    # mailcow submission only
   # Extra in-cluster destinations, e.g. n8n's Gateway (Phase 3):
   #   - { namespace: n8n, podLabels: { gateway.networking.k8s.io/gateway-name: n8n }, ports: [443] }
-  egressToPods: []
+  # In-cluster destinations: kara-api (slash commands and interactive
+  # buttons go to Kara, Phase 3) and n8n's gateway.
+  egressToPods:
+    - { namespace: kara, podLabels: { app.kubernetes.io/name: kara-api }, ports: [3001] }
+  # Namespaces whose workloads may call Mattermost's API directly (not through
+  # the Gateway): kara-api provisions accounts and posts as the bot.
+  apiCallerNamespaces: [kara]
   # Ceph RGW runs on worker1 (192.168.1.92), a cluster node: Cilium does not
   # match node addresses with ipBlock, so these ports also get a
   # CiliumNetworkPolicy to the host/remote-node entities.

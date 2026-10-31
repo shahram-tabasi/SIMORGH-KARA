@@ -40,3 +40,10 @@ export class MetricsController {
     return registry.metrics();
   }
 }
+
+export const teamEvents = new Counter({
+  name: 'kara_team_events_total',
+  help: 'Team Platform deliveries (Plane webhooks, Mattermost commands), by source and outcome',
+  labelNames: ['source', 'outcome'],
+  registers: [registry],
+});
