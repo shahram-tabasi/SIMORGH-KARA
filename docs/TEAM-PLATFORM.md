@@ -141,3 +141,19 @@ The master's root disk is 70 GB; `/home` has 400 GB free. Image builds
 | Harbor | anonymous view: gcr-proxy, ghcr-proxy, istio-charts, library, simorgh-chatbot (docker-proxy is private) | Plane, Mattermost, Valkey, RabbitMQ, operator images via `docker-proxy` |
 | Risks seen | GPU nodes on **Ubuntu 20.04 (end of standard support)**; Helm releases `istio-cni` and `ztunnel` in state **failed** (running, but the next upgrade must be handled); `strimzi-cluster-operator` **127 restarts**; stale pods (`llm-text` ContainerStatusUnknown, one collabora pod) | not blockers for Phase 1; listed for the ops backlog |
 | Master disk | `/` 70 GB (28 used: buildah 13 GB, containerd 2.3 GB, /root 5.2 GB); `/home` 412 GB free | buildah storage moved to `/home` (bind mount) |
+
+### Phase 0 — decisions to approve
+
+| # | Decision | Value |
+|---|---|---|
+| 1 | LoadBalancer IPs (one pool + L2 policy per app on worker1/worker2, `^ens34$`, as every app) | **192.168.1.133 Plane**, **192.168.1.134 Mattermost** — after a LAN check that both are unused (.126 is taken outside k8s) |
+| 2 | Names (PowerDNS now; ArvanCloud + edge nginx later) | `plane.simorghai.com` → .133, `team.simorghai.com` → .134 |
+| 3 | TLS | `wildcard-simorghai-tls` copied into `plane` and `mattermost` (sync-wildcard-cert.sh) |
+| 4 | Plane | chart `plane-ce` 1.8.6, `planeVersion: v1.4.3`; ingress off (our Gateway + HTTPRoute); bundled PostgreSQL 15.7, Valkey 7.2.11, RabbitMQ 3.13.6 on `ceph-rbd-simorgh` with real requests (not the chart's 50 Mi); uploads to **Ceph RGW S3** (bucket `plane-uploads`) — the chart's MinIO only if RGW is not reachable |
+| 5 | Plane images | Harbor proxy project **`plane-proxy` → `https://artifacts.plane.so`** (new, Harbor admin UI): plane-frontend, plane-space, plane-admin, plane-live, plane-backend at v1.4.3; postgres/valkey/rabbitmq via `docker-proxy` |
+| 6 | Mattermost | **(A, recommended)** our own small chart `simorgh-mattermost` like `simorgh-n8n` (Deployment + PostgreSQL 17.5 StatefulSet + Gateway), image `docker-proxy/mattermost/mattermost-team-edition:11.7.x` — fewest moving parts, no operator v2 migration ahead; **(B)** Mattermost Operator 1.13 (official; adds cluster-wide CRDs, v2.0 with breaking changes announced) |
+| 7 | Mattermost files | Ceph RGW S3 bucket `mattermost-files` (or a 50 Gi `ceph-rbd-simorgh` PVC) |
+| 8 | Memory | requests ~4 Gi (Plane) + ~2.5 Gi (Mattermost), limits ≤ 1.5× requests — nodes are at 47–54% requested, limits already over-committed (108–171%) |
+| 9 | Network policies | `default-deny` + allow DNS, istiod, gateway, llm-gateway (Phase 3), n8n webhooks — as in `simorgh-website` |
+| 10 | Sign-in, Phase 1 | local accounts created by Kara with e-mail invites; Keycloak GitLab-OAuth shim in Phase 3 |
+| 11 | AI | `qwen3.8-27b` through llm-gateway, tool calling already on (`--enable-auto-tool-choice --tool-call-parser=qwen3_xml`) — no vLLM change |
