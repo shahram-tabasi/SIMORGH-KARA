@@ -9,6 +9,7 @@ Every command runs **on the k8s master as root**, from a checkout of
 | 0 | Discovery (read-only) | `phase0-discovery.sh` |
 | 1 | Plane CE (`plane.simorghai.com`, .133) and Mattermost Team Edition (`team.simorghai.com`, .134); published through 1.68 | `make-secrets.sh`, `plane/{values,edge,policies}.yaml`, `../helm/simorgh-mattermost/` |
 | 2 | Plane → Kara (signed webhooks, read model `kara_team`, Kafka `plane.issue.v1`); Kara's credentials for Plane and Mattermost | `phase2/setup.sh`, kara-api `src/team/` |
+| 3 | Kara makes the accounts (Mattermost team per company, Plane invitations), one sign-in through Kara's "GitLab" adapter, the read-only assistant (`/mytasks` `/project` `/issue` `/ask`) | `phase3/setup.sh`, kara-api `src/sso/`, `src/assistant/`, `src/team/team-sync.ts` |
 
 ## Phase 1 — Plane and Mattermost
 
@@ -216,4 +217,76 @@ webhook's: `RESET_PLANE_WEBHOOK=1 bash deploy/team-platform/phase2/setup.sh`.
 If topic auto-creation is off on the cluster, create `plane.issue.v1` once
 (KafkaTopic, 3 partitions) — kara-api logs a warning and keeps the read model
 current either way.
+
+## Phase 3 — Kara makes the accounts; one sign-in; the assistant
+
+What it adds:
+- **Accounts from Kara.** In Kara (admin → company → apps) switch on
+  *گفتگوی تیمی (Mattermost)* and *پروژه‌ها (Plane)*, then give people the role on
+  their member page. The provisioner (the same queue as Keycloak and Odoo):
+  Mattermost — a team per company (its slug), channels `town-square`,
+  `announcements`, `kara-notifications`, the slash commands, an account per
+  person, deactivated when the role is taken away; Plane — an invitation to the
+  workspace with the role (member 15, admin 20, guest 5). Status per person in
+  `platform.provisioning_state` (targets `mattermost`, `plane`); who is who in
+  `kara_team.app_identities`.
+- **One sign-in.** Plane and Mattermost (free editions) can only sign in with
+  GitLab; kara-api answers as GitLab (`/sso/gitlab/…` on kara.simorghai.com) and
+  signs the person in with Keycloak realm kara. Only people Kara gives the app
+  get through. The button in both apps still says **GitLab** — tell people:
+  "GitLab = your Kara account".
+- **The assistant** (`@simorgh-assistant`): `/mytasks`, `/project ERP`,
+  `/issue ERP-42`, `/ask …` in any channel; the answer comes as a direct
+  message, built only from what the person may see (their kartabl and tasks,
+  Plane projects they are a member of). Read-only; every call in
+  `kara_team.assistant_audit`. `/ask` needs the llm-gateway key.
+
+### 1. Images and network (kara-api and kara-web: a new tag)
+
+```bash
+cd /root/simorgh-kara && git pull
+kubectl apply -f deploy/team-platform/plane/policies.yaml        # Plane → Kara's gateway (sign-in)
+# build kara-api, kara-web and kara-migrate with VERSION=<next tag> exactly as Phase 2 step 3, then:
+helm upgrade kara deploy/helm/simorgh-kara -n kara --reset-then-reuse-values --set image.tag=$VERSION --wait --timeout 15m
+```
+
+### 2. Sign-in and the model key
+
+```bash
+bash deploy/team-platform/phase3/setup.sh          # Keycloak client, Mattermost/Plane sign-in secrets, llm key
+kubectl -n plane rollout restart deploy/plane-api-wl
+helm upgrade mattermost deploy/helm/simorgh-mattermost -n mattermost --set mattermost.gitlabSso.enabled=true
+kubectl -n plane exec deploy/plane-api-wl -- getent hosts kara.simorghai.com   # must be 192.168.1.132 (Kara's gateway)
+```
+
+If that last line shows a public address instead, Plane cannot reach the
+adapter: tell me before going on (a CoreDNS entry fixes it).
+
+### 3. Accounts made by Kara sign in with Kara
+
+```bash
+helm upgrade kara deploy/helm/simorgh-kara -n kara --reset-then-reuse-values --set api.team.mattermost.auth=gitlab --wait
+```
+
+From now on the Mattermost accounts Kara makes (and the ones it made before)
+sign in with **GitLab** (= Kara). Your own first admin account keeps its
+password — it was there before Kara.
+
+### 4. Try it
+
+1. Kara → admin → your company → apps: tick Mattermost and Plane. Members →
+   yourself → Mattermost: user, Plane: admin. Within a minute:
+   ```bash
+   kubectl -n kara exec sts/kara-postgresql -- sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+     "select target, status, detail from platform.provisioning_state where target in ('"'"'mattermost'"'"','"'"'plane'"'"') order by synced_at desc limit 10"'
+   ```
+2. A private window → `https://team.simorghai.com` → **GitLab** → Kara's login →
+   back in Mattermost, in your company's team.
+3. `https://plane.simorghai.com` → **GitLab** → in the workspace (accept the
+   invitation if Plane shows it).
+4. In Mattermost: `/mytasks`, `/project <a project key>`, `/ask کارهای عقب‌افتاده من چیست؟`
+   — the answers arrive from Simorgh Assistant.
+
+Someone without the role who tries **GitLab** gets Kara's page "دسترسی شما …
+فعال نیست" — that is the gate working.
 

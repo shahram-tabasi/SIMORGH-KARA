@@ -123,6 +123,14 @@ spec:
               value: {{ $a.team.mattermost.url | quote }}
             - name: MATTERMOST_PUBLIC_URL
               value: {{ $a.team.mattermost.publicUrl | quote }}
+            - name: MATTERMOST_AUTH
+              value: {{ $a.team.mattermost.auth | quote }}
+            - name: SSO_PUBLIC_BASE
+              value: {{ printf "https://%s/sso/gitlab" .Values.kara.host | quote }}
+            - name: LLM_URL
+              value: {{ $a.team.assistant.llmUrl | quote }}
+            - name: LLM_MODEL
+              value: {{ $a.team.assistant.model | quote }}
             {{- range $env, $key := dict "PLANE_API_KEY" "planeApiKey" "PLANE_WEBHOOK_SECRET" "planeWebhookSecret" "MATTERMOST_ADMIN_TOKEN" "mattermostAdminToken" "MATTERMOST_BOT_TOKEN" "mattermostBotToken" "MATTERMOST_COMMAND_TOKENS" "mattermostCommandTokens" "ASSISTANT_SERVICE_TOKEN" "assistantServiceToken" "SSO_PLANE_CLIENT_SECRET" "ssoPlaneSecret" "SSO_MATTERMOST_CLIENT_SECRET" "ssoMattermostSecret" "SSO_KEYCLOAK_CLIENT_SECRET" "ssoKeycloakSecret" "LLM_API_KEY" "llmApiKey" }}
             - name: {{ $env }}
               valueFrom:

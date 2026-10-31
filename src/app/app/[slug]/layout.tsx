@@ -31,6 +31,11 @@ export default async function TenantLayout({
     ? await karaApi<{ calls: boolean; meetings: boolean }>(ctx.session.sub, "GET", `/v1/tenants/${encodeURIComponent(params.slug)}/comms`).catch(() => null)
     : null;
   const callsOn = !!comms?.calls;
+  // Team Platform (docs/TEAM-PLATFORM.md): links to Mattermost and Plane for a
+  // company that has them; Kara gives each person their account there.
+  const [co] = await sql<{ apps: Record<string, boolean> | null }[]>`SELECT apps FROM platform.companies WHERE slug = ${params.slug}`;
+  const teamChatUrl = process.env.MATTERMOST_PUBLIC_URL || "https://team.simorghai.com";
+  const projectsUrl = process.env.PLANE_PUBLIC_URL || "https://plane.simorghai.com";
   const push = (cond: boolean, item: NavItem) => (cond ? [item] : []);
 
   const groups: NavGroup[] = [
@@ -62,6 +67,8 @@ export default async function TenantLayout({
       title: "ارتباطات",
       items: [
         ...push(callsOn, { href: `${base}/calls`, label: "تماس و جلسه", icon: "📞" }),
+        ...push(!!co?.apps?.mattermost, { href: teamChatUrl, label: "گفتگوی تیمی (Mattermost)", icon: "💬" }),
+        ...push(!!co?.apps?.plane, { href: projectsUrl, label: "پروژه‌ها (Plane)", icon: "📋" }),
       ],
     },
     {

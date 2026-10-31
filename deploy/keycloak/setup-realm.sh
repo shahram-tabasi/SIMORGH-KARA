@@ -12,6 +12,10 @@
 #                                                 # one form for email and password
 #                                                 # (not Keycloak's identity-first steps)
 #   deploy/keycloak/setup-realm.sh hr-theme       # realm hr's login theme simorgh-hr
+#   deploy/keycloak/setup-realm.sh team-sso       # client kara-team-sso: Kara's "GitLab"
+#                                                 # sign-in adapter for Plane and Mattermost
+#                                                 # (docs/TEAM-PLATFORM.md §3), secret into
+#                                                 # Secret kara/kara-team ssoKeycloakSecret
 #   deploy/keycloak/setup-realm.sh staff-idp ORG  # Simorgh staff sign in with their
 #                                                 # realm-simorgh account (org alias ORG)
 #   KEEP_EMAILS="a@x b@y" deploy/keycloak/setup-realm.sh reset-identities
@@ -424,6 +428,22 @@ reset_identities() {
   echo "deleted: $n organizations and users"
 }
 
+# Kara's sign-in adapter for Plane and Mattermost (kara-api src/sso): both
+# speak GitLab OAuth only (free editions); kara-api answers as "GitLab" and
+# signs people in here, in realm kara. Confidential, code flow + PKCE.
+team_sso() {
+  say "client kara-team-sso (Plane and Mattermost sign-in)"
+  local base="$KARA_SCHEME://$KARA_HOST" id
+  id="$(printf '%s' "{\"clientId\":\"kara-team-sso\",\"name\":\"Simorgh Team (Plane, Mattermost)\",\"enabled\":true,
+    \"publicClient\":false,\"clientAuthenticatorType\":\"client-secret\",\"standardFlowEnabled\":true,
+    \"directAccessGrantsEnabled\":false,\"implicitFlowEnabled\":false,\"serviceAccountsEnabled\":false,
+    \"rootUrl\":\"$base\",\"redirectUris\":[\"$base/sso/gitlab/callback\"],\"webOrigins\":[\"$base\"],
+    \"attributes\":{\"pkce.code.challenge.method\":\"S256\"}
+    }" | upsert_client "$REALM" kara-team-sso)"
+  attach_scopes "$REALM" "$id" default basic profile email roles acr
+  client_secret "$REALM" "$id" | store_secret ssoKeycloakSecret "$NS" kara-team
+}
+
 login
 trap logout EXIT
 case "${1:-}" in
@@ -435,5 +455,6 @@ case "${1:-}" in
   login-form) shift; login_form "${@:-$REALM}" ;;
   hr-theme) hr_theme ;;
   reset-identities) reset_identities ;;
-  *) echo "usage: $0 realm | mail | theme | app-realms | staff-idp ORG_ALIAS | login-form [REALM…] | hr-theme | reset-identities"; exit 2 ;;
+  team-sso) team_sso ;;
+  *) echo "usage: $0 realm | mail | theme | app-realms | staff-idp ORG_ALIAS | login-form [REALM…] | hr-theme | team-sso | reset-identities"; exit 2 ;;
 esac

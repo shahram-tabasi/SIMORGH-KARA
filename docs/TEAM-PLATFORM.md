@@ -1,7 +1,8 @@
 # Simorgh Team Platform — Plane, Mattermost, n8n and the Team Assistant, inside Kara
 
 Status (2026-10-31): **Phase 1 live** (Plane .133, Mattermost .134, published through
-1.68); **Phase 2 written** (kara-api `src/team/`, `deploy/team-platform/phase2/`).
+1.68); **Phase 2 written** (kara-api `src/team/`, `deploy/team-platform/phase2/`); **Phase 3 written**
+(provisioning, the GitLab-OAuth adapter `src/sso/`, the read-only assistant `src/assistant/`).
 Runbook: `deploy/team-platform/README.md`.
 
 Implementation note, Phase 2: Plane's webhooks go **straight to kara-api**, not
@@ -9,6 +10,17 @@ through n8n. The signature check and the de-duplication belong where the data
 lands, and it is one hop fewer to fail; kara-api then publishes `plane.issue.v1`
 to Kafka for every other consumer (n8n included). n8n keeps the scheduled and
 conversational workflows (Phases 3–4).
+
+Implementation note, Phase 3: Mattermost's slash commands go **straight to
+kara-api** (`/v1/team/mattermost/command`, the command's token checked), and the
+assistant's tool loop runs in kara-api, where identity, roles and the audit
+already are. n8n gets the same tools as an API (`/v1/assistant/*`, service
+token, the person named by their Mattermost id) for its workflows. The
+identity map is `kara_team.app_identities` (owned by kara-api, next to its
+other `kara_*` schemas) rather than `platform.app_identities`.
+Plane's public API can invite but not add or remove members; Kara invites,
+and when access is taken away it refuses the sign-in and tells the admin
+(provisioning detail) to remove the member in Plane.
 
 ## 1. The rule that keeps it one platform
 

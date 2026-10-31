@@ -116,6 +116,16 @@ spec:
   hostnames:
     - {{ .Values.kara.host }}
   rules:
+    # Kara's "GitLab" sign-in adapter for Plane and Mattermost (kara-api
+    # src/sso): the browser's authorize and callback, and Plane's server-side
+    # token and user calls (Plane has one GitLab address for all three).
+    - matches:
+        - path: { type: PathPrefix, value: /sso/gitlab/ }
+      backendRefs:
+        - name: kara-api
+          port: 3001
+      timeouts:
+        request: 30s
     - matches:
         - path: { type: RegularExpression, value: "^/app/[^/]+/comms/live$" }
       backendRefs:

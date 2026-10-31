@@ -118,3 +118,65 @@ CREATE TABLE IF NOT EXISTS kara_team.plane_projects (
   archived    boolean     NOT NULL DEFAULT false,
   synced_at   timestamptz NOT NULL DEFAULT now()
 );
+
+-- Who is who across the apps (Phase 3): a Kara account's Mattermost user and
+-- Plane user. Written by the provisioner and on sign-in through the adapter.
+CREATE TABLE IF NOT EXISTS kara_team.app_identities (
+  account_id   uuid        NOT NULL,              -- platform.user_accounts.id
+  app          text        NOT NULL,              -- mattermost | plane
+  external_id  text,                              -- the app's user id (null: invited, not signed up yet)
+  username     text,
+  state        text        NOT NULL,              -- active | invited | deactivated | absent
+  managed      boolean     NOT NULL DEFAULT true, -- false: the account existed before Kara
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (account_id, app)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS app_identities_external ON kara_team.app_identities (app, external_id) WHERE external_id IS NOT NULL;
+
+-- The "GitLab" sign-in adapter's one-time codes and access tokens (hashed).
+CREATE TABLE IF NOT EXISTS kara_team.sso_grants (
+  hash         text        PRIMARY KEY,           -- sha256 of the code or token
+  kind         text        NOT NULL,              -- code | token
+  client_id    text        NOT NULL,              -- plane | mattermost
+  account_id   uuid        NOT NULL,
+  redirect_uri text,
+  expires_at   timestamptz NOT NULL,
+  used_at      timestamptz
+);
+CREATE INDEX IF NOT EXISTS sso_grants_expiry ON kara_team.sso_grants (expires_at);
+
+-- The adapter's pending sign-ins (the app's state, kept while Keycloak asks).
+CREATE TABLE IF NOT EXISTS kara_team.sso_pending (
+  state         text        PRIMARY KEY,          -- Kara's state towards Keycloak
+  client_id     text        NOT NULL,
+  redirect_uri  text        NOT NULL,
+  client_state  text,
+  code_verifier text        NOT NULL,
+  expires_at    timestamptz NOT NULL
+);
+
+-- Every assistant call (Phase 3): who asked, which tool, on what, the result.
+-- No tokens, no document bodies.
+CREATE TABLE IF NOT EXISTS kara_team.assistant_audit (
+  id          bigserial   PRIMARY KEY,
+  at          timestamptz NOT NULL DEFAULT now(),
+  account_id  uuid,
+  channel     text        NOT NULL,               -- mattermost | n8n | kara
+  tool        text        NOT NULL,
+  target      text,
+  arguments   jsonb       NOT NULL DEFAULT '{}',
+  outcome     text        NOT NULL,               -- ok | denied | error
+  detail      text
+);
+CREATE INDEX IF NOT EXISTS assistant_audit_account ON kara_team.assistant_audit (account_id, at DESC);
+
+-- The assistant's slash commands in each company's Mattermost team (made by
+-- the provisioner); Mattermost sends the token with every use.
+CREATE TABLE IF NOT EXISTS kara_team.mm_commands (
+  team_id     text        NOT NULL,
+  trigger     text        NOT NULL,
+  command_id  text        NOT NULL,
+  token_hash  text        NOT NULL,
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (team_id, trigger)
+);

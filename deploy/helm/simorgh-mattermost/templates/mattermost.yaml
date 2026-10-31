@@ -130,6 +130,18 @@ spec:
               valueFrom:
                 secretKeyRef: { name: {{ $m.smtp.existingSecret }}, key: password, optional: true }
             {{- end }}
+            {{- if $m.gitlabSso.enabled }}
+            # ── Sign-in through Kara (as "GitLab")
+            - { name: MM_GITLABSETTINGS_ENABLE, value: "true" }
+            - { name: MM_GITLABSETTINGS_ID, value: {{ $m.gitlabSso.clientId | quote }} }
+            - { name: MM_GITLABSETTINGS_SCOPE, value: "" }
+            - { name: MM_GITLABSETTINGS_AUTHENDPOINT, value: {{ $m.gitlabSso.authEndpoint | quote }} }
+            - { name: MM_GITLABSETTINGS_TOKENENDPOINT, value: {{ $m.gitlabSso.tokenEndpoint | quote }} }
+            - { name: MM_GITLABSETTINGS_USERAPIENDPOINT, value: {{ $m.gitlabSso.userApiEndpoint | quote }} }
+            - name: MM_GITLABSETTINGS_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ $m.gitlabSso.existingSecret }}, key: clientSecret }
+            {{- end }}
             {{- range $k, $v := $m.extraEnv }}
             - { name: {{ $k }}, value: {{ $v | quote }} }
             {{- end }}

@@ -18,6 +18,20 @@ export interface MmUser {
 }
 export interface MmTeam { id: string; name: string; display_name: string; delete_at: number }
 export interface MmChannel { id: string; name: string; team_id: string; type: string }
+export interface MmCommand {
+  id: string;
+  team_id: string;
+  trigger: string;
+  method: 'P' | 'G';
+  url: string;
+  token: string;
+  display_name: string;
+  description: string;
+  auto_complete: boolean;
+  auto_complete_desc: string;
+  auto_complete_hint: string;
+  username?: string;
+}
 export interface MmPost { id: string; channel_id: string; message: string }
 
 export interface MmAction {
@@ -106,6 +120,11 @@ export class MattermostClient {
       ?? this.req<MmChannel>('admin', 'POST', '/channels', { team_id: teamId, name, display_name: displayName, purpose, type: 'O' });
   }
   addToChannel(channelId: string, userId: string) { return this.req('admin', 'POST', `/channels/${channelId}/members`, { user_id: userId }); }
+
+  // ── Slash commands ───────────────────────────────────────────────────────
+  teamCommands(teamId: string) { return this.req<MmCommand[]>('admin', 'GET', `/commands?team_id=${teamId}&custom_only=true`); }
+  createCommand(c: Omit<MmCommand, 'id' | 'token'>) { return this.req<MmCommand>('admin', 'POST', '/commands', c); }
+  updateCommand(c: MmCommand) { return this.req<MmCommand>('admin', 'PUT', `/commands/${c.id}`, c); }
 
   // ── Messages (as the bot simorgh-assistant) ──────────────────────────────
   private botId?: string;

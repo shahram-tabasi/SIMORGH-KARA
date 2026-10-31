@@ -117,6 +117,15 @@ api:
     mattermost:
       url: http://mattermost.mattermost.svc.cluster.local:8065
       publicUrl: https://team.simorghai.com
+      # How accounts Kara makes sign in: "gitlab" (Kara's adapter: the Kara
+      # password, Keycloak MFA) once Phase 3's sign-in is set up, else "email"
+      # (a password link by mail).
+      auth: email
+    # The Team Assistant's language model (llm-gateway, key team-assistant in
+    # Secret kara-team llmApiKey).
+    assistant:
+      llmUrl: https://llm.simorghai.com/v1
+      model: qwen3.8-27b
     # Namespaces that call kara-api for the Team Platform: Plane's webhooks
     # (signed), Mattermost's slash commands and the "GitLab" sign-in adapter
     # (Phase 3), n8n's assistant workflows (service token).

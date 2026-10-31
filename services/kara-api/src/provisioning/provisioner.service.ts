@@ -5,6 +5,10 @@ import { ConnectorClient } from '../erp/connector.client';
 import { DbService } from '../infra/db.service';
 import { splitName } from '../identity/identity.service';
 import { KnowledgeFacts, OdooCompany, OdooMember, OdooSync, Outcome } from './odoo';
+import { MattermostClient } from '../team/mattermost.client';
+import { PlaneClient } from '../team/plane.client';
+import { TeamAccessService } from '../team/team-access.service';
+import { TeamSync } from '../team/team-sync';
 import {
   AppKey, AppMapping, CompanyFacts, MemberFacts, UnitFacts, companyGroupPaths, companyRoot, companyUses, companyUsesOdoo, diff,
   managedRoles, planMember,
@@ -51,8 +55,10 @@ export class ProvisionerService implements OnModuleInit, OnModuleDestroy {
     }));
 
   readonly odoo: OdooSync;
+  readonly team: TeamSync;
 
-  constructor(private readonly db: DbService, connector: ConnectorClient) {
+  constructor(private readonly db: DbService, connector: ConnectorClient, mm: MattermostClient, plane: PlaneClient, ids: TeamAccessService) {
+    this.team = new TeamSync(mm, plane, ids, db);
     this.odoo = new OdooSync(connector, async (companyId, odooCompanyId) => {
       await this.db.query('UPDATE platform.companies SET odoo_company_id = $2 WHERE id = $1 AND odoo_company_id IS NULL', [companyId, odooCompanyId]);
     });
@@ -64,7 +70,7 @@ export class ProvisionerService implements OnModuleInit, OnModuleDestroy {
       this.log.log('provisioning off (PROVISION_ENABLED=false)');
       return;
     }
-    const targets = [...this.realms.map((r) => r.target), ...(this.odoo.configured ? ['odoo'] : [])];
+    const targets = [...this.realms.map((r) => r.target), ...(this.odoo.configured ? ['odoo'] : []), ...this.team.targets()];
     this.log.log(`provisioning into ${targets.join(', ') || 'nothing (no client secrets, no erp-connector)'}`);
     this.schedule();
   }
@@ -257,6 +263,22 @@ export class ProvisionerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Plane and Mattermost (docs/TEAM-PLATFORM.md): each tried, the job fails if one did. */
+  private async teamSteps(entity: string, id: string, step: (app: 'plane' | 'mattermost') => Promise<Outcome>) {
+    const errors: string[] = [];
+    for (const app of this.team.targets()) {
+      try {
+        const out = await step(app);
+        await this.state(entity, id, app, out.status, out.externalId, out.detail);
+      } catch (e) {
+        const msg = (e as Error).message;
+        errors.push(`${app}: ${msg}`);
+        await this.state(entity, id, app, 'failed', null, msg);
+      }
+    }
+    if (errors.length) throw new Error(errors.join('; '));
+  }
+
   // ── A company: its organization and its unit groups in each app realm ────
 
   async company(companyId: string) {
@@ -265,6 +287,7 @@ export class ProvisionerService implements OnModuleInit, OnModuleDestroy {
     await this.both(
       () => this.realmsOfCompany(c),
       () => this.odooStep('company', companyId, c, () => this.odoo.company(c)),
+      () => this.teamSteps('company', companyId, (app) => this.team.company(app, c)),
     );
   }
 
@@ -335,7 +358,8 @@ export class ProvisionerService implements OnModuleInit, OnModuleDestroy {
       };
       return this.odoo.member(c!, om, accountId);
     });
-    await this.both(realms, odoo);
+    const team = () => this.teamSteps('member', accountId, (app) => this.team.member(app, accountId, c, m, m?.email ?? acc?.email ?? null));
+    await this.both(realms, odoo, team);
   }
 
   private async join(r: AppRealm, existing: KcUser | undefined, c: CompanyFacts, m: MemberFacts, plan: ReturnType<typeof planMember>, companyRoleExists: boolean) {

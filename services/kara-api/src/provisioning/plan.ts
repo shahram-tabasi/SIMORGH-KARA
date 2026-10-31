@@ -2,7 +2,7 @@
 // from Kara alone (docs/INTEGRATION.md). Pure: the provisioner compares this
 // with what the realm holds and makes the difference.
 
-export type AppKey = 'designSuite' | 'hrChatbot' | 'erp';
+export type AppKey = 'designSuite' | 'hrChatbot' | 'erp' | 'plane' | 'mattermost';
 
 export interface CompanyFacts {
   id: string;

@@ -186,6 +186,45 @@ export const config = {
       commandTokens: list('MATTERMOST_COMMAND_TOKENS'),
       timeoutMs: num('MATTERMOST_TIMEOUT_MS', 15_000),
     },
+    /**
+     * Kara's "GitLab" sign-in adapter (src/sso): Plane and Mattermost (free
+     * editions) sign in with GitLab OAuth only; Kara answers as GitLab and
+     * signs people in with Keycloak (client kara-team-sso, realm kara).
+     */
+    sso: {
+      /** Where browsers reach the adapter (the Kara gateway routes /sso/gitlab here). */
+      publicBase: trim(str('SSO_PUBLIC_BASE', 'https://kara.simorghai.com/sso/gitlab')),
+      keycloakClientId: str('SSO_KEYCLOAK_CLIENT_ID', 'kara-team-sso'),
+      keycloakClientSecret: str('SSO_KEYCLOAK_CLIENT_SECRET', ''),
+      /** The apps that may use it: client id → secret, allowed redirect prefix, Kara app key. */
+      clients: [
+        { id: 'plane', secret: str('SSO_PLANE_CLIENT_SECRET', ''), app: 'plane' as const,
+          redirectPrefix: str('SSO_PLANE_REDIRECT_PREFIX', 'https://plane.simorghai.com/auth/gitlab/callback') },
+        { id: 'mattermost', secret: str('SSO_MATTERMOST_CLIENT_SECRET', ''), app: 'mattermost' as const,
+          redirectPrefix: str('SSO_MATTERMOST_REDIRECT_PREFIX', 'https://team.simorghai.com/signup/gitlab/complete') },
+      ],
+      tokenTtlSeconds: num('SSO_TOKEN_TTL_SECONDS', 3600),
+    },
+    /** Mattermost accounts made by Kara sign in through the adapter ("gitlab") or by email and password. */
+    mattermostAuth: str('MATTERMOST_AUTH', 'email') as 'email' | 'gitlab',
+    /** Where Mattermost sends the assistant's slash commands (kara-api inside the cluster). */
+    commandUrl: str('MATTERMOST_COMMAND_URL', 'http://kara-api.kara.svc.cluster.local:3001/v1/team/mattermost/command'),
+    /** The Mattermost channels every member of a company's team joins. */
+    defaultChannels: list('MATTERMOST_DEFAULT_CHANNELS', 'town-square,announcements,kara-notifications'),
+    /**
+     * The Team Assistant (src/assistant): the office LLM through llm-gateway
+     * (OpenAI-compatible, key team-assistant), tools answered by Kara as the
+     * asking person. Empty key: /ask is off, the plain commands still work.
+     */
+    assistant: {
+      llmUrl: trim(str('LLM_URL', 'https://llm.simorghai.com/v1')),
+      llmApiKey: str('LLM_API_KEY', ''),
+      model: str('LLM_MODEL', 'qwen3.8-27b'),
+      timeoutMs: num('LLM_TIMEOUT_MS', 120_000),
+      maxToolRounds: num('ASSISTANT_MAX_TOOL_ROUNDS', 5),
+      /** n8n's service token (Secret kara-team assistantServiceToken): /v1/assistant/* for workflows. */
+      serviceToken: str('ASSISTANT_SERVICE_TOKEN', ''),
+    },
     /** Kafka topic for Plane's issue events (others may follow them). */
     planeTopic: str('PLANE_KAFKA_TOPIC', 'plane.issue.v1'),
   },

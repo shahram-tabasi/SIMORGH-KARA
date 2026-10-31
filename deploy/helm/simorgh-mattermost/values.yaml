@@ -82,6 +82,17 @@ mattermost:
   hostAliases:
     - ip: 192.168.1.68
       hostnames: [mail.simorghai.com]
+  # Sign-in with the Kara account: Kara answers as "GitLab" (kara-api
+  # src/sso, docs/TEAM-PLATFORM.md §3). The browser goes to the public
+  # authorize address; Mattermost's server calls kara-api inside the cluster.
+  # Secret mattermost-sso (clientSecret) comes from phase3/setup.sh.
+  gitlabSso:
+    enabled: false
+    clientId: mattermost
+    existingSecret: mattermost-sso
+    authEndpoint: https://kara.simorghai.com/sso/gitlab/oauth/authorize
+    tokenEndpoint: http://kara-api.kara.svc.cluster.local:3001/sso/gitlab/oauth/token
+    userApiEndpoint: http://kara-api.kara.svc.cluster.local:3001/sso/gitlab/api/v4/user
   logLevel: INFO                     # the image default is DEBUG: every probe logged
   extraEnv: {}
   # Limits at most 1.5x requests (decision 8, docs/TEAM-PLATFORM.md).

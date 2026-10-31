@@ -27,6 +27,12 @@ import { MattermostClient } from './team/mattermost.client';
 import { PlaneClient } from './team/plane.client';
 import { PlaneEventsService } from './team/plane-events.service';
 import { PlaneWebhookController } from './team/plane-webhook.controller';
+import { TeamAccessService } from './team/team-access.service';
+import { GitlabShimController } from './sso/gitlab-shim.controller';
+import { AssistantController, AssistantTokenGuard } from './assistant/assistant.controller';
+import { AssistantService } from './assistant/assistant.service';
+import { AssistantToolsService } from './assistant/tools.service';
+import { MattermostCommandController } from './assistant/mattermost-command.controller';
 
 /** X-Request-Id in (or made here) and out, and one log line per request. */
 function requestLog(req: Request & { actor?: { email: string; via: string } }, res: Response, next: NextFunction) {
@@ -45,8 +51,8 @@ function requestLog(req: Request & { actor?: { email: string; via: string } }, r
 }
 
 @Module({
-  controllers: [AdminController, ErpController, IdentityController, CommsController, ContextController, PlmController, ShopFloorController, PlaneWebhookController, HealthController, MetricsController],
-  providers: [DbService, TenantsService, ActorGuard, ConnectorClient, ReadModelService, ErpConsumer, IdentityService, LiveService, CallsService, ProvisionerService, ContextService, CompanyDeleteService, PlaneClient, MattermostClient, PlaneEventsService],
+  controllers: [AdminController, ErpController, IdentityController, CommsController, ContextController, PlmController, ShopFloorController, PlaneWebhookController, GitlabShimController, AssistantController, MattermostCommandController, HealthController, MetricsController],
+  providers: [DbService, TenantsService, ActorGuard, ConnectorClient, ReadModelService, ErpConsumer, IdentityService, LiveService, CallsService, ProvisionerService, ContextService, CompanyDeleteService, PlaneClient, MattermostClient, PlaneEventsService, TeamAccessService, AssistantToolsService, AssistantService, AssistantTokenGuard],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

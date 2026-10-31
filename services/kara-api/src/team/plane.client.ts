@@ -80,6 +80,13 @@ export class PlaneClient {
 
   members() { return this.req<PlaneMember[]>('GET', this.ws('/members/')); }
 
+  /** A project's members (Plane users); a list or a page, depending on the version. */
+  async projectMembers(projectId: string): Promise<PlaneUserLite[]> {
+    const r = await this.req<PlaneUserLite[] | Page<PlaneUserLite & { member?: string }>>('GET', this.ws(`/projects/${projectId}/members/`));
+    const list = Array.isArray(r) ? r : r.results;
+    return list.map((u) => ({ ...u, id: (u as { member?: string }).member ?? u.id }));
+  }
+
   invitations() { return this.all<PlaneInvitation>(this.ws('/invitations/')); }
 
   invite(email: string, role: number) { return this.req<PlaneInvitation>('POST', this.ws('/invitations/'), { email, role }); }
@@ -87,6 +94,10 @@ export class PlaneClient {
   updateInvitation(id: string, role: number) { return this.req<PlaneInvitation>('PATCH', this.ws(`/invitations/${id}/`), { role }); }
 
   deleteInvitation(id: string) { return this.req<void>('DELETE', this.ws(`/invitations/${id}/`)); }
+
+  projectUrl(projectId: string) {
+    return `${config.team.plane.publicUrl}/${encodeURIComponent(this.workspace)}/projects/${projectId}/issues`;
+  }
 
   /** A browser link to an issue. */
   issueUrl(projectId: string, issueId: string) {
