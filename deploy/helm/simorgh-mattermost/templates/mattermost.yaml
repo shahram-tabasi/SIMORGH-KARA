@@ -96,6 +96,8 @@ spec:
             - { name: MM_PLUGINSETTINGS_ENABLEMARKETPLACE, value: {{ $m.marketplace | quote }} }
             - { name: MM_PLUGINSETTINGS_ENABLEREMOTEMARKETPLACE, value: "false" }
             - { name: MM_PLUGINSETTINGS_ENABLEUPLOADS, value: "false" }
+            - { name: MM_LOGSETTINGS_CONSOLELEVEL, value: {{ $m.logLevel | default "INFO" | quote }} }
+            - { name: MM_LOGSETTINGS_FILELEVEL, value: {{ $m.logLevel | default "INFO" | quote }} }
             - { name: MM_LOGSETTINGS_ENABLEDIAGNOSTICS, value: {{ $m.diagnostics | quote }} }
             - { name: MM_EMAILSETTINGS_SENDPUSHNOTIFICATIONS, value: {{ $m.push.enabled | quote }} }
             - { name: MM_EMAILSETTINGS_PUSHNOTIFICATIONCONTENTS, value: {{ $m.push.contents | quote }} }

@@ -82,6 +82,7 @@ mattermost:
   hostAliases:
     - ip: 192.168.1.68
       hostnames: [mail.simorghai.com]
+  logLevel: INFO                     # the image default is DEBUG: every probe logged
   extraEnv: {}
   # Limits at most 1.5x requests (decision 8, docs/TEAM-PLATFORM.md).
   resources:
@@ -128,3 +129,7 @@ networkPolicy:
   # Extra in-cluster destinations, e.g. n8n's Gateway (Phase 3):
   #   - { namespace: n8n, podLabels: { gateway.networking.k8s.io/gateway-name: n8n }, ports: [443] }
   egressToPods: []
+  # Ceph RGW runs on worker1 (192.168.1.92), a cluster node: Cilium does not
+  # match node addresses with ipBlock, so these ports also get a
+  # CiliumNetworkPolicy to the host/remote-node entities.
+  nodeEgressPorts: [8080]

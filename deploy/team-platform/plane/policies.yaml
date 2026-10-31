@@ -103,3 +103,17 @@ kind: PeerAuthentication
 metadata: { name: default, namespace: plane }
 spec:
   mtls: { mode: STRICT }
+---
+# Ceph RGW listens on 192.168.1.92, which is worker1, a cluster node. Cilium
+# gives node addresses the identities host/remote-node, so the ipBlock above
+# never matches them (the first install's create_bucket was cut off). Allow
+# the RGW port to the nodes, nothing else.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: { name: allow-egress-rgw-on-nodes, namespace: plane }
+spec:
+  endpointSelector: {}
+  egress:
+    - toEntities: [host, remote-node]
+      toPorts:
+        - ports: [{ port: "8080", protocol: TCP }]
