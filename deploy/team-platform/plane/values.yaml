@@ -19,7 +19,10 @@ _noGpu: &noGpu
     requiredDuringSchedulingIgnoredDuringExecution:
       nodeSelectorTerms:
         - matchExpressions:
-            - { key: nvidia.com/gpu.product, operator: DoesNotExist }
+            # GPU Feature Discovery labels are not on these nodes; name them.
+            - key: kubernetes.io/hostname
+              operator: NotIn
+              values: [k8s.gpu-worker1.simorgh, k8s.gpu-worker2.simorgh]
 
 # Pulls through Harbor's Docker Hub proxy; the chart's ServiceAccount carries
 # the pull secret (copied into the namespace by make-secrets.sh).
