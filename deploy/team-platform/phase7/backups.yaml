@@ -1,0 +1,193 @@
+# Phase 7 (docs/TEAM-PLATFORM.md): a nightly dump of Plane's and Mattermost's
+# databases into Ceph RGW (bucket <app>-backups, owned by the app's own RGW
+# user), kept without deletes: daily/<weekday>.dump (7 days) and, on Fridays,
+# weekly/w<ISO week mod 5>.dump (about 5 weeks). Files are already in RGW
+# (replicated 3x); these dumps are what a restore needs besides them.
+#
+#   kubectl apply -f deploy/team-platform/phase7/backups.yaml
+#   kubectl -n plane create job --from=cronjob/team-backup team-backup-now      # one now
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: team-backup
+  namespace: plane
+  labels: { app.kubernetes.io/name: team-backup, app.kubernetes.io/part-of: simorgh-team-platform }
+spec:
+  schedule: "30 1 * * *"
+  timeZone: Asia/Tehran
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels: { app.kubernetes.io/name: team-backup }
+        spec:
+          restartPolicy: OnFailure
+          imagePullSecrets: [{ name: harbor-registry }]
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: kubernetes.io/hostname
+                        operator: NotIn
+                        values: [k8s.gpu-worker1.simorgh, k8s.gpu-worker2.simorgh]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
+            seccompProfile: { type: RuntimeDefault }
+          initContainers:
+            - name: dump
+              image: registry.simorghai.com/docker-proxy/library/postgres:17.5-alpine
+              command: ["sh", "-ec", "pg_dump -Fc -Z 6 -f /backup/db.dump && pg_restore -l /backup/db.dump >/dev/null && ls -l /backup/db.dump"]
+              env:
+                - { name: PGHOST, value: plane-pgdb }
+                - name: PGUSER
+                  valueFrom: { secretKeyRef: { name: plane-pgdb-secrets, key: POSTGRES_USER } }
+                - name: PGPASSWORD
+                  valueFrom: { secretKeyRef: { name: plane-pgdb-secrets, key: POSTGRES_PASSWORD } }
+                - name: PGDATABASE
+                  valueFrom: { secretKeyRef: { name: plane-pgdb-secrets, key: POSTGRES_DB } }
+              securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+              resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { memory: 512Mi } }
+              volumeMounts: [{ name: backup, mountPath: /backup }, { name: tmp, mountPath: /tmp }]
+          containers:
+            - name: upload
+              image: registry.simorghai.com/docker-proxy/curlimages/curl:8.11.1
+              command:
+                - sh
+                - -ec
+                - |
+                  S3="http://192.168.1.92:8080/plane-backups"
+                  c() { curl -fsS --aws-sigv4 "aws:amz:us-east-1:s3" --user "$AK:$SK" "$@"; }
+                  # The bucket, once (an existing one answers 409: fine).
+                  curl -sS -o /dev/null --aws-sigv4 "aws:amz:us-east-1:s3" --user "$AK:$SK" -X PUT "$S3" || true
+                  day=$(date +%a); c -T /backup/db.dump "$S3/daily/$day.dump"
+                  if [ "$(date +%u)" = 5 ]; then w=$(( $(date +%V | sed 's/^0//') % 5 )); c -T /backup/db.dump "$S3/weekly/w$w.dump"; fi
+                  echo "uploaded plane $(date -Iseconds) $(wc -c < /backup/db.dump) bytes"
+              env:
+                - name: AK
+                  valueFrom: { secretKeyRef: { name: plane-doc-store, key: AWS_ACCESS_KEY_ID } }
+                - name: SK
+                  valueFrom: { secretKeyRef: { name: plane-doc-store, key: AWS_SECRET_ACCESS_KEY } }
+              securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+              resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { memory: 128Mi } }
+              volumeMounts: [{ name: backup, mountPath: /backup }]
+          volumes:
+            - { name: backup, emptyDir: { sizeLimit: 10Gi } }
+            - { name: tmp, emptyDir: { sizeLimit: 64Mi } }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: team-backup
+  namespace: mattermost
+  labels: { app.kubernetes.io/name: team-backup, app.kubernetes.io/part-of: simorgh-team-platform }
+spec:
+  schedule: "45 1 * * *"
+  timeZone: Asia/Tehran
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels: { app.kubernetes.io/name: team-backup }
+        spec:
+          restartPolicy: OnFailure
+          imagePullSecrets: [{ name: harbor-registry }]
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: kubernetes.io/hostname
+                        operator: NotIn
+                        values: [k8s.gpu-worker1.simorgh, k8s.gpu-worker2.simorgh]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
+            seccompProfile: { type: RuntimeDefault }
+          initContainers:
+            - name: dump
+              image: registry.simorghai.com/docker-proxy/library/postgres:17.5-alpine
+              command: ["sh", "-ec", "pg_dump -Fc -Z 6 -f /backup/db.dump && pg_restore -l /backup/db.dump >/dev/null && ls -l /backup/db.dump"]
+              env:
+                - { name: PGHOST, value: mattermost-postgresql }
+                - name: PGUSER
+                  valueFrom: { secretKeyRef: { name: mattermost-db, key: username } }
+                - name: PGPASSWORD
+                  valueFrom: { secretKeyRef: { name: mattermost-db, key: password } }
+                - { name: PGDATABASE, value: mattermost }
+              securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+              resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { memory: 512Mi } }
+              volumeMounts: [{ name: backup, mountPath: /backup }, { name: tmp, mountPath: /tmp }]
+          containers:
+            - name: upload
+              image: registry.simorghai.com/docker-proxy/curlimages/curl:8.11.1
+              command:
+                - sh
+                - -ec
+                - |
+                  S3="http://192.168.1.92:8080/mattermost-backups"
+                  c() { curl -fsS --aws-sigv4 "aws:amz:us-east-1:s3" --user "$AK:$SK" "$@"; }
+                  # The bucket, once (an existing one answers 409: fine).
+                  curl -sS -o /dev/null --aws-sigv4 "aws:amz:us-east-1:s3" --user "$AK:$SK" -X PUT "$S3" || true
+                  day=$(date +%a); c -T /backup/db.dump "$S3/daily/$day.dump"
+                  if [ "$(date +%u)" = 5 ]; then w=$(( $(date +%V | sed 's/^0//') % 5 )); c -T /backup/db.dump "$S3/weekly/w$w.dump"; fi
+                  echo "uploaded mattermost $(date -Iseconds) $(wc -c < /backup/db.dump) bytes"
+              env:
+                - name: AK
+                  valueFrom: { secretKeyRef: { name: mattermost-s3, key: accessKeyId } }
+                - name: SK
+                  valueFrom: { secretKeyRef: { name: mattermost-s3, key: secretAccessKey } }
+              securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+              resources: { requests: { cpu: 20m, memory: 32Mi }, limits: { memory: 128Mi } }
+              volumeMounts: [{ name: backup, mountPath: /backup }]
+          volumes:
+            - { name: backup, emptyDir: { sizeLimit: 10Gi } }
+            - { name: tmp, emptyDir: { sizeLimit: 64Mi } }
+---
+# Mattermost's namespace allows its database only from Mattermost: let the
+# backup in, and out to RGW on worker1 (a node address: Cilium entities).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-backup, namespace: mattermost }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: team-backup } }
+  policyTypes: [Egress]
+  egress:
+    - to: [{ podSelector: { matchLabels: { app.kubernetes.io/name: mattermost-postgresql } } }]
+      ports: [{ protocol: TCP, port: 5432 }, { protocol: TCP, port: 15008 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-backup-to-postgresql, namespace: mattermost }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: mattermost-postgresql } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: team-backup } } }]
+      ports: [{ protocol: TCP, port: 5432 }, { protocol: TCP, port: 15008 }]
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: { name: allow-backup-rgw, namespace: mattermost }
+spec:
+  endpointSelector: { matchLabels: { app.kubernetes.io/name: team-backup } }
+  egress:
+    - toEntities: [host, remote-node]
+      toPorts: [{ ports: [{ port: "8080", protocol: TCP }] }]

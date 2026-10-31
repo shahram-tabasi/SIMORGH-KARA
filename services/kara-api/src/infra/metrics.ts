@@ -47,3 +47,16 @@ export const teamEvents = new Counter({
   labelNames: ['source', 'outcome'],
   registers: [registry],
 });
+
+export const teamProvisioningFailed = new Gauge({
+  name: 'kara_team_provisioning_failed',
+  help: 'People and companies whose last provisioning into Plane or Mattermost failed, by target',
+  labelNames: ['target'],
+  registers: [registry],
+});
+
+export const teamProposalsPending = new Gauge({
+  name: 'kara_team_proposals_pending',
+  help: 'Changes proposed by the assistant waiting for an approval',
+  registers: [registry],
+});

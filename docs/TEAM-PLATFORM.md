@@ -5,7 +5,9 @@ Status (2026-10-31): **Phase 1 live** (Plane .133, Mattermost .134, published th
 (provisioning, the GitLab-OAuth adapter `src/sso/`, the read-only assistant `src/assistant/`); **Phase 4 written**
 (notices, digests, n8n schedules in `deploy/team-platform/phase4/`); **Phase 5 written** (proposals
 approved by buttons and the kartabl, `src/assistant/proposals.service.ts`); **Phase 6 written** (Kara knowledge +
-Nextcloud documents, unit-filtered, `src/knowledge/`).
+Nextcloud documents, unit-filtered, `src/knowledge/`); **Phase 7 written** (backups, alerts, restore drill,
+load test, DR: `deploy/team-platform/phase7/`). Phases 2–7 are code and runbooks: each is applied and
+checked on the cluster by its README section.
 
 Implementation note, Phase 6: retrieval is PostgreSQL full-text search
 (`simple` configuration, which treats Persian words as they are written)

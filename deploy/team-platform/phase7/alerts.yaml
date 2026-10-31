@@ -1,0 +1,65 @@
+# Phase 7 (docs/TEAM-PLATFORM.md): what should page someone about the Team
+# Platform. Prometheus (kube-prometheus-stack, label release: prometheus)
+# picks this up; kara-api's metrics come through its ServiceMonitor.
+#
+#   kubectl apply -f deploy/team-platform/phase7/alerts.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: simorgh-team-platform
+  namespace: monitoring
+  labels: { release: prometheus, app.kubernetes.io/part-of: simorgh-team-platform }
+spec:
+  groups:
+    - name: team-platform
+      rules:
+        - alert: TeamAppDown
+          expr: |
+            kube_deployment_status_replicas_available{namespace="mattermost", deployment="mattermost"} < 1
+            or kube_deployment_status_replicas_available{namespace="plane", deployment=~"plane-(api|web|worker|live)-wl"} < 1
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.deployment }} has no running pod"
+            description: "kubectl -n {{ $labels.namespace }} get pods; kubectl -n {{ $labels.namespace }} describe deploy {{ $labels.deployment }}"
+        - alert: TeamDatabaseDown
+          expr: kube_statefulset_status_replicas_ready{namespace=~"plane|mattermost", statefulset=~"plane-pgdb-wl|mattermost-postgresql|plane-redis-wl|plane-rabbitmq-wl"} < 1
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.statefulset }} is not ready"
+        - alert: TeamBackupMissing
+          expr: time() - kube_cronjob_status_last_successful_time{namespace=~"plane|mattermost", cronjob="team-backup"} > 26 * 3600
+          for: 30m
+          labels: { severity: warning }
+          annotations:
+            summary: "No successful {{ $labels.namespace }} backup for more than a day"
+            description: "kubectl -n {{ $labels.namespace }} get jobs -l app.kubernetes.io/name=team-backup; kubectl -n {{ $labels.namespace }} logs job/<last> -c upload"
+        - alert: TeamVolumeFilling
+          expr: |
+            kubelet_volume_stats_used_bytes{namespace=~"plane|mattermost"} / kubelet_volume_stats_capacity_bytes{namespace=~"plane|mattermost"} > 0.85
+          for: 30m
+          labels: { severity: warning }
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is over 85% full"
+        - alert: KaraTeamProvisioningFailing
+          expr: kara_team_provisioning_failed > 0
+          for: 30m
+          labels: { severity: warning }
+          annotations:
+            summary: "Kara could not give {{ $value }} people or companies their {{ $labels.target }} access"
+            description: "select entity, entity_id, detail from platform.provisioning_state where target = '{{ $labels.target }}' and status = 'failed'"
+        - alert: KaraPlaneWebhookRejected
+          expr: increase(kara_team_events_total{source="plane", outcome="bad_signature"}[15m]) > 3
+          labels: { severity: warning }
+          annotations:
+            summary: "Plane webhooks refused for a bad signature: the secret in kara-team is not the webhook's"
+            description: "RESET_PLANE_WEBHOOK=1 bash deploy/team-platform/phase2/setup.sh"
+        - alert: KaraPlaneWebhookSilent
+          expr: |
+            sum(increase(kara_team_events_total{source="plane", outcome=~"applied|duplicate|ignored"}[2d])) == 0
+            and on() hour() >= 6 and on() hour() < 16 and on() day_of_week() != 5
+          for: 6h
+          labels: { severity: info }
+          annotations:
+            summary: "No Plane webhook for two days on working days: is the webhook still set (Plane → Workspace settings → Webhooks)?"

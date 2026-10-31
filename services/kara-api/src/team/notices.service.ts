@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { config } from '../config';
 import { DbService } from '../infra/db.service';
-import { teamEvents } from '../infra/metrics';
+import { teamEvents, teamProposalsPending, teamProvisioningFailed } from '../infra/metrics';
 import { MattermostClient } from './mattermost.client';
 import { IssueRow, PlaneEventsService, PlaneIssueEvent } from './plane-events.service';
 import { PlaneClient } from './plane.client';
@@ -34,6 +34,7 @@ const actorOf = (e: PlaneIssueEvent): string | null => {
 export class TeamNoticesService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly log = new Logger(TeamNoticesService.name);
   private timer?: NodeJS.Timeout;
+  private gaugeTimer?: NodeJS.Timeout;
   private busy = false;
 
   constructor(private readonly db: DbService, private readonly mm: MattermostClient, private readonly plane: PlaneClient, events: PlaneEventsService) {
@@ -41,11 +42,23 @@ export class TeamNoticesService implements OnApplicationBootstrap, OnModuleDestr
   }
 
   onApplicationBootstrap() {
-    if (process.env.KARA_API_CLI || !this.mm.botConfigured || !config.team.noticePollSeconds) return;
+    if (process.env.KARA_API_CLI) return;
+    this.gaugeTimer = setInterval(() => void this.gauges().catch(() => undefined), 60_000);
+    if (!this.mm.botConfigured || !config.team.noticePollSeconds) return;
     this.timer = setInterval(() => void this.poll(), config.team.noticePollSeconds * 1000);
   }
 
-  onModuleDestroy() { if (this.timer) clearInterval(this.timer); }
+  onModuleDestroy() { if (this.timer) clearInterval(this.timer); if (this.gaugeTimer) clearInterval(this.gaugeTimer); }
+
+  /** Phase 7's alerts read these. */
+  private async gauges() {
+    for (const t of ['plane', 'mattermost']) {
+      const [r] = await this.db.query<{ n: string }>(`SELECT count(*)::text AS n FROM platform.provisioning_state WHERE target = $1 AND status = 'failed'`, [t]);
+      teamProvisioningFailed.set({ target: t }, Number(r?.n ?? 0));
+    }
+    const [p] = await this.db.query<{ n: string }>(`SELECT count(*)::text AS n FROM kara_team.proposals WHERE status = 'pending' AND created_at > now() - interval '7 days'`);
+    teamProposalsPending.set(Number(p?.n ?? 0));
+  }
 
   private async mattermostUser(app: 'plane', externalId: string): Promise<string | null>;
   private async mattermostUser(app: 'account', accountId: string): Promise<string | null>;

@@ -13,6 +13,7 @@ Every command runs **on the k8s master as root**, from a checkout of
 | 4 | Notices in Mattermost (Plane assignments, new kartabl approvals/tasks, work-desk tasks), the morning digest and the weekly report (n8n schedule) | kara-api `src/team/notices.service.ts`, `src/assistant/digest.service.ts`, `phase4/` |
 | 5 | Changes through approval: the assistant proposes one exact Plane change; Approve / Reject buttons + a kartabl approval item; only Approve runs it | kara-api `src/assistant/proposals.service.ts` |
 | 6 | Knowledge: the assistant searches Kara's knowledge and Nextcloud `/Kara/<company>/<unit>/…`, filtered by the person's units, and cites | kara-api `src/knowledge/`, `phase6/setup.sh` |
+| 7 | Nightly database backups to Ceph, alerts, restore drill, load test, disaster recovery | `phase7/` |
 
 ## Phase 1 — Plane and Mattermost
 
@@ -396,4 +397,88 @@ open. The rule is tested on its own (`src/knowledge/knowledge.spec.ts`, "exit ch
 `/ask آیین‌نامه مرخصی چه می‌گوید؟` → an answer with links to the documents it
 used. Someone outside the unit asking the same gets no citation from that
 unit's folder.
+
+## Phase 7 — backups, alerts, restore drill, load test
+
+### Backups
+
+`phase7/backups.yaml`: a CronJob `team-backup` in each namespace (01:30 Plane,
+01:45 Mattermost, Tehran time). `pg_dump -Fc` (checked with `pg_restore -l`
+before upload) to Ceph RGW bucket `plane-backups` / `mattermost-backups`, as
+the app's own RGW user. Kept without deletes: `daily/<Mon…Sun>.dump` (a week)
+and, on Fridays, `weekly/w0…w4.dump` (about five weeks). The files themselves
+(uploads, attachments) are in RGW already, three copies on three hosts.
+
+```bash
+kubectl apply -f deploy/team-platform/phase7/backups.yaml
+kubectl -n plane create job --from=cronjob/team-backup team-backup-now
+kubectl -n mattermost create job --from=cronjob/team-backup team-backup-now
+kubectl -n plane logs job/team-backup-now -c upload; kubectl -n mattermost logs job/team-backup-now -c upload   # "uploaded … bytes"
+```
+
+### Alerts
+
+```bash
+kubectl apply -f deploy/team-platform/phase7/alerts.yaml
+```
+
+| Alert | When |
+|---|---|
+| TeamAppDown | Mattermost or a Plane web/API/worker/live deployment has no pod for 5 min |
+| TeamDatabaseDown | a PostgreSQL, Valkey or RabbitMQ of the two apps not ready for 5 min |
+| TeamBackupMissing | no successful backup for more than 26 h |
+| TeamVolumeFilling | a volume of the two apps over 85 % |
+| KaraTeamProvisioningFailing | Kara could not give someone their Plane/Mattermost access for 30 min |
+| KaraPlaneWebhookRejected | Plane webhooks refused for a bad signature |
+| KaraPlaneWebhookSilent | no Plane webhook for two working days |
+
+### Restore drill (the exit check)
+
+```bash
+bash deploy/team-platform/phase7/restore-drill.sh plane
+bash deploy/team-platform/phase7/restore-drill.sh mattermost
+```
+
+Each restores the newest daily dump into a throw-away PostgreSQL in namespace
+`team-restore-drill`, compares the main tables' row counts with the live
+database, prints **RESTORE DRILL PASSED** or **FAILED**, and deletes the
+namespace. Nothing live is written. Run it monthly.
+
+### Load test
+
+```bash
+bash deploy/team-platform/phase7/load-test.sh                 # 400 requests per page, 20 at a time
+N=2000 C=50 bash deploy/team-platform/phase7/load-test.sh     # heavier
+```
+
+### Disaster recovery
+
+*A database is lost or corrupted* (example: Mattermost; Plane is the same
+with `plane-pgdb-wl`, `plane-pgdb-secrets` and the `plane-*-wl` deployments):
+
+```bash
+# 1. Stop the app (the database stays up)
+kubectl -n mattermost scale deploy/mattermost --replicas=0
+# 2. Fetch the dump you want into the database pod (newest daily; or weekly/wN.dump)
+kubectl -n mattermost run fetch --rm -i --restart=Never --image=registry.simorghai.com/docker-proxy/curlimages/curl:8.11.1 \
+  --overrides='{"spec":{"imagePullSecrets":[{"name":"harbor-registry"}]}}' --env AK=… --env SK=… -- \
+  sh -c 'curl -fsS --aws-sigv4 aws:amz:us-east-1:s3 --user "$AK:$SK" http://192.168.1.92:8080/mattermost-backups/daily/Thu.dump' \
+  > /root/restore.dump        # AK/SK: kubectl -n mattermost get secret mattermost-s3 -o jsonpath='{.data.accessKeyId}' | base64 -d …
+kubectl -n mattermost cp /root/restore.dump mattermost-postgresql-0:/tmp/restore.dump
+# 3. Replace the database's contents with the dump
+kubectl -n mattermost exec mattermost-postgresql-0 -- sh -c \
+  'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner /tmp/restore.dump && rm /tmp/restore.dump'
+# 4. Start the app again
+kubectl -n mattermost scale deploy/mattermost --replicas=1
+```
+
+*The whole namespace is lost:* reinstall as in Phase 1 (`make-secrets.sh`
+keeps the passwords it finds; if the Secrets are gone too, the database
+passwords are in `/root/team-platform-secrets/` for Plane and must be set on
+a fresh `mattermost-db`), let the empty database start, then steps 1–4.
+The files are still in RGW (buckets `plane-uploads`, `mattermost-files`).
+
+*Kara's side* (`kara_team.*`: who is who, proposals, the audit) lives in Kara's
+own database and follows Kara's backups; the read models (Plane issues,
+documents) rebuild themselves from Plane and Nextcloud.
 
