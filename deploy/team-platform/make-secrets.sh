@@ -95,6 +95,10 @@ else
   note "plane-app-keys created"
 fi
 
+# CELERY_WORKER_CONCURRENCY: the chart cannot change the worker's command,
+# and celery otherwise starts one process per node core (16-24 here) and is
+# OOM-killed at its 1 Gi limit. This Secret is in the worker's envFrom, and
+# celery reads CELERY_<SUBCOMMAND>_<OPTION> from the environment.
 # USE_MINIO=1: Plane signs upload/download links for the page's own host
 # (https://plane.simorghai.com/plane-uploads/…, routed to RGW by edge.yaml).
 apply_secret plane-doc-store -n plane \
@@ -104,7 +108,8 @@ apply_secret plane-doc-store -n plane \
   --from-literal=AWS_S3_BUCKET_NAME=plane-uploads \
   --from-literal=FILE_SIZE_LIMIT=52428800 \
   --from-literal=AWS_ACCESS_KEY_ID="$PLANE_S3_ACCESS" \
-  --from-literal=AWS_SECRET_ACCESS_KEY="$PLANE_S3_SECRET"
+  --from-literal=AWS_SECRET_ACCESS_KEY="$PLANE_S3_SECRET" \
+  --from-literal=CELERY_WORKER_CONCURRENCY="${PLANE_WORKER_CONCURRENCY:-2}"
 note "plane-doc-store ok"
 
 VALUES=$SECRETS_DIR/plane-values-secrets.yaml
