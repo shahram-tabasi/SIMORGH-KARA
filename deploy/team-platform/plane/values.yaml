@@ -11,6 +11,16 @@
 
 planeVersion: v1.4.3
 
+# Keep Plane off the GPU nodes: their memory is for vLLM and their disks are
+# near the kubelet's eviction line (pods were evicted for ephemeral-storage
+# on gpu-worker1 at the first install). Applied to every component below.
+_noGpu: &noGpu
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - { key: nvidia.com/gpu.product, operator: DoesNotExist }
+
 # Pulls through Harbor's Docker Hub proxy; the chart's ServiceAccount carries
 # the pull secret (copied into the namespace by make-secrets.sh).
 dockerRegistry:
@@ -29,6 +39,7 @@ ssl:
 
 # ── Data services: the chart's own, one pod each (a small team's size) ──────
 postgres:
+  affinity: *noGpu
   local_setup: true
   image: registry.simorghai.com/docker-proxy/library/postgres:15.7-alpine
   storageClass: ceph-rbd-simorgh
@@ -36,6 +47,7 @@ postgres:
   assign_cluster_ip: true
 
 redis:
+  affinity: *noGpu
   local_setup: true
   image: registry.simorghai.com/docker-proxy/valkey/valkey:7.2.11-alpine
   storageClass: ceph-rbd-simorgh
@@ -43,6 +55,7 @@ redis:
   assign_cluster_ip: true
 
 rabbitmq:
+  affinity: *noGpu
   local_setup: true
   image: registry.simorghai.com/docker-proxy/library/rabbitmq:3.13.6-management-alpine
   storageClass: ceph-rbd-simorgh
@@ -77,6 +90,7 @@ env:
 # placeholder) with limits at most 1.5x requests (decision 8: the nodes'
 # limits are already over-committed), ClusterIP Services for the Gateway ──
 web:
+  affinity: *noGpu
   image: registry.simorghai.com/docker-proxy/makeplane/plane-frontend
   pullPolicy: IfNotPresent
   assign_cluster_ip: true
@@ -85,6 +99,7 @@ web:
   cpuRequest: 50m
   cpuLimit: 500m
 space:
+  affinity: *noGpu
   image: registry.simorghai.com/docker-proxy/makeplane/plane-space
   pullPolicy: IfNotPresent
   assign_cluster_ip: true
@@ -93,6 +108,7 @@ space:
   cpuRequest: 25m
   cpuLimit: 300m
 admin:
+  affinity: *noGpu
   image: registry.simorghai.com/docker-proxy/makeplane/plane-admin
   pullPolicy: IfNotPresent
   assign_cluster_ip: true
@@ -101,6 +117,7 @@ admin:
   cpuRequest: 25m
   cpuLimit: 300m
 live:
+  affinity: *noGpu
   image: registry.simorghai.com/docker-proxy/makeplane/plane-live
   pullPolicy: IfNotPresent
   assign_cluster_ip: true
@@ -109,6 +126,7 @@ live:
   cpuRequest: 25m
   cpuLimit: 300m
 api:
+  affinity: *noGpu
   image: registry.simorghai.com/docker-proxy/makeplane/plane-backend
   pullPolicy: IfNotPresent
   assign_cluster_ip: true
@@ -117,6 +135,7 @@ api:
   cpuRequest: 100m
   cpuLimit: "1"
 worker:
+  affinity: *noGpu
   image: registry.simorghai.com/docker-proxy/makeplane/plane-backend
   pullPolicy: IfNotPresent
   memoryRequest: 768Mi
@@ -124,6 +143,7 @@ worker:
   cpuRequest: 100m
   cpuLimit: "1"
 beatworker:
+  affinity: *noGpu
   image: registry.simorghai.com/docker-proxy/makeplane/plane-backend
   pullPolicy: IfNotPresent
   memoryRequest: 192Mi

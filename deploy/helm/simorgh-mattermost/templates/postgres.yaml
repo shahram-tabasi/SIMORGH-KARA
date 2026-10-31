@@ -38,6 +38,10 @@ spec:
         app.kubernetes.io/name: mattermost-postgresql
     spec:
       {{- include "mm.imagePullSecrets" . | nindent 6 }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 70          # postgres, in the alpine image
