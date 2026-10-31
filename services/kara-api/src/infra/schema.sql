@@ -196,3 +196,22 @@ CREATE TABLE IF NOT EXISTS kara_team.digests (
   sent_at     timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (account_id, kind, period)
 );
+
+-- Phase 5: changes the assistant proposes. Nothing reaches Plane until the
+-- approver presses Approve (Mattermost button); the request is also an
+-- approval item in their Kara kartabl.
+CREATE TABLE IF NOT EXISTS kara_team.proposals (
+  id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  requested_by  uuid        NOT NULL,             -- Kara account
+  approver      uuid        NOT NULL,             -- Kara account
+  action        jsonb       NOT NULL,             -- { kind, projectId, issueId, … } exactly what will run
+  summary       text        NOT NULL,             -- what the approver reads
+  status        text        NOT NULL DEFAULT 'pending', -- pending | approved | rejected | executed | failed | expired
+  kartabl_ref   text,                             -- schema:item id
+  mm_post_id    text,
+  result        text,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  decided_at    timestamptz,
+  decided_by    uuid
+);
+CREATE INDEX IF NOT EXISTS proposals_pending ON kara_team.proposals (approver) WHERE status = 'pending';

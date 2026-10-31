@@ -6,6 +6,7 @@ import { teamEvents } from '../infra/metrics';
 import { MattermostClient } from '../team/mattermost.client';
 import { TeamAccessService } from '../team/team-access.service';
 import { AssistantService } from './assistant.service';
+import { ProposalsService } from './proposals.service';
 
 /** What Mattermost posts for a slash command (form-encoded). */
 interface SlashCommand {
@@ -47,7 +48,22 @@ export class MattermostCommandController {
   private readonly log = new Logger(MattermostCommandController.name);
 
   constructor(private readonly assistant: AssistantService, private readonly access: TeamAccessService, private readonly mm: MattermostClient,
-    private readonly db: DbService) {}
+    private readonly db: DbService, private readonly proposals: ProposalsService) {}
+
+  /**
+   * POST /v1/team/mattermost/action — the Approve / Reject buttons on a
+   * proposed change (Phase 5). The button carries an HMAC of the proposal and
+   * the decision; Mattermost adds who pressed it, which must be the approver.
+   */
+  @Post('action')
+  @HttpCode(200)
+  async action(@Body() b: { user_id?: string; context?: { proposal?: string; decision?: string; sig?: string } }) {
+    const c = b?.context ?? {};
+    if (!b?.user_id || !c.proposal || !c.decision || !c.sig) return { ephemeral_text: 'درخواست ناقص است.' };
+    const r = await this.proposals.decide(c.proposal, c.decision, c.sig, b.user_id);
+    if (r.ephemeral) return { ephemeral_text: r.ephemeral };
+    return { update: { message: r.text, props: { attachments: [] } } };
+  }
 
   /** A token Kara made the command with (kara_team.mm_commands), or one set by hand (MATTERMOST_COMMAND_TOKENS). */
   private async known(token: string): Promise<boolean> {

@@ -62,7 +62,7 @@ export class AssistantToolsService {
   }
   private members?: { at: number; list: { id: string; email?: string; display_name?: string }[] };
 
-  private async canSeeProject(planeUserId: string, projectId: string): Promise<boolean> {
+  async canSee(planeUserId: string, projectId: string): Promise<boolean> {
     const hit = this.projectMembers.get(projectId);
     if (hit && Date.now() - hit.at < 5 * 60_000) return hit.ids.has(planeUserId);
     if (!this.plane.configured) return false;
@@ -114,7 +114,7 @@ export class AssistantToolsService {
     const [p] = await this.db.query<{ id: string; identifier: string; name: string }>(
       `SELECT id::text, identifier, name FROM kara_team.plane_projects WHERE upper(identifier) = upper($1) AND NOT archived`, [key.trim()]);
     if (!p) { await this.audit(a, 'project_status', key, { key }, 'error', 'no such project'); return { error: `پروژه‌ای با کلید ${key} پیدا نشد.` }; }
-    if (!pu || !(await this.canSeeProject(pu, p.id))) {
+    if (!pu || !(await this.canSee(pu, p.id))) {
       await this.audit(a, 'project_status', p.identifier, { key }, 'denied', 'not a project member');
       return { error: `شما عضو پروژه ${p.identifier} در Plane نیستید.` };
     }
@@ -156,7 +156,7 @@ export class AssistantToolsService {
       FROM kara_team.plane_issues WHERE upper(project_key) = upper($1) AND sequence_id = $2 AND NOT deleted`, [m[1], Number(m[2])]);
     if (!i) { await this.audit(a, 'issue', key, { key }, 'error', 'not found'); return { error: `کار ${key} پیدا نشد.` }; }
     const pu = await this.planeUser(a.accountId);
-    if (!pu || !(await this.canSeeProject(pu, i.project_id))) {
+    if (!pu || !(await this.canSee(pu, i.project_id))) {
       await this.audit(a, 'issue', key, { key }, 'denied', 'not a project member');
       return { error: `به پروژه این کار دسترسی ندارید.` };
     }
@@ -178,7 +178,7 @@ export class AssistantToolsService {
       SELECT id::text, project_id::text, project_key || '-' || sequence_id AS key, name, state_name AS state
       FROM kara_team.plane_issues WHERE NOT deleted AND name ILIKE '%' || $1 || '%' ORDER BY updated_at DESC NULLS LAST LIMIT 40`, [text.trim().slice(0, 100)]);
     const out = [];
-    for (const r of rows) if (await this.canSeeProject(pu, r.project_id)) out.push({ key: r.key, name: r.name, state: r.state, url: this.plane.issueUrl(r.project_id, r.id) });
+    for (const r of rows) if (await this.canSee(pu, r.project_id)) out.push({ key: r.key, name: r.name, state: r.state, url: this.plane.issueUrl(r.project_id, r.id) });
     await this.audit(a, 'search_issues', null, { text }, 'ok', `${out.length} found`);
     return { results: out.slice(0, 15) };
   }

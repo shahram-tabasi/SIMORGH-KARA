@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { config } from '../config';
+import { ProposalInput, ProposalsService } from './proposals.service';
 import { Asker, AssistantToolsService, WorkItem } from './tools.service';
 
 interface ChatMessage {
@@ -13,6 +14,12 @@ const TOOLS = [
   { type: 'function', function: { name: 'my_work', description: "The asking person's open work: Kara kartabl items, Kara tasks, and Plane issues assigned to them.", parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'project_status', description: 'Status of a Plane project by its key (e.g. ERP): issues by state, overdue issues, open issues per person.', parameters: { type: 'object', properties: { key: { type: 'string', description: 'Project key, e.g. ERP' } }, required: ['key'] } } },
   { type: 'function', function: { name: 'issue', description: 'One Plane issue by its key, e.g. ERP-42: state, dates, assignees, description.', parameters: { type: 'object', properties: { key: { type: 'string' } }, required: ['key'] } } },
+  { type: 'function', function: { name: 'propose_change', description: "Propose ONE change in Plane for the person to approve. Nothing changes until they press Approve. kind: set_state (issue, state), assign (issue, assignees), set_due_date (issue, date YYYY-MM-DD Gregorian), comment (issue, text), create_issue (project, title, description?, assignees?, date?, priority? urgent|high|medium|low|none).", parameters: { type: 'object', properties: {
+    kind: { type: 'string', enum: ['set_state', 'assign', 'set_due_date', 'comment', 'create_issue'] },
+    issue: { type: 'string', description: 'Issue key, e.g. ERP-42' }, project: { type: 'string', description: 'Project key for create_issue' },
+    state: { type: 'string' }, assignees: { type: 'array', items: { type: 'string' }, description: 'Names, usernames or emails of project members' },
+    date: { type: 'string' }, text: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, priority: { type: 'string' },
+  }, required: ['kind'] } } },
   { type: 'function', function: { name: 'search_issues', description: 'Find Plane issues whose title contains the text.', parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } } },
 ];
 
@@ -20,7 +27,7 @@ const SYSTEM = `You are «دستیار سیمرغ» (Simorgh Assistant), the tea
 Answer in the language of the question (Persian by default), short and concrete, in Markdown.
 Use the tools for every fact about work, tasks, projects or issues; never invent issues, dates, people or numbers.
 The tools already answer as the asking person and only show what they may see: if a tool says access is denied, say so plainly.
-You cannot change anything (no creating, closing, assigning or editing). If asked to, say that changes go through an approval in Kara's kartabl (coming soon) and suggest the exact change.
+You never change anything yourself. To change Plane (state, assignees, due date, a comment, a new issue) call propose_change once per change: the person then gets Approve / Reject buttons and an approval item in their Kara kartabl, and only their approval runs it. Tell them that. Convert Persian (Jalali) dates to Gregorian YYYY-MM-DD before proposing.
 Quote issue keys (ERP-42) and give their links. Dates are Gregorian YYYY-MM-DD from the tools; you may add the Persian (Jalali) date.`;
 
 /** Lists the person's work for /mytasks: grouped, due dates first. Exported for tests. */
@@ -45,18 +52,19 @@ export function formatWork(name: string, items: WorkItem[], planeLinked: boolean
 export class AssistantService {
   private readonly log = new Logger(AssistantService.name);
 
-  constructor(readonly tools: AssistantToolsService) {}
+  constructor(readonly tools: AssistantToolsService, private readonly proposals: ProposalsService) {}
 
   get llmConfigured() { return !!config.team.assistant.llmApiKey; }
 
   private async callTool(a: Asker, name: string, rawArgs: string): Promise<unknown> {
-    let args: Record<string, string> = {};
+    let args: Record<string, unknown> = {};
     try { args = rawArgs ? JSON.parse(rawArgs) : {}; } catch { return { error: 'bad arguments' }; }
     switch (name) {
       case 'my_work': return this.tools.myWork(a);
       case 'project_status': return this.tools.projectStatus(a, String(args.key ?? ''));
       case 'issue': return this.tools.issue(a, String(args.key ?? ''));
       case 'search_issues': return this.tools.searchIssues(a, String(args.text ?? ''));
+      case 'propose_change': return this.proposals.propose(a, args as unknown as ProposalInput);
       default: return { error: `unknown tool ${name}` };
     }
   }

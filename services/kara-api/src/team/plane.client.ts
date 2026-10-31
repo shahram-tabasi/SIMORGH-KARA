@@ -78,6 +78,18 @@ export class PlaneClient {
     return this.req<PlaneIssue>('GET', this.ws(`/issues/${m[1].toUpperCase()}-${m[2]}/`));
   }
 
+  updateIssue(projectId: string, id: string, patch: Record<string, unknown>) {
+    return this.req<PlaneIssue>('PATCH', this.ws(`/projects/${projectId}/issues/${id}/`), patch);
+  }
+
+  createIssue(projectId: string, body: Record<string, unknown>) {
+    return this.req<PlaneIssue>('POST', this.ws(`/projects/${projectId}/issues/`), body);
+  }
+
+  comment(projectId: string, issueId: string, html: string) {
+    return this.req<{ id: string }>('POST', this.ws(`/projects/${projectId}/issues/${issueId}/comments/`), { comment_html: html });
+  }
+
   members() { return this.req<PlaneMember[]>('GET', this.ws('/members/')); }
 
   /** A project's members (Plane users); a list or a page, depending on the version. */

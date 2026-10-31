@@ -31,6 +31,7 @@ import { TeamAccessService } from './team/team-access.service';
 import { GitlabShimController } from './sso/gitlab-shim.controller';
 import { AssistantController, AssistantTokenGuard, DigestController, ServiceTokenGuard } from './assistant/assistant.controller';
 import { DigestService } from './assistant/digest.service';
+import { ProposalsService } from './assistant/proposals.service';
 import { TeamNoticesService } from './team/notices.service';
 import { AssistantService } from './assistant/assistant.service';
 import { AssistantToolsService } from './assistant/tools.service';
@@ -54,7 +55,7 @@ function requestLog(req: Request & { actor?: { email: string; via: string } }, r
 
 @Module({
   controllers: [AdminController, ErpController, IdentityController, CommsController, ContextController, PlmController, ShopFloorController, PlaneWebhookController, GitlabShimController, AssistantController, DigestController, MattermostCommandController, HealthController, MetricsController],
-  providers: [DbService, TenantsService, ActorGuard, ConnectorClient, ReadModelService, ErpConsumer, IdentityService, LiveService, CallsService, ProvisionerService, ContextService, CompanyDeleteService, PlaneClient, MattermostClient, PlaneEventsService, TeamAccessService, AssistantToolsService, AssistantService, AssistantTokenGuard, ServiceTokenGuard, DigestService, TeamNoticesService],
+  providers: [DbService, TenantsService, ActorGuard, ConnectorClient, ReadModelService, ErpConsumer, IdentityService, LiveService, CallsService, ProvisionerService, ContextService, CompanyDeleteService, PlaneClient, MattermostClient, PlaneEventsService, TeamAccessService, AssistantToolsService, AssistantService, AssistantTokenGuard, ServiceTokenGuard, DigestService, TeamNoticesService, ProposalsService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

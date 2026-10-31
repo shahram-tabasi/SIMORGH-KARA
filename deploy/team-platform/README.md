@@ -11,6 +11,7 @@ Every command runs **on the k8s master as root**, from a checkout of
 | 2 | Plane → Kara (signed webhooks, read model `kara_team`, Kafka `plane.issue.v1`); Kara's credentials for Plane and Mattermost | `phase2/setup.sh`, kara-api `src/team/` |
 | 3 | Kara makes the accounts (Mattermost team per company, Plane invitations), one sign-in through Kara's "GitLab" adapter, the read-only assistant (`/mytasks` `/project` `/issue` `/ask`) | `phase3/setup.sh`, kara-api `src/sso/`, `src/assistant/`, `src/team/team-sync.ts` |
 | 4 | Notices in Mattermost (Plane assignments, new kartabl approvals/tasks, work-desk tasks), the morning digest and the weekly report (n8n schedule) | kara-api `src/team/notices.service.ts`, `src/assistant/digest.service.ts`, `phase4/` |
+| 5 | Changes through approval: the assistant proposes one exact Plane change; Approve / Reject buttons + a kartabl approval item; only Approve runs it | kara-api `src/assistant/proposals.service.ts` |
 
 ## Phase 1 — Plane and Mattermost
 
@@ -319,4 +320,37 @@ bash deploy/team-platform/phase4/setup.sh          # credential + the two workfl
 Try it without waiting for the morning: in n8n open **Simorgh Team — daily
 digest** → *Execute workflow*. Then assign yourself a Plane work item from
 someone else's account, or put an approval in your kartabl: the DM arrives.
+
+## Phase 5 — changes only through an approval
+
+The assistant may now *propose* a change in Plane — set a state ("close
+ERP-42"), assign people, move a due date, add a comment, create a work item —
+but never make it. Each proposal:
+
+1. is checked against Plane (the issue exists, the state exists in that
+   project, the people are project members, the person asking belongs to the
+   project) and written to `kara_team.proposals` with the exact API call;
+2. becomes an approval item in the person's Kara kartabl and a DM with
+   **تأیید و اجرا / رد** buttons showing exactly what will change;
+3. runs only when the approver presses **Approve** (the button carries an HMAC
+   of the proposal and the decision; Mattermost says who pressed it; one
+   decision per proposal; 7 days to decide). Plane gets the change and a
+   comment "از طریق دستیار سیمرغ — درخواست: …، تأیید: …". The kartabl item
+   is closed either way. Everything is in `kara_team.assistant_audit`.
+
+The approver is the person who asked: they confirm what the model understood,
+in their own projects. (A manager's approval for other people's issues is a
+policy choice to add later.)
+
+### Deploy
+
+kara-api with a new tag (Phase 2 step 3). One requirement in Plane: the
+person whose token Kara uses (Phase 2) must be a **member of every project**
+Kara may change (Project settings → Members) — Plane's API refuses changes
+in projects its caller is not in.
+
+### Try it
+
+`/ask ERP-42 را ببند` → a DM with the proposal and two buttons → **تأیید و اجرا**
+→ the issue is done in Plane, with the comment; the kartabl item is closed.
 
