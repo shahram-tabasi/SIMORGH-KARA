@@ -1,6 +1,6 @@
 # Simorgh Team Platform — Plane, Mattermost, n8n and the Team Assistant, inside Kara
 
-Status: **plan (Phase 0)**. Nothing here is deployed. Phase 0 is
+Status: **Phase 0 done (findings in §8), waiting for approval.** Nothing here is deployed. Phase 0 is
 `deploy/team-platform/phase0-discovery.sh` (read-only) and this document;
 infrastructure changes wait for approval.
 
@@ -57,9 +57,13 @@ Plane webhooks ──► n8n (Workflow G, HMAC check) ──► Kafka plane.issu
 - **Mattermost Free** (formerly Team Edition): OpenID Connect is paid; Free has
   **GitLab** OAuth. Bots, slash commands, webhooks and interactive messages are free.
 - We run **GitLab CE**, which signs users in through Keycloak (OIDC, free).
-  So: Keycloak → GitLab → Plane / Mattermost. One password, Keycloak MFA. Mattermost
-  calls this "double SSO" and does not support it officially (it works; we own the risk).
-  Alternative: buy Plane Pro and Mattermost Professional and use Keycloak directly.
+  ~~Keycloak → GitLab → Plane / Mattermost~~ — **rejected in Phase 0**: GitLab runs on
+  1.68 (EOL, compromised in Oct 2026); everyone's login must not depend on it.
+  Instead a small **GitLab-OAuth shim** in front of Keycloak (namespace `kara`): it
+  answers the three calls Plane and Mattermost make to "GitLab" (`/oauth/authorize`,
+  `/oauth/token`, `/api/v4/user`) from the Keycloak `kara` realm. One password, Keycloak
+  MFA, no GitLab. Until it exists: local accounts created by Kara with e-mail invites.
+  Alternative: buy Plane Pro and Mattermost Professional and use Keycloak OIDC directly.
 - Mobile push for Mattermost Free goes through Mattermost's test push service on the
   internet: set notifications to "generic, no message content".
 - AGPL (Plane): fine for our own use; if Simorgh ships it to customers, modified
@@ -69,8 +73,8 @@ Plane webhooks ──► n8n (Workflow G, HMAC check) ──► Kafka plane.issu
 
 | | Choice | Notes |
 |---|---|---|
-| Plane | Official Helm chart (`makeplane/helm-charts`, CE), ns `plane`, `plane.simorghai.com` | own PostgreSQL (StatefulSet on `ceph-rbd-simorgh`, like Odoo/n8n); bundled Valkey and RabbitMQ (single pod — enough for a small team); **uploads to Ceph RGW S3** (no MinIO) |
-| Mattermost | Mattermost's documented Kubernetes method (Operator) or the official `mattermost-team-edition` chart — chosen in Phase 0 by which is current | ns `mattermost`, `team.simorghai.com`; own PostgreSQL; files in Ceph RGW S3; bots + personal access tokens enabled for the bot only |
+| Plane | Official Helm chart `plane-ce` **1.8.6 → Plane CE v1.4.3**, ns `plane`, `plane.simorghai.com` | own PostgreSQL (StatefulSet on `ceph-rbd-simorgh`, like Odoo/n8n); bundled Valkey and RabbitMQ (single pod — enough for a small team); **uploads to Ceph RGW S3** (no MinIO) |
+| Mattermost | **Mattermost Operator** (the method Mattermost documents for Kubernetes; the team-edition chart is marked for migration) running **Mattermost Team Edition 11.7.x ESR** (supported to 2027-05-15) | ns `mattermost`, `team.simorghai.com`; own PostgreSQL; files in Ceph RGW S3; bots + personal access tokens enabled for the bot only |
 | n8n | the running instance | add credentials: Mattermost bot, Plane API, Kara assistant, llm-gateway |
 | Gateways | one Gateway per namespace (our pattern), `wildcard-simorghai-tls` synced by `sync-wildcard-cert.sh` | 2 new LoadBalancer IPs (plane, mattermost) |
 | Public access | edge nginx on 1.68 + ArvanCloud, `host_is_public 1` | Mattermost needs WebSocket + long timeouts (own server block) |
@@ -119,3 +123,21 @@ to be sized from Phase 0 free space.
 The master's root disk is 70 GB; `/home` has 400 GB free. Image builds
 (`buildah`, `/var/lib/containers`) and discovery output go to `/home`
 (see the move procedure given with this plan).
+
+## 8. Phase 0 findings (2026-10-31, `phase0-discovery.sh`)
+
+| Area | Found | Means |
+|---|---|---|
+| Kubernetes / Helm | 1.36.2, Helm 3.21.4, Cilium 1.19.3, Istio 1.25.0 ambient, cert-manager 1.21.1 | charts must accept 1.36 (`kubeVersion`) |
+| Nodes | master 16c/32 GB (tainted); worker1, worker2 16c/32 GB; worker3, gpu-worker1/2 24c/32 GB | **memory is the limit**: in use 45–66% per node (worker2 66%) — CPU 2–8% |
+| GPU | 1× NVIDIA A30 24 GB per GPU node, 21.5 / 22.2 GB used: `llm-text` Qwen3.8-27B-INT4 (gpu-worker1), Qwen3.5-9B-FP8 (gpu-worker2), vLLM v0.30.0, 32k context | **no room for another model**; the assistant shares these through llm-gateway; tool calling needs `--enable-auto-tool-choice --tool-call-parser` on vLLM (to check) |
+| Vectors | Qdrant in `simorgh-chatbot` (qdrant-0, 10 Gi) and `hr-chatbot` (hr-qdrant); `hr-embeddings` service | reuse `simorgh-chatbot` Qdrant with its own collection; embedding model to confirm |
+| Databases | one PostgreSQL StatefulSet per app (kara, odoo, keycloak, n8n, nextcloud, hr, erp-connector), Redis per app | Plane and Mattermost get their own, same pattern |
+| Storage | `ceph-rbd-simorgh` (RWO), `ceph-fs-simorgh` (RWX); RGW S3 endpoint not seen in this scan | Mattermost files and Plane uploads on PVCs unless RGW is confirmed |
+| Gateways / IPs | one Istio Gateway per namespace; LB IPs in use .125, .127–.132, .210–.220 (.126 taken outside k8s) | 2 new IPs: Plane, Mattermost — from the pool blocks (part 2) |
+| DNS (PowerDNS) | no `plane`, `team`, `mm`, `chat`, `automation` records; `gitlab` → 1.68 | add `plane`, `team` |
+| n8n | 2.42.4, single instance, own PG 17.5 (5 Gi), data 2 Gi, gateway .129 | reuse; queue mode not needed yet |
+| Nextcloud | 34.0.3, PG + Redis on `ceph-rbd-kafka` | source for the knowledge base |
+| Harbor | anonymous view: gcr-proxy, ghcr-proxy, istio-charts, library, simorgh-chatbot (docker-proxy is private) | Plane, Mattermost, Valkey, RabbitMQ, operator images via `docker-proxy` |
+| Risks seen | GPU nodes on **Ubuntu 20.04 (end of standard support)**; Helm releases `istio-cni` and `ztunnel` in state **failed** (running, but the next upgrade must be handled); `strimzi-cluster-operator` **127 restarts**; stale pods (`llm-text` ContainerStatusUnknown, one collabora pod) | not blockers for Phase 1; listed for the ops backlog |
+| Master disk | `/` 70 GB (28 used: buildah 13 GB, containerd 2.3 GB, /root 5.2 GB); `/home` 412 GB free | buildah storage moved to `/home` (bind mount) |
