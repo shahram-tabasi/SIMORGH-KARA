@@ -180,3 +180,19 @@ CREATE TABLE IF NOT EXISTS kara_team.mm_commands (
   updated_at  timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (team_id, trigger)
 );
+
+-- Phase 4: where the notice poller got to in each company (new kartabl items
+-- and tasks since then become direct messages), and which digests went out.
+CREATE TABLE IF NOT EXISTS kara_team.notice_marks (
+  schema_name text        NOT NULL,
+  source      text        NOT NULL,               -- kartabl | task
+  last_at     timestamptz NOT NULL,
+  PRIMARY KEY (schema_name, source)
+);
+CREATE TABLE IF NOT EXISTS kara_team.digests (
+  account_id  uuid        NOT NULL,
+  kind        text        NOT NULL,               -- daily | weekly
+  period      text        NOT NULL,               -- 2026-11-01 | 2026-W44
+  sent_at     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (account_id, kind, period)
+);

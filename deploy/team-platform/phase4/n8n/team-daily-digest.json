@@ -1,0 +1,83 @@
+{
+  "id": "KaraDigestDaily1",
+  "name": "Simorgh Team — daily digest (Mattermost)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 7 * * 6,0,1,2,3"
+            }
+          ]
+        }
+      },
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "de6a4f08-6043-5a7e-a581-0a73af7ec3f4"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://kara-api.kara.svc.cluster.local:3001/v1/assistant/digests/daily",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "name": "Kara: daily digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "id": "2604cada-5d6b-576d-abdd-67507ca4b29b",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "KaraAssistant001",
+          "name": "Kara assistant (service token)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Kara: daily digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Tehran",
+    "saveDataSuccessExecution": "all"
+  },
+  "pinData": {},
+  "tags": [],
+  "meta": {
+    "description": "07:30 Tehran, Saturday to Wednesday: each person's open work as a DM from Simorgh Assistant (kara-api decides who and what; once per day)."
+  }
+}

@@ -225,6 +225,8 @@ export const config = {
       /** n8n's service token (Secret kara-team assistantServiceToken): /v1/assistant/* for workflows. */
       serviceToken: str('ASSISTANT_SERVICE_TOKEN', ''),
     },
+    /** Phase 4: Kara's own notices (kartabl items, tasks) as direct messages; how often to look (s; 0: off). */
+    noticePollSeconds: num('TEAM_NOTICE_POLL_SECONDS', 60),
     /** Kafka topic for Plane's issue events (others may follow them). */
     planeTopic: str('PLANE_KAFKA_TOPIC', 'plane.issue.v1'),
   },

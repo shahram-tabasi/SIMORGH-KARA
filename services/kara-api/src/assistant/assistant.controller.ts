@@ -4,6 +4,7 @@ import { timingSafeEqual } from 'crypto';
 import { config } from '../config';
 import { TeamAccessService } from '../team/team-access.service';
 import { AssistantService } from './assistant.service';
+import { DigestService } from './digest.service';
 
 type WithAsker = Request & { asker?: { accountId: string; channel: string } };
 
@@ -51,5 +52,32 @@ export class AssistantController {
   async ask(@Req() req: WithAsker, @Body() b: { question?: string }) {
     if (!b?.question?.trim()) throw new BadRequestException('question required');
     return { answer: await this.assistant.ask(req.asker!, b.question) };
+  }
+}
+
+/** The service token alone (no person): n8n's scheduled workflows. */
+@Injectable()
+export class ServiceTokenGuard implements CanActivate {
+  canActivate(ctx: ExecutionContext): boolean {
+    const req = ctx.switchToHttp().getRequest<Request>();
+    const want = config.team.assistant.serviceToken;
+    const got = /^Bearer\s+(.+)$/i.exec(req.headers.authorization ?? '')?.[1] ?? '';
+    if (!want || Buffer.from(got).length !== Buffer.from(want).length || !timingSafeEqual(Buffer.from(got), Buffer.from(want))) {
+      throw new ForbiddenException('bad service token');
+    }
+    return true;
+  }
+}
+
+/** POST /v1/assistant/digests/daily | weekly — n8n's schedule (Phase 4). */
+@Controller('v1/assistant/digests')
+@UseGuards(ServiceTokenGuard)
+export class DigestController {
+  constructor(private readonly digests: DigestService) {}
+
+  @Post(':kind')
+  run(@Param('kind') kind: string) {
+    if (kind !== 'daily' && kind !== 'weekly') throw new BadRequestException('daily or weekly');
+    return this.digests.run(kind);
   }
 }

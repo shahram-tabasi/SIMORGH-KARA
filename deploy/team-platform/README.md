@@ -10,6 +10,7 @@ Every command runs **on the k8s master as root**, from a checkout of
 | 1 | Plane CE (`plane.simorghai.com`, .133) and Mattermost Team Edition (`team.simorghai.com`, .134); published through 1.68 | `make-secrets.sh`, `plane/{values,edge,policies}.yaml`, `../helm/simorgh-mattermost/` |
 | 2 | Plane → Kara (signed webhooks, read model `kara_team`, Kafka `plane.issue.v1`); Kara's credentials for Plane and Mattermost | `phase2/setup.sh`, kara-api `src/team/` |
 | 3 | Kara makes the accounts (Mattermost team per company, Plane invitations), one sign-in through Kara's "GitLab" adapter, the read-only assistant (`/mytasks` `/project` `/issue` `/ask`) | `phase3/setup.sh`, kara-api `src/sso/`, `src/assistant/`, `src/team/team-sync.ts` |
+| 4 | Notices in Mattermost (Plane assignments, new kartabl approvals/tasks, work-desk tasks), the morning digest and the weekly report (n8n schedule) | kara-api `src/team/notices.service.ts`, `src/assistant/digest.service.ts`, `phase4/` |
 
 ## Phase 1 — Plane and Mattermost
 
@@ -289,4 +290,33 @@ password — it was there before Kara.
 
 Someone without the role who tries **GitLab** gets Kara's page "دسترسی شما …
 فعال نیست" — that is the gate working.
+
+## Phase 4 — notices, morning digest, weekly report
+
+What it adds (all as direct messages from **Simorgh Assistant**, only to
+people who have Mattermost in Kara):
+- **Plane**: a work item assigned to you by someone else — at once (from the
+  webhook).
+- **Kara**: a new item in your kartabl (an approval waiting for you, a task)
+  and a new task on the work desk, with a link — within a minute (kara-api
+  looks every 60 s, `TEAM_NOTICE_POLL_SECONDS`; it starts from "now", so old
+  items are never sent).
+- **Morning digest** 07:30 Tehran, Saturday–Wednesday: your open work (Plane,
+  work desk, kartabl), overdue first; nothing is sent to someone with nothing open.
+- **Weekly report** Wednesday 15:00: done in Plane this week, open, overdue.
+  n8n's two workflows only start them (`POST /v1/assistant/digests/daily|weekly`);
+  kara-api sends each person each one once per day / ISO week
+  (`kara_team.digests`), however often n8n calls.
+
+### Deploy
+
+```bash
+cd /root/simorgh-kara && git pull
+# kara-api with a new tag (Phase 2 step 3), then:
+bash deploy/team-platform/phase4/setup.sh          # credential + the two workflows, published
+```
+
+Try it without waiting for the morning: in n8n open **Simorgh Team — daily
+digest** → *Execute workflow*. Then assign yourself a Plane work item from
+someone else's account, or put an approval in your kartabl: the DM arrives.
 

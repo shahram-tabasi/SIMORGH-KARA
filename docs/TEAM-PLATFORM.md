@@ -2,7 +2,8 @@
 
 Status (2026-10-31): **Phase 1 live** (Plane .133, Mattermost .134, published through
 1.68); **Phase 2 written** (kara-api `src/team/`, `deploy/team-platform/phase2/`); **Phase 3 written**
-(provisioning, the GitLab-OAuth adapter `src/sso/`, the read-only assistant `src/assistant/`).
+(provisioning, the GitLab-OAuth adapter `src/sso/`, the read-only assistant `src/assistant/`); **Phase 4 written**
+(notices, digests, n8n schedules in `deploy/team-platform/phase4/`).
 Runbook: `deploy/team-platform/README.md`.
 
 Implementation note, Phase 2: Plane's webhooks go **straight to kara-api**, not

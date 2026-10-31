@@ -1,0 +1,83 @@
+{
+  "id": "KaraDigestWeekl1",
+  "name": "Simorgh Team — weekly report (Mattermost)",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 15 * * 3"
+            }
+          ]
+        }
+      },
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7e5a328c-a496-5361-94b3-ad1fe2a59d61"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://kara-api.kara.svc.cluster.local:3001/v1/assistant/digests/weekly",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "name": "Kara: weekly digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "id": "243f6735-a5f9-56a7-868e-b2d2cd021e18",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "KaraAssistant001",
+          "name": "Kara assistant (service token)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Kara: weekly digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Tehran",
+    "saveDataSuccessExecution": "all"
+  },
+  "pinData": {},
+  "tags": [],
+  "meta": {
+    "description": "Wednesday 15:00 Tehran: each person's week (done in Plane, open, overdue) as a DM; once per ISO week."
+  }
+}
