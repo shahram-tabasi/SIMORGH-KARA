@@ -106,7 +106,12 @@ kubectl -n mattermost exec deploy/mattermost -- mmctl --local system status
 **Plane** — `https://plane.simorghai.com/god-mode`:
 1. Create the instance admin (your `@simorghai.com` address).
 2. Authentication: turn **off** "Allow anyone to sign up"; keep email+password.
-3. Email: `mail.simorghai.com`, 587, TLS, user `team@simorghai.com` (step 8).
+3. Email: host `mail.simorghai.com`, 587, TLS, user `team@simorghai.com`
+   (step 8), then **Send test email**. Inside the cluster that name may resolve
+   to the public address, which `policies.yaml` does not allow (the Plane chart
+   has no hostAliases; Mattermost's chart pins it to .68). If the test fails,
+   check `kubectl -n plane exec deploy/plane-api-wl -- getent hosts mail.simorghai.com`
+   and tell me: the fix is a CoreDNS or policy change, not a guess here.
 4. Create the workspace `simorgh`, then the first projects.
 
 **Mattermost** — `https://team.simorghai.com`:
