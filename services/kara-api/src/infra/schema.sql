@@ -215,3 +215,23 @@ CREATE TABLE IF NOT EXISTS kara_team.proposals (
   decided_by    uuid
 );
 CREATE INDEX IF NOT EXISTS proposals_pending ON kara_team.proposals (approver) WHERE status = 'pending';
+
+-- Phase 6: documents from Nextcloud for the assistant, with the Kara unit
+-- that may read each (folder /Kara/<company>/<unit>/<sub-unit>/…). Unit path
+-- empty: the whole company (files at the company's root or under _all).
+CREATE TABLE IF NOT EXISTS kara_team.documents (
+  company_id  uuid        NOT NULL,
+  path        text        NOT NULL,               -- inside the company's folder
+  file_id     text,                               -- Nextcloud's, for the link
+  unit_path   text[]      NOT NULL DEFAULT '{}',
+  title       text        NOT NULL,
+  etag        text,
+  mime        text,
+  size        bigint,
+  body        text        NOT NULL DEFAULT '',
+  modified_at timestamptz,
+  synced_at   timestamptz NOT NULL DEFAULT now(),
+  tsv         tsvector GENERATED ALWAYS AS (to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(body, ''))) STORED,
+  PRIMARY KEY (company_id, path)
+);
+CREATE INDEX IF NOT EXISTS documents_tsv ON kara_team.documents USING gin (tsv);

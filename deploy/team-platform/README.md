@@ -12,6 +12,7 @@ Every command runs **on the k8s master as root**, from a checkout of
 | 3 | Kara makes the accounts (Mattermost team per company, Plane invitations), one sign-in through Kara's "GitLab" adapter, the read-only assistant (`/mytasks` `/project` `/issue` `/ask`) | `phase3/setup.sh`, kara-api `src/sso/`, `src/assistant/`, `src/team/team-sync.ts` |
 | 4 | Notices in Mattermost (Plane assignments, new kartabl approvals/tasks, work-desk tasks), the morning digest and the weekly report (n8n schedule) | kara-api `src/team/notices.service.ts`, `src/assistant/digest.service.ts`, `phase4/` |
 | 5 | Changes through approval: the assistant proposes one exact Plane change; Approve / Reject buttons + a kartabl approval item; only Approve runs it | kara-api `src/assistant/proposals.service.ts` |
+| 6 | Knowledge: the assistant searches Kara's knowledge and Nextcloud `/Kara/<company>/<unit>/…`, filtered by the person's units, and cites | kara-api `src/knowledge/`, `phase6/setup.sh` |
 
 ## Phase 1 — Plane and Mattermost
 
@@ -353,4 +354,46 @@ in projects its caller is not in.
 
 `/ask ERP-42 را ببند` → a DM with the proposal and two buttons → **تأیید و اجرا**
 → the issue is done in Plane, with the comment; the kartabl item is closed.
+
+## Phase 6 — documents, filtered by who may open them
+
+The assistant's tool `search_documents` (used by `/ask`) searches two
+sources and returns titles, links and excerpts, which the answer must cite:
+
+- **Kara's knowledge** (Kara → دانش سازمان: rules, orders, products, uploaded
+  PDF/Word text), by company and unit — the same rule as Kara's knowledge page.
+- **Nextcloud** `Kara/<company slug>/…`: a read-only account `kara-reader`
+  copies the text of txt, md, csv, html, docx, odt, pptx and xlsx files into
+  `kara_team.documents` every 2 h (only changed files are read again; deleted
+  or moved files leave the index). PDFs are not read from Nextcloud — upload
+  them to Kara's knowledge page, which extracts their text.
+
+**Who sees what.** A document in a folder named like a Kara unit
+(`Kara/ekc/Engineering/Electrical/…`) is for the people of that unit and of the
+units under it; files at the company folder's root or under `_all` are for the
+whole company; a top-level folder that is not a unit is **not indexed at all**
+(a private folder never becomes everyone's). The filter runs in PostgreSQL
+before anything is returned, so the model never sees what the person may not
+open. The rule is tested on its own (`src/knowledge/knowledge.spec.ts`, "exit check").
+
+### Deploy
+
+1. kara-api with a new tag (Phase 2 step 3).
+2. In Nextcloud (admin): user `kara-reader`; folder `Kara` shared read-only with
+   it; one folder per company slug; sub-folders named exactly like Kara's units.
+   As `kara-reader`: Settings → Security → create an app password.
+3. Find Nextcloud's address inside the cluster and run the setup:
+   ```bash
+   kubectl get svc -A | grep -i nextcloud
+   NEXTCLOUD_URL=http://<service>.<namespace>.svc.cluster.local:<port> bash deploy/team-platform/phase6/setup.sh
+   kubectl -n kara logs deploy/kara-api -f | grep -i nextcloud        # "nextcloud ekc: N indexed …"
+   ```
+   If the check says Nextcloud did not answer 207, a network policy on the
+   Nextcloud side may block namespace `kara`: send me the output.
+
+### Try it
+
+`/ask آیین‌نامه مرخصی چه می‌گوید؟` → an answer with links to the documents it
+used. Someone outside the unit asking the same gets no citation from that
+unit's folder.
 

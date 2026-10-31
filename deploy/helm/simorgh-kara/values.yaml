@@ -126,6 +126,13 @@ api:
     assistant:
       llmUrl: https://llm.simorghai.com/v1
       model: qwen3.8-27b
+    # Phase 6: documents for the assistant from Nextcloud /Kara/<company>/…
+    # (folders named like Kara's units). Empty url: off. The app password of
+    # the reader account is Secret kara-team nextcloudAppPassword.
+    nextcloud:
+      url: ""
+      publicUrl: https://cloud.simorghai.com
+      user: kara-reader
     # Namespaces that call kara-api for the Team Platform: Plane's webhooks
     # (signed), Mattermost's slash commands and the "GitLab" sign-in adapter
     # (Phase 3), n8n's assistant workflows (service token).

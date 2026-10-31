@@ -227,6 +227,20 @@ export const config = {
     },
     /** Phase 4: Kara's own notices (kartabl items, tasks) as direct messages; how often to look (s; 0: off). */
     noticePollSeconds: num('TEAM_NOTICE_POLL_SECONDS', 60),
+    /**
+     * Phase 6: Nextcloud documents for the assistant. A service account with
+     * read access to /Kara (an app password); each company's folder is
+     * /Kara/<company slug>/, its sub-folders named like Kara's units.
+     */
+    nextcloud: {
+      url: trim(str('NEXTCLOUD_URL', '')),
+      publicUrl: trim(str('NEXTCLOUD_PUBLIC_URL', 'https://cloud.simorghai.com')),
+      user: str('NEXTCLOUD_USER', 'kara-reader'),
+      appPassword: str('NEXTCLOUD_APP_PASSWORD', ''),
+      root: str('NEXTCLOUD_ROOT', 'Kara'),
+      syncHours: num('NEXTCLOUD_SYNC_HOURS', 2),
+      maxBytes: num('NEXTCLOUD_MAX_BYTES', 15 * 1024 * 1024),
+    },
     /** Kafka topic for Plane's issue events (others may follow them). */
     planeTopic: str('PLANE_KAFKA_TOPIC', 'plane.issue.v1'),
   },

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { config } from '../config';
+import { KnowledgeService } from '../knowledge/knowledge.service';
 import { ProposalInput, ProposalsService } from './proposals.service';
 import { Asker, AssistantToolsService, WorkItem } from './tools.service';
 
@@ -20,6 +21,7 @@ const TOOLS = [
     state: { type: 'string' }, assignees: { type: 'array', items: { type: 'string' }, description: 'Names, usernames or emails of project members' },
     date: { type: 'string' }, text: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, priority: { type: 'string' },
   }, required: ['kind'] } } },
+  { type: 'function', function: { name: 'search_documents', description: "Search the company's documents and knowledge the person may open (Kara's rules, orders and products; Nextcloud documents of their units). Returns titles, links and excerpts to cite.", parameters: { type: 'object', properties: { query: { type: 'string', description: 'A few key words, in the language of the documents' } }, required: ['query'] } } },
   { type: 'function', function: { name: 'search_issues', description: 'Find Plane issues whose title contains the text.', parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } } },
 ];
 
@@ -28,7 +30,7 @@ Answer in the language of the question (Persian by default), short and concrete,
 Use the tools for every fact about work, tasks, projects or issues; never invent issues, dates, people or numbers.
 The tools already answer as the asking person and only show what they may see: if a tool says access is denied, say so plainly.
 You never change anything yourself. To change Plane (state, assignees, due date, a comment, a new issue) call propose_change once per change: the person then gets Approve / Reject buttons and an approval item in their Kara kartabl, and only their approval runs it. Tell them that. Convert Persian (Jalali) dates to Gregorian YYYY-MM-DD before proposing.
-Quote issue keys (ERP-42) and give their links. Dates are Gregorian YYYY-MM-DD from the tools; you may add the Persian (Jalali) date.`;
+Quote issue keys (ERP-42) and give their links. For questions about rules, procedures, products or documents, use search_documents and cite every document you use as a Markdown link; if nothing relevant is found, say so instead of answering from general knowledge. Dates are Gregorian YYYY-MM-DD from the tools; you may add the Persian (Jalali) date.`;
 
 /** Lists the person's work for /mytasks: grouped, due dates first. Exported for tests. */
 export function formatWork(name: string, items: WorkItem[], planeLinked: boolean): string {
@@ -52,7 +54,7 @@ export function formatWork(name: string, items: WorkItem[], planeLinked: boolean
 export class AssistantService {
   private readonly log = new Logger(AssistantService.name);
 
-  constructor(readonly tools: AssistantToolsService, private readonly proposals: ProposalsService) {}
+  constructor(readonly tools: AssistantToolsService, private readonly proposals: ProposalsService, private readonly knowledge: KnowledgeService) {}
 
   get llmConfigured() { return !!config.team.assistant.llmApiKey; }
 
@@ -64,6 +66,11 @@ export class AssistantService {
       case 'project_status': return this.tools.projectStatus(a, String(args.key ?? ''));
       case 'issue': return this.tools.issue(a, String(args.key ?? ''));
       case 'search_issues': return this.tools.searchIssues(a, String(args.text ?? ''));
+      case 'search_documents': {
+        const r = await this.knowledge.search(a.accountId, String(args.query ?? ''));
+        await this.tools.audit(a, 'search_documents', null, { query: args.query }, r.error ? 'denied' : 'ok', `${r.results.length} found`);
+        return r;
+      }
       case 'propose_change': return this.proposals.propose(a, args as unknown as ProposalInput);
       default: return { error: `unknown tool ${name}` };
     }

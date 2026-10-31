@@ -33,6 +33,7 @@ import { AssistantController, AssistantTokenGuard, DigestController, ServiceToke
 import { DigestService } from './assistant/digest.service';
 import { ProposalsService } from './assistant/proposals.service';
 import { TeamNoticesService } from './team/notices.service';
+import { KnowledgeService } from './knowledge/knowledge.service';
 import { AssistantService } from './assistant/assistant.service';
 import { AssistantToolsService } from './assistant/tools.service';
 import { MattermostCommandController } from './assistant/mattermost-command.controller';
@@ -55,7 +56,7 @@ function requestLog(req: Request & { actor?: { email: string; via: string } }, r
 
 @Module({
   controllers: [AdminController, ErpController, IdentityController, CommsController, ContextController, PlmController, ShopFloorController, PlaneWebhookController, GitlabShimController, AssistantController, DigestController, MattermostCommandController, HealthController, MetricsController],
-  providers: [DbService, TenantsService, ActorGuard, ConnectorClient, ReadModelService, ErpConsumer, IdentityService, LiveService, CallsService, ProvisionerService, ContextService, CompanyDeleteService, PlaneClient, MattermostClient, PlaneEventsService, TeamAccessService, AssistantToolsService, AssistantService, AssistantTokenGuard, ServiceTokenGuard, DigestService, TeamNoticesService, ProposalsService],
+  providers: [DbService, TenantsService, ActorGuard, ConnectorClient, ReadModelService, ErpConsumer, IdentityService, LiveService, CallsService, ProvisionerService, ContextService, CompanyDeleteService, PlaneClient, MattermostClient, PlaneEventsService, TeamAccessService, AssistantToolsService, AssistantService, AssistantTokenGuard, ServiceTokenGuard, DigestService, TeamNoticesService, ProposalsService, KnowledgeService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

@@ -4,7 +4,15 @@ Status (2026-10-31): **Phase 1 live** (Plane .133, Mattermost .134, published th
 1.68); **Phase 2 written** (kara-api `src/team/`, `deploy/team-platform/phase2/`); **Phase 3 written**
 (provisioning, the GitLab-OAuth adapter `src/sso/`, the read-only assistant `src/assistant/`); **Phase 4 written**
 (notices, digests, n8n schedules in `deploy/team-platform/phase4/`); **Phase 5 written** (proposals
-approved by buttons and the kartabl, `src/assistant/proposals.service.ts`).
+approved by buttons and the kartabl, `src/assistant/proposals.service.ts`); **Phase 6 written** (Kara knowledge +
+Nextcloud documents, unit-filtered, `src/knowledge/`).
+
+Implementation note, Phase 6: retrieval is PostgreSQL full-text search
+(`simple` configuration, which treats Persian words as they are written)
+filtered by company and unit before anything is returned — no new vector
+database, as decided, and no document leaves its permission boundary. If
+answers need semantic search later, the chatbot's embeddings service can add
+a vector column to `kara_team.documents` behind the same filter.
 Runbook: `deploy/team-platform/README.md`.
 
 Implementation note, Phase 2: Plane's webhooks go **straight to kara-api**, not

@@ -131,7 +131,13 @@ spec:
               value: {{ $a.team.assistant.llmUrl | quote }}
             - name: LLM_MODEL
               value: {{ $a.team.assistant.model | quote }}
-            {{- range $env, $key := dict "PLANE_API_KEY" "planeApiKey" "PLANE_WEBHOOK_SECRET" "planeWebhookSecret" "MATTERMOST_ADMIN_TOKEN" "mattermostAdminToken" "MATTERMOST_BOT_TOKEN" "mattermostBotToken" "MATTERMOST_COMMAND_TOKENS" "mattermostCommandTokens" "ASSISTANT_SERVICE_TOKEN" "assistantServiceToken" "SSO_PLANE_CLIENT_SECRET" "ssoPlaneSecret" "SSO_MATTERMOST_CLIENT_SECRET" "ssoMattermostSecret" "SSO_KEYCLOAK_CLIENT_SECRET" "ssoKeycloakSecret" "LLM_API_KEY" "llmApiKey" }}
+            - name: NEXTCLOUD_URL
+              value: {{ $a.team.nextcloud.url | quote }}
+            - name: NEXTCLOUD_PUBLIC_URL
+              value: {{ $a.team.nextcloud.publicUrl | quote }}
+            - name: NEXTCLOUD_USER
+              value: {{ $a.team.nextcloud.user | quote }}
+            {{- range $env, $key := dict "PLANE_API_KEY" "planeApiKey" "PLANE_WEBHOOK_SECRET" "planeWebhookSecret" "MATTERMOST_ADMIN_TOKEN" "mattermostAdminToken" "MATTERMOST_BOT_TOKEN" "mattermostBotToken" "MATTERMOST_COMMAND_TOKENS" "mattermostCommandTokens" "ASSISTANT_SERVICE_TOKEN" "assistantServiceToken" "SSO_PLANE_CLIENT_SECRET" "ssoPlaneSecret" "SSO_MATTERMOST_CLIENT_SECRET" "ssoMattermostSecret" "SSO_KEYCLOAK_CLIENT_SECRET" "ssoKeycloakSecret" "LLM_API_KEY" "llmApiKey" "NEXTCLOUD_APP_PASSWORD" "nextcloudAppPassword" }}
             - name: {{ $env }}
               valueFrom:
                 secretKeyRef: { name: {{ $a.team.existingSecret }}, key: {{ $key }}, optional: true }
